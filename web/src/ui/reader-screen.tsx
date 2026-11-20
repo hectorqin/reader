@@ -1,4 +1,12 @@
-import { readThemePreference, resolveAppTheme, resolveReaderSurface, resolveReadingTheme, saveThemePreference, subscribeTheme, systemPrefersDark } from '../shared/theme/theme.ts';
+import {
+  readThemePreference,
+  resolveAppTheme,
+  resolveReaderSurface,
+  resolveReadingTheme,
+  saveThemePreference,
+  subscribeTheme,
+  systemPrefersDark,
+} from '../shared/theme/theme.ts';
 import { applyCorrections, emptyOverrides, type ReadingOverrides } from './reading-overrides.ts';
 import { loadTxt } from '../formats/txt.ts';
 import { ApiError } from '../api/errors.ts';
@@ -19,10 +27,15 @@ import type { BookDoc } from '../formats/types.ts';
 import type { ContentItem, TocEntry } from '../api/types.ts';
 
 /** The directory of a chapter book, straight from its items: volumes and notes included. */
-const tocOf = (items: ContentItem[]): ChromeTocEntry[] => items.map((item) => ({
-  id: item.href, label: item.title, depth: 0, spine: item.seq,
-  ...(item.volume ? { volume: item.volume } : {}), ...(item.note ? { note: item.note } : {}),
-}));
+const tocOf = (items: ContentItem[]): ChromeTocEntry[] =>
+  items.map((item) => ({
+    id: item.href,
+    label: item.title,
+    depth: 0,
+    spine: item.seq,
+    ...(item.volume ? { volume: item.volume } : {}),
+    ...(item.note ? { note: item.note } : {}),
+  }));
 import type { NativePageHost } from './native-page.ts';
 import { TtsEngine, type TtsSnapshot } from '../render/tts.ts';
 import type { SpokenChunk } from '../render/tts-text.ts';
@@ -143,7 +156,16 @@ export class ReaderScreen {
     navigating: false,
     // Settings rows, flattened for the panel. See `settingsView`.
     ...emptyChromeSettings(),
-    tts: { active: false, state: 'idle', label: '', chip: '从头朗读', index: 0, total: 0, sentenceIndex: -1, sentenceTotal: 0 },
+    tts: {
+      active: false,
+      state: 'idle',
+      label: '',
+      chip: '从头朗读',
+      index: 0,
+      total: 0,
+      sentenceIndex: -1,
+      sentenceTotal: 0,
+    },
     layout: 'reflowable',
     format: '',
   } as ChromeState;
@@ -172,7 +194,7 @@ export class ReaderScreen {
   private lastSpeechQueue: SpokenChunk[] = [];
   /** What the server said it can synthesise. */
   private httpTtsAvailable = false;
-  private httpTtsTimeoutMs=20000;
+  private httpTtsTimeoutMs = 20000;
   /** Probed once per screen; a server's capabilities do not change mid-book. */
   /** Voices the current engine reports, for the panel's select. */
   private voices: Array<{ id: string; name: string; lang: string; default: boolean }> = [];
@@ -246,7 +268,10 @@ export class ReaderScreen {
     this.publicationCache = new PublicationCache(
       options.platform.kv,
       options.platform.blobs,
-      publicationScope(options.api.baseUrl || (typeof location !== 'undefined' ? location.origin : ''), options.api.currentSession()?.user.id ?? ''),
+      publicationScope(
+        options.api.baseUrl || (typeof location !== 'undefined' ? location.origin : ''),
+        options.api.currentSession()?.user.id ?? '',
+      ),
     );
 
     // The stage is created here and never re-created: `ReaderView` attaches to it
@@ -260,7 +285,9 @@ export class ReaderScreen {
     const active = (): void => this.readingTime.activity();
     this.stage.addEventListener('pointerdown', active, { passive: true });
     this.stage.addEventListener('wheel', active, { passive: true });
-    const visibility = (): void => { if (document.visibilityState === 'hidden') void this.readingTime.flush(); };
+    const visibility = (): void => {
+      if (document.visibilityState === 'hidden') void this.readingTime.flush();
+    };
     document.addEventListener('visibilitychange', visibility);
     this.listeners.push(() => {
       this.stage.removeEventListener('pointerdown', active);
@@ -278,7 +305,10 @@ export class ReaderScreen {
     // The reading theme (the app's, or 黑白灰) and the reading paper, on this
     // container only; see resolveReaderSurface.
     this.applyReadingTheme();
-    this.themeOff = subscribeTheme(this.themeScope(), () => { this.applyReadingTheme(); if (!this.disposed) this.patch({}); });
+    this.themeOff = subscribeTheme(this.themeScope(), () => {
+      this.applyReadingTheme();
+      if (!this.disposed) this.patch({});
+    });
     this.element.style.cssText = 'flex:1 1 auto;min-height:0;display:flex;flex-direction:column;position:relative;';
     this.ui = createRoot(this.element);
     this.renderChrome();
@@ -286,48 +316,122 @@ export class ReaderScreen {
     this.bindSyncStatus();
   }
 
-  private themeScope(): string { return this.options.themeScope ?? 'default'; }
+  private themeScope(): string {
+    return this.options.themeScope ?? 'default';
+  }
 
   private readerSurface() {
-    return resolveReaderSurface(readThemePreference(this.themeScope()), systemPrefersDark(), this.settings.paper ?? 'theme', this.settings.paperFollowsDark ?? true);
+    return resolveReaderSurface(
+      readThemePreference(this.themeScope()),
+      systemPrefersDark(),
+      this.settings.paper ?? 'theme',
+      this.settings.paperFollowsDark ?? true,
+    );
   }
 
   private applyReadingTheme(): void {
     const surface = this.readerSurface();
     this.element.dataset['theme'] = surface.theme;
     this.element.dataset['mode'] = surface.mode;
-    if (surface.paper) this.element.dataset['paper'] = surface.paper; else delete this.element.dataset['paper'];
+    if (surface.paper) this.element.dataset['paper'] = surface.paper;
+    else delete this.element.dataset['paper'];
   }
 
   private renderChrome(): void {
-    flushSync(() => this.ui.render(
-<ReaderChrome
-          tools={<>{this.annotation && <AnnotationPopover key={this.annotation.note?.id ?? encodeAnchor(this.annotation.anchor)} target={this.annotation}
-            save={(type, comment, color) => this.saveAnnotation(type, comment, color)} remove={() => this.removeAnnotation()}
-            close={() => { this.annotation = null; this.annotationClosedAt = performance.now(); this.view?.clearSelection(); this.patch({}); }}
-            {...(this.assistAvailable ? { askAi: () => this.openAssist() } : {})} />}{this.assist && <AiAssistSheet
-            key={encodeAnchor(this.assist.anchor)} quote={this.assist.anchor.quote} ask={(action, question) => this.askAi(action, question)} keep={comment => this.keepAnswer(comment)}
-            onClose={() => { this.assist = null; this.patch({}); }} />}{this.viewer && <ImageViewer
-            key={this.viewer.images[this.viewer.index]?.src} images={this.viewer.images} start={this.viewer.index}
-            onClose={() => this.closeViewer()} />}{this.footnote && <Sheet
-            title="注释" size="compact" className="footnote-sheet" onClose={() => { this.footnote = null; this.patch({}); }}
-            footer={<Button onClick={() => this.goToNote()}>跳到注释处</Button>}>
-            <div className="footnote-text">{this.footnote.paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div>
-          </Sheet>}{this.toolsOpen && this.manifest ? <ReadingTools
-            api={this.options.api} cache={this.publicationCache} offline={this.options.offline}
-            sync={this.options.sync} manifest={this.manifest} selection={this.toolsSelection}
-            locator={this.view?.position()?.locator ?? ''} chapterTitle={this.view?.position()?.chapterTitle ?? ''} returnLocator={this.toolsReturn}
-            sections={signal => this.searchSections(signal)} navigate={target => this.navigateTool(target)}
-            overrides={this.overrides} saveOverrides={value => this.saveOverrides(value)} undoOverrides={() => this.undoOverrides()}
-            previewHeadings={prefix => this.previewHeadings(prefix)}
-            onNotes={() => this.paintNotes()} onClose={() => { this.toolsOpen = false; this.patch({}); }}
-            previewSpeech={() => this.previewSpeech()} stopPreview={() => this.stopPreview()} /> : null}</>}
+    flushSync(() =>
+      this.ui.render(
+        <ReaderChrome
+          tools={
+            <>
+              {this.annotation && (
+                <AnnotationPopover
+                  key={this.annotation.note?.id ?? encodeAnchor(this.annotation.anchor)}
+                  target={this.annotation}
+                  save={(type, comment, color) => this.saveAnnotation(type, comment, color)}
+                  remove={() => this.removeAnnotation()}
+                  close={() => {
+                    this.annotation = null;
+                    this.annotationClosedAt = performance.now();
+                    this.view?.clearSelection();
+                    this.patch({});
+                  }}
+                  {...(this.assistAvailable ? { askAi: () => this.openAssist() } : {})}
+                />
+              )}
+              {this.assist && (
+                <AiAssistSheet
+                  key={encodeAnchor(this.assist.anchor)}
+                  quote={this.assist.anchor.quote}
+                  ask={(action, question) => this.askAi(action, question)}
+                  keep={(comment) => this.keepAnswer(comment)}
+                  onClose={() => {
+                    this.assist = null;
+                    this.patch({});
+                  }}
+                />
+              )}
+              {this.viewer && (
+                <ImageViewer
+                  key={this.viewer.images[this.viewer.index]?.src}
+                  images={this.viewer.images}
+                  start={this.viewer.index}
+                  onClose={() => this.closeViewer()}
+                />
+              )}
+              {this.footnote && (
+                <Sheet
+                  title="注释"
+                  size="compact"
+                  className="footnote-sheet"
+                  onClose={() => {
+                    this.footnote = null;
+                    this.patch({});
+                  }}
+                  footer={<Button onClick={() => this.goToNote()}>跳到注释处</Button>}
+                >
+                  <div className="footnote-text">
+                    {this.footnote.paragraphs.map((paragraph, index) => (
+                      <p key={index}>{paragraph}</p>
+                    ))}
+                  </div>
+                </Sheet>
+              )}
+              {this.toolsOpen && this.manifest ? (
+                <ReadingTools
+                  api={this.options.api}
+                  cache={this.publicationCache}
+                  offline={this.options.offline}
+                  sync={this.options.sync}
+                  manifest={this.manifest}
+                  selection={this.toolsSelection}
+                  locator={this.view?.position()?.locator ?? ''}
+                  chapterTitle={this.view?.position()?.chapterTitle ?? ''}
+                  returnLocator={this.toolsReturn}
+                  sections={(signal) => this.searchSections(signal)}
+                  navigate={(target) => this.navigateTool(target)}
+                  overrides={this.overrides}
+                  saveOverrides={(value) => this.saveOverrides(value)}
+                  undoOverrides={() => this.undoOverrides()}
+                  previewHeadings={(prefix) => this.previewHeadings(prefix)}
+                  onNotes={() => this.paintNotes()}
+                  onClose={() => {
+                    this.toolsOpen = false;
+                    this.patch({});
+                  }}
+                  previewSpeech={() => this.previewSpeech()}
+                  stopPreview={() => this.stopPreview()}
+                />
+              ) : null}
+            </>
+          }
           state={this.chrome}
           stage={this.stage}
           handlers={{
             onTools: () => this.openTools(),
             onBack: () => this.options.onBack(),
-            onRetryOpen: () => { if (this.book) void this.open(this.book); },
+            onRetryOpen: () => {
+              if (this.book) void this.open(this.book);
+            },
             onToggleBookmark: () => void this.toggleBookmark(),
             toggleToc: () => this.toggleToc(),
             toggleSettings: (tab) => this.toggleSettings(tab),
@@ -335,30 +439,66 @@ export class ReaderScreen {
             theme: () => {
               const preference = readThemePreference(this.themeScope());
               const systemDark = systemPrefersDark();
-              return { preference, app: resolveAppTheme(preference, systemDark), reading: resolveReadingTheme(preference, systemDark), surface: this.readerSurface() };
+              return {
+                preference,
+                app: resolveAppTheme(preference, systemDark),
+                reading: resolveReadingTheme(preference, systemDark),
+                surface: this.readerSurface(),
+              };
             },
-            onTheme: (patch) => { try { saveThemePreference(this.themeScope(), patch); } catch { /* the device refused storage; the choice simply does not stick */ } this.patch({}); },
+            onTheme: (patch) => {
+              try {
+                saveThemePreference(this.themeScope(), patch);
+              } catch {
+                /* the device refused storage; the choice simply does not stick */
+              }
+              this.patch({});
+            },
             onSpeechSetting: (patch) => this.updateSpeechSetting(patch),
             onVoice: (voice) => this.updateSpeechSetting({ ttsVoice: voice }),
             onSpeakFromHere: () => void this.speakFromReaderPosition(),
             onSwitchEngine: (kind) => this.switchSpeechEngine(kind),
             onTocEntry: (ref) => void this.goToChapterRef(ref),
             onChapter: (delta) => void this.goToChapter(delta),
-            onBookInfo: () => { const open = !this.chrome.bookInfoOpen; this.patch({ bookInfoOpen: open }); if (open) void this.loadHistory(); },
+            onBookInfo: () => {
+              const open = !this.chrome.bookInfoOpen;
+              this.patch({ bookInfoOpen: open });
+              if (open) void this.loadHistory();
+            },
             onRetryHistory: () => void this.loadHistory(),
             onRestoreHistory: (locator) => void this.restoreHistory(locator),
             onAiSummary: () => void this.generateAiSummary(),
             onRefresh: () => void this.refreshPublication(),
             onRefreshChapter: () => void this.refreshChapter(),
-            onAlternatives: cursor => void this.loadAlternatives(cursor),
+            onAlternatives: (cursor) => void this.loadAlternatives(cursor),
             onAlternative: (ref, title) => void this.previewAlternative(ref, title),
-            onAlternativeChapter: id => { this.qualityRun?.abort(); this.patch({ alternativeChapter: id, alternativeQuality:null, alternativeQualityError:'', alternativeQualityBusy:false }); },
+            onAlternativeChapter: (id) => {
+              this.qualityRun?.abort();
+              this.patch({
+                alternativeChapter: id,
+                alternativeQuality: null,
+                alternativeQualityError: '',
+                alternativeQualityBusy: false,
+              });
+            },
             onCheckAlternative: () => void this.checkAlternative(),
             onSwitchSource: () => void this.switchSource(),
             onCancelSwitch: () => this.closeAlternatives(),
-            onCancelAlternative: () => { this.qualityRun?.abort(); this.patch({ alternativeChapters: undefined, alternativeChapter: '', alternativeQuality:null, alternativeQualityError:'', alternativeQualityBusy:false }); },
+            onCancelAlternative: () => {
+              this.qualityRun?.abort();
+              this.patch({
+                alternativeChapters: undefined,
+                alternativeChapter: '',
+                alternativeQuality: null,
+                alternativeQualityError: '',
+                alternativeQualityBusy: false,
+              });
+            },
             onScrubPage: (page) => void this.scrubToPage(page),
-            onScrubChapter: (chapter) => { if (!this.navigating && !this.chrome.refreshing && !this.chrome.switching) void this.goToSection(chapter - 1); },
+            onScrubChapter: (chapter) => {
+              if (!this.navigating && !this.chrome.refreshing && !this.chrome.switching)
+                void this.goToSection(chapter - 1);
+            },
             onTurnPage: (direction) => void this.turnPage(direction),
             onSpeechToggle: () => this.toggleSpeech(),
             onSpeechPrevious: () => void this.tts?.previous(),
@@ -366,8 +506,9 @@ export class ReaderScreen {
             onSpeechScrub: (index) => this.onSpeechScrub(index),
             onStopSpeech: () => this.stopSpeech(),
           }}
-        />
-    ));
+        />,
+      ),
+    );
   }
 
   /**
@@ -381,12 +522,17 @@ export class ReaderScreen {
    * how to fetch a window.
    */
   private previewNote(ref: string | null, fragment: string): boolean {
-    const view = this.view, doc = this.doc;
+    const view = this.view,
+      doc = this.doc;
     if (!view || !doc || this.toolsOpen || this.navigating) return false;
     const current = view.position().sectionIndex;
     const index = ref === null ? current : view.indexOfSection(this.localSectionId(ref));
     if (index < 0) return false;
-    const show = (paragraphs: string[]): void => { this.annotation = null; this.footnote = { paragraphs, ref: index === current ? null : ref, fragment }; this.patch({}); };
+    const show = (paragraphs: string[]): void => {
+      this.annotation = null;
+      this.footnote = { paragraphs, ref: index === current ? null : ref, fragment };
+      this.patch({});
+    };
     if (index === current) {
       const paragraphs = view.noteAt(fragment);
       if (paragraphs) show(paragraphs);
@@ -396,12 +542,17 @@ export class ReaderScreen {
     void (async () => {
       let paragraphs: string[] | null = null;
       try {
-        const lazy = doc as BookDoc & { loadSection?(index: number): Promise<import('../formats/types.ts').Section | null> };
+        const lazy = doc as BookDoc & {
+          loadSection?(index: number): Promise<import('../formats/types.ts').Section | null>;
+        };
         const section = lazy.loadSection ? await lazy.loadSection(index) : doc.sections[index];
         if (section?.html && section.bodyIsMarkup !== false) paragraphs = noteInMarkup(section.html, fragment);
-      } catch { /* unreadable right now: the jump reports it in its own words */ }
+      } catch {
+        /* unreadable right now: the jump reports it in its own words */
+      }
       if (epoch !== this.viewEpoch || this.disposed) return;
-      if (paragraphs) show(paragraphs); else void this.goToChapterRef(`${ref}#${fragment}`);
+      if (paragraphs) show(paragraphs);
+      else void this.goToChapterRef(`${ref}#${fragment}`);
     })();
     return true;
   }
@@ -423,21 +574,40 @@ export class ReaderScreen {
   }
 
   private async askAi(action: AssistAction, question: string): Promise<string> {
-    const book = this.book, assist = this.assist;
+    const book = this.book,
+      assist = this.assist;
     if (!book || !assist) throw new Error('阅读器已关闭');
     const { anchor, context } = assist;
-    const result = await this.options.api.aiAssist(book.id, { action, text: anchor.quote, ...(context !== anchor.quote ? { context } : {}), ...(question ? { question } : {}) });
+    const result = await this.options.api.aiAssist(book.id, {
+      action,
+      text: anchor.quote,
+      ...(context !== anchor.quote ? { context } : {}),
+      ...(question ? { question } : {}),
+    });
     return result.answer;
   }
 
   /** Keeps an AI answer as an annotation on the passage it was about, so it shows in 读书笔记. */
   private async keepAnswer(comment: string): Promise<void> {
-    const book = this.book, assist = this.assist;
+    const book = this.book,
+      assist = this.assist;
     if (!book || !assist) throw new Error('阅读器已关闭');
     const chapterTitle = this.view?.position()?.chapterTitle;
-    await this.options.offline.upsertNotes([{ id: newId(), bookId: book.id, type: 'note', locator: encodeAnchor(assist.anchor),
-      text: assist.anchor.quote, comment, color: '#ffd54f', ...(chapterTitle !== undefined ? { chapterTitle } : {}), updatedAt: Date.now() }]);
-    this.options.sync.schedule(); this.paintNotes();
+    await this.options.offline.upsertNotes([
+      {
+        id: newId(),
+        bookId: book.id,
+        type: 'note',
+        locator: encodeAnchor(assist.anchor),
+        text: assist.anchor.quote,
+        comment,
+        color: '#ffd54f',
+        ...(chapterTitle !== undefined ? { chapterTitle } : {}),
+        updatedAt: Date.now(),
+      },
+    ]);
+    this.options.sync.schedule();
+    this.paintNotes();
   }
 
   /**
@@ -450,7 +620,10 @@ export class ReaderScreen {
   private openPagePicture(): boolean {
     const picture = this.view?.pagePicture();
     if (!picture) return false;
-    if (this.options.pageHost) { this.options.pageHost.hide(); this.viewerOverNativePage = true; }
+    if (this.options.pageHost) {
+      this.options.pageHost.hide();
+      this.viewerOverNativePage = true;
+    }
     this.viewer = picture;
     this.patch({});
     return true;
@@ -475,10 +648,16 @@ export class ReaderScreen {
   }
 
   private async generateAiSummary(): Promise<void> {
-    if (this.chrome.aiSummary) { this.patch({ aiSummary: '' }); return; }
+    if (this.chrome.aiSummary) {
+      this.patch({ aiSummary: '' });
+      return;
+    }
     if (!this.book || !this.chrome.currentSectionId || this.chrome.aiSummaryBusy) return;
     const content = this.stage.textContent?.trim() || '';
-    if (!content) { this.flashStatus('当前章节没有可总结的正文', 2400); return; }
+    if (!content) {
+      this.flashStatus('当前章节没有可总结的正文', 2400);
+      return;
+    }
     this.patch({ aiSummaryBusy: true, aiSummary: '' });
     try {
       const result = await this.options.api.aiSummary(this.book.id, this.chrome.currentSectionId, content);
@@ -499,45 +678,83 @@ export class ReaderScreen {
     this.doc?.pdf?.dispose();
     const pdfLoading = new AbortController();
     this.pdfLoading = pdfLoading;
-    this.closeAlternatives(); this.chapterRefresh?.abort(); this.chapterRefresh = null;
+    this.closeAlternatives();
+    this.chapterRefresh?.abort();
+    this.chapterRefresh = null;
     const token = ++this.loadingToken;
-    this.toolsOpen = false; this.annotation = null; this.footnote = null; this.assist = null; this.viewer = null; this.viewerOverNativePage = false; this.toolsReturn = ''; this.toolsSelection = null; this.stopPreview();
-    this.content = null; this.book = book;
+    this.toolsOpen = false;
+    this.annotation = null;
+    this.footnote = null;
+    this.assist = null;
+    this.viewer = null;
+    this.viewerOverNativePage = false;
+    this.toolsReturn = '';
+    this.toolsSelection = null;
+    this.stopPreview();
+    this.content = null;
+    this.book = book;
     let opened = false;
     if (book.title) document.title = `${book.title} · reader`;
-    this.patch({ openFailure: '', title: book.title, author: book.author, description: book.description, bookInfoOpen: false, canRefresh: book.format === 'chapters', canSwitch: false, alternatives: null, refreshingChapter: false, sourceName: '', chapterUrl: '', toc: [] });
+    this.patch({
+      openFailure: '',
+      title: book.title,
+      author: book.author,
+      description: book.description,
+      bookInfoOpen: false,
+      canRefresh: book.format === 'chapters',
+      canSwitch: false,
+      alternatives: null,
+      refreshingChapter: false,
+      sourceName: '',
+      chapterUrl: '',
+      toc: [],
+    });
     this.setStatus('loading', '正在载入…');
     this.setChromeVisible(true);
 
     try {
       this.manifest = await this.loadManifest(book);
       if (token !== this.loadingToken) return;
-      const storedOverrides = await this.publicationCache.overrides(book.id) ?? emptyOverrides();
+      const storedOverrides = (await this.publicationCache.overrides(book.id)) ?? emptyOverrides();
       if (token !== this.loadingToken) return;
       this.overrides = storedOverrides;
       try {
         const remote = await this.options.api.readingOverrides(book.id);
         if (token !== this.loadingToken) return;
         if (remote && Number.isSafeInteger(remote.version) && Array.isArray(remote.corrections)) {
-          this.overrides = remote; await this.publicationCache.putOverrides(book.id,remote).catch(() => undefined);
+          this.overrides = remote;
+          await this.publicationCache.putOverrides(book.id, remote).catch(() => undefined);
         }
-      } catch (error) { if (error instanceof ApiError && error.isAuthFailure) throw error; }
+      } catch (error) {
+        if (error instanceof ApiError && error.isAuthFailure) throw error;
+      }
       if (token !== this.loadingToken) return;
       // 无能力 → 不渲染 (ui.md §5): AI 总结 only appears when the server will answer it.
       // An older server without the endpoint keeps the button, as it always had.
       if (typeof this.options.api.aiCapabilities === 'function' && this.chrome.aiSummaryAvailable === undefined) {
-        void this.options.api.aiCapabilities().then(capabilities => {
-          if (!this.disposed) { this.assistAvailable = capabilities.assist === true; this.patch({ aiSummaryAvailable: capabilities.summary }); }
-        }).catch(error => {
-          if (!this.disposed && error instanceof ApiError && error.kind === 'not_found') this.patch({ aiSummaryAvailable: true });
-        });
+        void this.options.api
+          .aiCapabilities()
+          .then((capabilities) => {
+            if (!this.disposed) {
+              this.assistAvailable = capabilities.assist === true;
+              this.patch({ aiSummaryAvailable: capabilities.summary });
+            }
+          })
+          .catch((error) => {
+            if (!this.disposed && error instanceof ApiError && error.kind === 'not_found')
+              this.patch({ aiSummaryAvailable: true });
+          });
       }
       if (book.format === 'chapters' && typeof this.options.api.sourceOptions === 'function') {
-        void this.options.api.sourceOptions(book.id).then(options => {
-          if (token === this.loadingToken) this.patch({ canSwitch: options.canSwitch });
-        }).catch(error => {
-          if (token === this.loadingToken && error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
-        });
+        void this.options.api
+          .sourceOptions(book.id)
+          .then((options) => {
+            if (token === this.loadingToken) this.patch({ canSwitch: options.canSwitch });
+          })
+          .catch((error) => {
+            if (token === this.loadingToken && error instanceof ApiError && error.isAuthFailure)
+              this.options.onSignedOut();
+          });
       }
 
       // A staged book is read through the windowed contract and never downloads
@@ -563,7 +780,9 @@ export class ReaderScreen {
       let loaded: LoadedBook;
       if (book.format === 'pdf') {
         const cached = await this.publicationCache.resource(book.id, OFFLINE_FILE);
-        const source = cached?.byteLength ? cached : await this.options.api.pdfSource(book.id, { signal: pdfLoading.signal });
+        const source = cached?.byteLength
+          ? cached
+          : await this.options.api.pdfSource(book.id, { signal: pdfLoading.signal });
         if (token !== this.loadingToken) return;
         const { loadPdf } = await import('../formats/pdf.ts');
         loaded = { doc: await loadPdf(source, pdfLoading.signal), notes: [] };
@@ -572,7 +791,10 @@ export class ReaderScreen {
         if (token !== this.loadingToken) return;
         loaded = await this.loadDoc(book, this.manifest, bytes);
       }
-      if (token !== this.loadingToken) { loaded.doc.pdf?.dispose(); return; }
+      if (token !== this.loadingToken) {
+        loaded.doc.pdf?.dispose();
+        return;
+      }
 
       this.doc = loaded.doc;
       opened = true;
@@ -586,7 +808,8 @@ export class ReaderScreen {
       if (token !== this.loadingToken) return;
       this.handleLoadError(err);
       // A toast fades after a few seconds; an empty stage behind it must keep saying why.
-      if (!opened && !this.disposed && (this.chrome.statusState === 'error' || this.chrome.statusState === 'offline')) this.patch({ openFailure: this.chrome.statusText || '无法打开这本书' });
+      if (!opened && !this.disposed && (this.chrome.statusState === 'error' || this.chrome.statusState === 'offline'))
+        this.patch({ openFailure: this.chrome.statusText || '无法打开这本书' });
     }
   }
 
@@ -604,7 +827,8 @@ export class ReaderScreen {
    */
   private async openStaged(book: Book, token: number): Promise<{ doc: BookDoc } | null> {
     if (book.format === 'txt' && this.overrides.headingPrefix) return null;
-    if (!['chapters', 'txt'].includes(book.format) && await this.publicationCache.resource(book.id, OFFLINE_FILE)) return null;
+    if (!['chapters', 'txt'].includes(book.format) && (await this.publicationCache.resource(book.id, OFFLINE_FILE)))
+      return null;
     const manifest = this.manifest;
     const content = manifest?.content;
     if (!content || !isStagedKind(content.kind)) return null;
@@ -627,9 +851,12 @@ export class ReaderScreen {
     if (book.format !== 'chapters') {
       try {
         const fetched = await this.options.api.toc(book.id);
-        if (Array.isArray(fetched)) { toc = fetched; await this.publicationCache.putToc(book.id, toc).catch(() => undefined); }
+        if (Array.isArray(fetched)) {
+          toc = fetched;
+          await this.publicationCache.putToc(book.id, toc).catch(() => undefined);
+        }
       } catch {
-        toc = await this.publicationCache.toc(book.id) ?? [];
+        toc = (await this.publicationCache.toc(book.id)) ?? [];
       }
     }
     if (toc.length === 0) {
@@ -638,16 +865,22 @@ export class ReaderScreen {
         title: item.title,
         level: 0,
         spine: item.seq,
-        ...(item.volume ? { volume: item.volume } : {}), ...(item.note ? { note: item.note } : {}),
+        ...(item.volume ? { volume: item.volume } : {}),
+        ...(item.note ? { note: item.note } : {}),
       }));
     }
     if (token !== this.loadingToken) return null;
 
-    this.patch({ toc: toc.map((entry) => ({
-      id: entry.href, label: entry.title, depth: entry.level,
-      ...(entry.spine === undefined ? {} : { spine: entry.spine }),
-      ...(entry.volume ? { volume: entry.volume } : {}), ...(entry.note ? { note: entry.note } : {}),
-    })) });
+    this.patch({
+      toc: toc.map((entry) => ({
+        id: entry.href,
+        label: entry.title,
+        depth: entry.level,
+        ...(entry.spine === undefined ? {} : { spine: entry.spine }),
+        ...(entry.volume ? { volume: entry.volume } : {}),
+        ...(entry.note ? { note: entry.note } : {}),
+      })),
+    });
 
     this.content = content;
     const doc = createStagedDoc({
@@ -695,7 +928,7 @@ export class ReaderScreen {
       fresh = await this.options.api.asset(book.id, ref).catch(() => null);
       if (fresh) cached = null;
     }
-    const blob = cached ? new Blob([toArrayBuffer(cached)]) : fresh ?? await this.options.api.asset(book.id, ref);
+    const blob = cached ? new Blob([toArrayBuffer(cached)]) : (fresh ?? (await this.options.api.asset(book.id, ref)));
     if (!cached) {
       // Cached per section, not per book, so a partially read book is partially
       // readable offline and re-opening one does not re-fetch what was read.
@@ -713,7 +946,12 @@ export class ReaderScreen {
     // as they are); this only re-typesets, and applies when *read*, so chapters the
     // server cached before the plugin cleaned them are fixed too. A chapter with
     // images (every comic chapter) or tables keeps its markup; EPUBs never get here.
-    if (book.format === 'chapters' && item.kind === 'chapter' && /html/i.test(item.mediaType) && isTextOnlyMarkup(body)) {
+    if (
+      book.format === 'chapters' &&
+      item.kind === 'chapter' &&
+      /html/i.test(item.mediaType) &&
+      isTextOnlyMarkup(body)
+    ) {
       return { html: htmlToText(body), plainText: true };
     }
     return { html: body };
@@ -723,7 +961,8 @@ export class ReaderScreen {
     this.pdfLoading?.abort();
     this.doc?.pdf?.dispose();
     this.themeOff?.();
-    this.closeAlternatives(); this.chapterRefresh?.abort();
+    this.closeAlternatives();
+    this.chapterRefresh?.abort();
     this.stopPreview();
     this.disposed = true;
     this.loadingToken += 1;
@@ -755,39 +994,49 @@ export class ReaderScreen {
 
   private async previewHeadings(prefix: string): Promise<string[]> {
     if (!this.book || !this.manifest) throw new Error('阅读器已关闭');
-    const bytes = await this.fetchBookBytes(this.book,this.manifest);
-    const result = loadTxt({ bytes,bookId:this.book.id,fileName:'preview.txt' },{ headingPrefix:prefix, ...(this.settings.txtEncoding ? {encoding:this.settings.txtEncoding} : {}) });
-    return result.doc.toc.map(entry => entry.label);
+    const bytes = await this.fetchBookBytes(this.book, this.manifest);
+    const result = loadTxt(
+      { bytes, bookId: this.book.id, fileName: 'preview.txt' },
+      { headingPrefix: prefix, ...(this.settings.txtEncoding ? { encoding: this.settings.txtEncoding } : {}) },
+    );
+    return result.doc.toc.map((entry) => entry.label);
   }
   private async saveOverrides(value: ReadingOverrides): Promise<void> {
     if (!this.book) return;
     const token = this.loadingToken;
-    const next = await this.options.api.saveReadingOverrides(this.book.id,value);
+    const next = await this.options.api.saveReadingOverrides(this.book.id, value);
     if (token === this.loadingToken) await this.applyOverrides(next);
   }
   private async undoOverrides(): Promise<void> {
     if (!this.book) return;
     const token = this.loadingToken;
-    const next = await this.options.api.undoReadingOverrides(this.book.id,this.overrides.version);
+    const next = await this.options.api.undoReadingOverrides(this.book.id, this.overrides.version);
     if (token === this.loadingToken) await this.applyOverrides(next);
   }
   private async applyOverrides(next: ReadingOverrides): Promise<void> {
-    const book = this.book; if (!book) return;
+    const book = this.book;
+    if (!book) return;
     const oldPrefix = this.overrides.headingPrefix;
     this.overrides = next;
-    await this.publicationCache.putOverrides(book.id,next).catch(() => undefined);
+    await this.publicationCache.putOverrides(book.id, next).catch(() => undefined);
     if (oldPrefix !== next.headingPrefix) {
       await this.flushProgress();
-      this.content = null; this.patch({toc:[]});
+      this.content = null;
+      this.patch({ toc: [] });
       if (!this.manifest) return;
-      const staged = await this.openStaged(book,this.loadingToken);
-      this.doc = staged?.doc ?? (await this.loadDoc(book,this.manifest,await this.fetchBookBytes(book,this.manifest))).doc;
-      this.afterDocLoaded(); await this.view?.open(0,0); this.toolsReturn = '';
+      const staged = await this.openStaged(book, this.loadingToken);
+      this.doc =
+        staged?.doc ?? (await this.loadDoc(book, this.manifest, await this.fetchBookBytes(book, this.manifest))).doc;
+      this.afterDocLoaded();
+      await this.view?.open(0, 0);
+      this.toolsReturn = '';
     } else {
       const position = this.view?.position();
       if (position) await this.view?.openLocator(position.locator);
     }
-    this.toolsSelection = null; this.paintNotes(); this.patch({});
+    this.toolsSelection = null;
+    this.paintNotes();
+    this.patch({});
   }
 
   private openTools(): void {
@@ -801,10 +1050,20 @@ export class ReaderScreen {
 
   private paintNotes(): void {
     if (!this.book) return;
-    this.view?.paintAnnotations(this.options.offline.notesFor(this.book.id).flatMap(note => {
-      const anchor = decodeAnchor(note.locator);
-      return anchor && note.type !== 'bookmark' ? [{ id: note.id, anchor: { ...anchor, sectionId: this.localSectionId(anchor.sectionId) }, color: note.color || '#ffd54f' }] : [];
-    }));
+    this.view?.paintAnnotations(
+      this.options.offline.notesFor(this.book.id).flatMap((note) => {
+        const anchor = decodeAnchor(note.locator);
+        return anchor && note.type !== 'bookmark'
+          ? [
+              {
+                id: note.id,
+                anchor: { ...anchor, sectionId: this.localSectionId(anchor.sectionId) },
+                color: note.color || '#ffd54f',
+              },
+            ]
+          : [];
+      }),
+    );
   }
 
   private async saveAnnotation(type: 'highlight' | 'note' | 'bookmark', comment: string, color: string): Promise<void> {
@@ -812,51 +1071,88 @@ export class ReaderScreen {
     const { anchor, note } = this.annotation;
     // A new note records the chapter on screen; an edited one keeps its chapter and its tags.
     const chapterTitle = note ? note.chapterTitle : this.view?.position()?.chapterTitle;
-    await this.options.offline.upsertNotes([{ id: note?.id ?? newId(), bookId: this.book.id,
-      type, locator: encodeAnchor(anchor), text: anchor.quote, comment, color,
-      ...(chapterTitle !== undefined ? { chapterTitle } : {}), ...(note?.tags ? { tags: note.tags } : {}), updatedAt: Date.now() }]);
-    this.options.sync.schedule(); this.paintNotes();
+    await this.options.offline.upsertNotes([
+      {
+        id: note?.id ?? newId(),
+        bookId: this.book.id,
+        type,
+        locator: encodeAnchor(anchor),
+        text: anchor.quote,
+        comment,
+        color,
+        ...(chapterTitle !== undefined ? { chapterTitle } : {}),
+        ...(note?.tags ? { tags: note.tags } : {}),
+        updatedAt: Date.now(),
+      },
+    ]);
+    this.options.sync.schedule();
+    this.paintNotes();
   }
   private async removeAnnotation(): Promise<void> {
     if (!this.annotation?.note) return;
-    await this.options.offline.deleteNote(this.annotation.note.id); this.options.sync.schedule(); this.paintNotes();
+    await this.options.offline.deleteNote(this.annotation.note.id);
+    this.options.sync.schedule();
+    this.paintNotes();
   }
 
   private searchText(html: string, sectionId: string): string {
-    const root = new DOMParser().parseFromString(html,'text/html').body;
-    applyCorrections(root,sectionId,this.overrides);
+    const root = new DOMParser().parseFromString(html, 'text/html').body;
+    applyCorrections(root, sectionId, this.overrides);
     return searchableText(root.innerHTML);
   }
   private async *searchSections(signal: AbortSignal): AsyncGenerator<SearchSection> {
-    const doc = this.doc, book = this.book, content = this.manifest?.content;
+    const doc = this.doc,
+      book = this.book,
+      content = this.manifest?.content;
     if (!doc || !book || doc.layout === 'fixed') throw new Error('此格式暂不支持正文搜索');
     if (this.content && content) {
       for (let group = 0; group < Math.max(1, content.groups.length); group++) {
         signal.throwIfAborted();
         const window = group === 0 ? content : await this.publicationCache.window(book.id, group);
-        if (!window || window.revision !== content.revision) throw new Error('部分目录未缓存，离线搜索不完整；已保留找到的结果');
+        if (!window || window.revision !== content.revision)
+          throw new Error('部分目录未缓存，离线搜索不完整；已保留找到的结果');
         for (const item of window.items) {
           signal.throwIfAborted();
           const ref = renditionRef(item);
           const bytes = await this.publicationCache.resource(book.id, ref);
           if (!bytes) throw new Error('部分章节未缓存，离线搜索不完整；已保留找到的结果');
           const html = new TextDecoder().decode(bytes);
-          yield { id: item.href, title: item.title, text: this.searchText(/(?:xhtml|html|xml)/i.test(item.mediaType) ? html : textToChapterHtml(html),item.href) };
+          yield {
+            id: item.href,
+            title: item.title,
+            text: this.searchText(
+              /(?:xhtml|html|xml)/i.test(item.mediaType) ? html : textToChapterHtml(html),
+              item.href,
+            ),
+          };
         }
       }
     } else {
-      const lazy = doc as BookDoc & { loadSection?(index: number): Promise<import('../formats/types.ts').Section | null> };
+      const lazy = doc as BookDoc & {
+        loadSection?(index: number): Promise<import('../formats/types.ts').Section | null>;
+      };
       for (let i = 0; i < doc.sections.length; i++) {
         signal.throwIfAborted();
         const section = lazy.loadSection ? await lazy.loadSection(i) : doc.sections[i];
-        if (section) yield { id: section.id, title: section.label, text: this.searchText(section.bodyIsMarkup === false ? textToChapterHtml(section.html ?? '') : section.html ?? '',section.id) };
+        if (section)
+          yield {
+            id: section.id,
+            title: section.label,
+            text: this.searchText(
+              section.bodyIsMarkup === false ? textToChapterHtml(section.html ?? '') : (section.html ?? ''),
+              section.id,
+            ),
+          };
       }
     }
   }
 
   private async readWindow(bookId: string, group: number, signal?: AbortSignal): Promise<BookContent> {
-    try { const content = await this.options.api.items(bookId, group, signal ? { signal } : {}); await this.publicationCache.putWindow(bookId, group, content).catch(() => undefined); return content; }
-    catch (error) {
+    try {
+      const content = await this.options.api.items(bookId, group, signal ? { signal } : {});
+      await this.publicationCache.putWindow(bookId, group, content).catch(() => undefined);
+      return content;
+    } catch (error) {
       if (error instanceof ApiError && !error.isConnectivity && error.kind !== 'server') throw error;
       const cached = await this.publicationCache.window(bookId, group);
       if (cached && cached.revision === this.manifest?.content?.revision) return cached;
@@ -870,7 +1166,9 @@ export class ReaderScreen {
     // have matches no chapter: saved, synced, and never drawn.
     const bare = id.replace(/^xhtml:/, '');
     const sections = this.doc?.sections ?? [];
-    const known = sections.find(section => section.id === id) ?? sections.find(section => section.id.replace(/^xhtml:/, '') === bare);
+    const known =
+      sections.find((section) => section.id === id) ??
+      sections.find((section) => section.id.replace(/^xhtml:/, '') === bare);
     if (known) return known.id;
     if (!this.content && this.book?.format === 'epub') return id.replace(/^xhtml:/, '');
     if (this.content && this.book?.format === 'epub' && !id.startsWith('xhtml:')) return 'xhtml:' + id;
@@ -884,46 +1182,72 @@ export class ReaderScreen {
   private async navigateTool(target: TextAnchor | string): Promise<void> {
     if (!this.view) throw new Error('阅读器已关闭');
     const locator = typeof target === 'string' ? /^r1:([^:]+):(.+)$/.exec(target) : null;
-    const section = typeof target === 'string' ? locator?.[2] ?? target : target.sectionId;
+    const section = typeof target === 'string' ? (locator?.[2] ?? target) : target.sectionId;
     await this.goToChapterRef(section);
     if (typeof target === 'string') {
-      if (!await this.view.openLocator(this.compatibleLocator(target))) throw new Error('无法恢复此位置，章节可能已更新');
+      if (!(await this.view.openLocator(this.compatibleLocator(target))))
+        throw new Error('无法恢复此位置，章节可能已更新');
       if (target === this.toolsReturn) this.toolsReturn = '';
-    } else if (!this.view.showTextAnchor({ ...target, sectionId: this.localSectionId(target.sectionId) })) throw new Error('原文位置已变化，无法准确定位');
+    } else if (!this.view.showTextAnchor({ ...target, sectionId: this.localSectionId(target.sectionId) }))
+      throw new Error('原文位置已变化，无法准确定位');
     this.paintNotes();
   }
 
-  private stopPreview(): void { this.previewRun?.abort(); this.previewRun = null; this.preview?.dispose(); this.preview = null; }
+  private stopPreview(): void {
+    this.previewRun?.abort();
+    this.previewRun = null;
+    this.preview?.dispose();
+    this.preview = null;
+  }
 
   private async previewSpeech(): Promise<string> {
-    this.stopPreview(); this.tts?.stop();
-    const run = this.previewRun = new AbortController();
+    this.stopPreview();
+    this.tts?.stop();
+    const run = (this.previewRun = new AbortController());
     const requested = this.settings.ttsEngine;
     const available = this.speechAvailability();
     const kind = requested === 'auto' ? available.preferred : requested;
     if (!kind) throw new Error('当前设备没有可用语音，请配置系统语音或 HTTP 服务');
     if (kind === 'http') {
-      try { await this.options.api.testSpeech(this.settings.ttsVoice, this.settings.ttsRate, { signal: run.signal }); }
-      catch (error) {
-        const labels: Record<string, string> = { TTS_DISABLED: '服务端未配置 HTTP 朗读', TTS_AUTH: '朗读上游鉴权失败，请检查服务端凭据', TTS_TIMEOUT: '朗读上游超时，请重试', TTS_EMPTY: '上游返回空音频', TTS_CONTENT: '上游返回的不是音频，请检查服务地址', TTS_UPSTREAM: '无法访问朗读上游服务' };
+      try {
+        await this.options.api.testSpeech(this.settings.ttsVoice, this.settings.ttsRate, { signal: run.signal });
+      } catch (error) {
+        const labels: Record<string, string> = {
+          TTS_DISABLED: '服务端未配置 HTTP 朗读',
+          TTS_AUTH: '朗读上游鉴权失败，请检查服务端凭据',
+          TTS_TIMEOUT: '朗读上游超时，请重试',
+          TTS_EMPTY: '上游返回空音频',
+          TTS_CONTENT: '上游返回的不是音频，请检查服务地址',
+          TTS_UPSTREAM: '无法访问朗读上游服务',
+        };
         if (error instanceof ApiError) throw new Error(labels[error.code] ?? error.message);
         throw error;
       }
     }
     run.signal.throwIfAborted();
     let failure = '';
-    const engine = createSpeechEngine({ kind, baseUrl: this.options.api.baseUrl,
+    const engine = createSpeechEngine({
+      kind,
+      baseUrl: this.options.api.baseUrl,
       accessToken: () => this.options.api.currentSession()?.accessToken ?? null,
       resourceToken: () => this.options.api.currentSession()?.resourceToken ?? null,
       prepareRequest: () => this.prepareSpeechRequest(),
       nativeBridge: this.options.speechBridge ?? null,
-      onError: message => { failure = message; this.flashStatus(message, 6000); },
+      onError: (message) => {
+        failure = message;
+        this.flashStatus(message, 6000);
+      },
     });
     if (!engine) throw new Error('所选语音引擎不可用，请切换引擎');
     this.preview = engine;
-    engine.setRate(this.settings.ttsRate); engine.setPitch(this.settings.ttsPitch);
-    engine.setVolume(this.settings.ttsVolume); engine.setVoice(this.settings.ttsVoice);
-    engine.loadQueue = async from => ({ chunks: from ? [] : [{ text: '这是阅读器朗读试听。愿你享受阅读的时光。', node: null, start: 0, blockIndex: 0 }], startIndex: 0 });
+    engine.setRate(this.settings.ttsRate);
+    engine.setPitch(this.settings.ttsPitch);
+    engine.setVolume(this.settings.ttsVolume);
+    engine.setVoice(this.settings.ttsVoice);
+    engine.loadQueue = async (from) => ({
+      chunks: from ? [] : [{ text: '这是阅读器朗读试听。愿你享受阅读的时光。', node: null, start: 0, blockIndex: 0 }],
+      startIndex: 0,
+    });
     await engine.play(0);
     if (failure) throw new Error(failure);
     return '已启动试听：' + SPEECH_ENGINE_LABELS[kind] + '；请确认能听到声音';
@@ -947,130 +1271,240 @@ export class ReaderScreen {
 
   private async sourceAction(action: () => Promise<void>): Promise<void> {
     if (this.chrome.switching || this.chrome.refreshing || this.chrome.refreshingChapter || this.navigating) return;
-    const token = this.loadingToken; this.patch({ switching: true });
-    try { await action(); }
-    catch (error) {
+    const token = this.loadingToken;
+    this.patch({ switching: true });
+    try {
+      await action();
+    } catch (error) {
       if (token !== this.loadingToken) return;
       if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
       else this.flashStatus(error instanceof Error ? error.message : '换源操作失败', 5000);
-    } finally { if (token === this.loadingToken) this.patch({ switching: false }); }
+    } finally {
+      if (token === this.loadingToken) this.patch({ switching: false });
+    }
   }
   private closeAlternatives(): void {
-    this.qualityRun?.abort(); this.qualityRun = null;
-    this.alternativeEpoch++; this.alternativesRun?.abort(); this.alternativesRun = null;
-    this.patch({ alternatives: null, alternativeChecks: {}, alternativesSearching: false, alternativeChapters: undefined, alternativeChapter: '', alternativeQuality:null, alternativeQualityError:'', alternativeQualityBusy:false });
+    this.qualityRun?.abort();
+    this.qualityRun = null;
+    this.alternativeEpoch++;
+    this.alternativesRun?.abort();
+    this.alternativesRun = null;
+    this.patch({
+      alternatives: null,
+      alternativeChecks: {},
+      alternativesSearching: false,
+      alternativeChapters: undefined,
+      alternativeChapter: '',
+      alternativeQuality: null,
+      alternativeQualityError: '',
+      alternativeQualityBusy: false,
+    });
   }
   private async loadAlternatives(_cursor?: string): Promise<void> {
-    const book = this.book, token = this.loadingToken; if (!book) return;
+    const book = this.book,
+      token = this.loadingToken;
+    if (!book) return;
     this.closeAlternatives();
-    const run = new AbortController(); this.alternativesRun = run;
-    const sessionId = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
+    const run = new AbortController();
+    this.alternativesRun = run;
+    const sessionId = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('');
     this.patch({ alternatives: { items: [] }, alternativesSearching: true, tocOpen: false, settingsOpen: false });
     try {
       for await (const page of this.options.api.alternatives(book.id, { sessionId }, { signal: run.signal })) {
         if (run.signal.aborted || token !== this.loadingToken) return;
-        const items = new Map((this.chrome.alternatives?.items ?? []).map(entry => [entry.ref, entry]));
+        const items = new Map((this.chrome.alternatives?.items ?? []).map((entry) => [entry.ref, entry]));
         for (const entry of page.items) items.set(entry.ref, entry);
-        const errors = new Map([...(this.chrome.alternatives?.errors ?? []), ...(page.errors ?? [])].map(error => [error.source + ':' + error.code, error]));
+        const errors = new Map(
+          [...(this.chrome.alternatives?.errors ?? []), ...(page.errors ?? [])].map((error) => [
+            error.source + ':' + error.code,
+            error,
+          ]),
+        );
         this.patch({ alternatives: { ...page, items: [...items.values()], errors: [...errors.values()] } });
       }
     } catch (error) {
       if (!run.signal.aborted && token === this.loadingToken) this.handleLoadError(error);
     } finally {
-      if (this.alternativesRun === run) { this.alternativesRun = null; this.patch({ alternativesSearching: false }); }
+      if (this.alternativesRun === run) {
+        this.alternativesRun = null;
+        this.patch({ alternativesSearching: false });
+      }
     }
   }
   private async refreshChapter(): Promise<void> {
-    const book = this.book, content = this.content, token = this.loadingToken;
-    const item = content?.items.find(value => value.href === this.chrome.currentSectionId);
-    if (!book || !content || !item || this.chapterRefresh || this.chrome.refreshing || this.chrome.switching || this.navigating) return;
-    const run = new AbortController(); this.chapterRefresh = run;
-    this.patch({ refreshingChapter: true }); this.setStatus('loading', '正在重新获取当前章节…');
+    const book = this.book,
+      content = this.content,
+      token = this.loadingToken;
+    const item = content?.items.find((value) => value.href === this.chrome.currentSectionId);
+    if (
+      !book ||
+      !content ||
+      !item ||
+      this.chapterRefresh ||
+      this.chrome.refreshing ||
+      this.chrome.switching ||
+      this.navigating
+    )
+      return;
+    const run = new AbortController();
+    this.chapterRefresh = run;
+    this.patch({ refreshingChapter: true });
+    this.setStatus('loading', '正在重新获取当前章节…');
     try {
-      const blob = await this.options.api.refreshChapter(book.id, item.resourceRef ?? item.href, { signal: run.signal });
+      const blob = await this.options.api.refreshChapter(book.id, item.resourceRef ?? item.href, {
+        signal: run.signal,
+      });
       if (token !== this.loadingToken || run.signal.aborted) return;
       await this.publicationCache.putResource(book.id, renditionRef(item), new Uint8Array(await blob.arrayBuffer()));
       const toc = tocOf(content.items);
-      const doc = createStagedDoc({ kind: content.kind, content, toc, orderedByBook: true, loader: { read: value => this.readStagedSection(book, value) } });
+      const doc = createStagedDoc({
+        kind: content.kind,
+        content,
+        toc,
+        orderedByBook: true,
+        loader: { read: (value) => this.readStagedSection(book, value) },
+      });
       (doc as BookDoc & { staged?: unknown }).staged = doc;
       // Navigation remains possible during the network request; restore the current landing chapter.
       let parsed = parseLocator(this.view?.position().locator ?? '', doc);
-      let index = Math.max(0, doc.sections.findIndex(section => section.id === (parsed?.sectionId ?? item.href)));
+      let index = Math.max(
+        0,
+        doc.sections.findIndex((section) => section.id === (parsed?.sectionId ?? item.href)),
+      );
       while (true) {
         await doc.loadSection(index);
         if (token !== this.loadingToken || run.signal.aborted || this.content !== content) return;
         parsed = parseLocator(this.view?.position().locator ?? '', doc);
-        const latest = Math.max(0, doc.sections.findIndex(section => section.id === (parsed?.sectionId ?? item.href)));
+        const latest = Math.max(
+          0,
+          doc.sections.findIndex((section) => section.id === (parsed?.sectionId ?? item.href)),
+        );
         if (latest === index) break;
         index = latest;
       }
-      this.stopSpeech(); await this.flushProgress();
+      this.stopSpeech();
+      await this.flushProgress();
       if (token !== this.loadingToken || run.signal.aborted) return;
-      this.doc = doc; this.afterDocLoaded();
-      await this.view?.open(index, parsed?.offset ?? 0); this.flashStatus('章节内容已更新');
+      this.doc = doc;
+      this.afterDocLoaded();
+      await this.view?.open(index, parsed?.offset ?? 0);
+      this.flashStatus('章节内容已更新');
     } catch (error) {
       if (!run.signal.aborted && token === this.loadingToken) {
         if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
         else this.flashStatus('刷新正文失败，已保留当前章节', 4000);
       }
-    } finally { if (this.chapterRefresh === run) { this.chapterRefresh = null; this.patch({ refreshingChapter: false }); } }
+    } finally {
+      if (this.chapterRefresh === run) {
+        this.chapterRefresh = null;
+        this.patch({ refreshingChapter: false });
+      }
+    }
   }
   private async previewAlternative(ref: string, title: string): Promise<void> {
-    const book = this.book, token = this.loadingToken; if (!book) return;
-    this.qualityRun?.abort(); this.qualityRun = null;
+    const book = this.book,
+      token = this.loadingToken;
+    if (!book) return;
+    this.qualityRun?.abort();
+    this.qualityRun = null;
     const epoch = ++this.alternativeEpoch;
     await this.sourceAction(async () => {
       const preview = await this.options.api.switchPreview(book.id, ref);
       if (token !== this.loadingToken) return;
       if (epoch !== this.alternativeEpoch) return;
       this.alternativeRef = ref;
-      const label = this.chrome.toc.find(entry => entry.id === this.chrome.currentSectionId)?.label;
-      const matching = preview.chapters.filter(chapter => chapter.title === label);
-      this.patch({ alternativeChapters: preview.chapters, alternativeTitle: title, alternativeLatest:preview.latestChapter ?? '', alternativeQuality:null, alternativeQualityError:'', alternativeQualityBusy:false, alternativeChapter: matching.length === 1 ? matching[0]!.id : '' });
+      const label = this.chrome.toc.find((entry) => entry.id === this.chrome.currentSectionId)?.label;
+      const matching = preview.chapters.filter((chapter) => chapter.title === label);
+      this.patch({
+        alternativeChapters: preview.chapters,
+        alternativeTitle: title,
+        alternativeLatest: preview.latestChapter ?? '',
+        alternativeQuality: null,
+        alternativeQualityError: '',
+        alternativeQualityBusy: false,
+        alternativeChapter: matching.length === 1 ? matching[0]!.id : '',
+      });
     });
   }
   private async checkAlternative(): Promise<void> {
-    const book = this.book, ref = this.alternativeRef, chapter = this.chrome.alternativeChapter;
+    const book = this.book,
+      ref = this.alternativeRef,
+      chapter = this.chrome.alternativeChapter;
     if (!book || !ref || !chapter) return;
-    this.qualityRun?.abort(); const run = this.qualityRun = new AbortController();
-    this.patch({alternativeQuality:null,alternativeQualityError:'',alternativeQualityBusy:true});
+    this.qualityRun?.abort();
+    const run = (this.qualityRun = new AbortController());
+    this.patch({ alternativeQuality: null, alternativeQualityError: '', alternativeQualityBusy: true });
     try {
-      const quality = await this.options.api.switchQuality(book.id,ref,chapter,{signal:run.signal});
-      if (!run.signal.aborted && this.qualityRun === run) this.patch({alternativeQuality:quality,alternativeLatest:quality.latestChapter, alternativeChecks:{...this.chrome.alternativeChecks,[ref]:{quality,chapter:quality.title}}});
+      const quality = await this.options.api.switchQuality(book.id, ref, chapter, { signal: run.signal });
+      if (!run.signal.aborted && this.qualityRun === run)
+        this.patch({
+          alternativeQuality: quality,
+          alternativeLatest: quality.latestChapter,
+          alternativeChecks: { ...this.chrome.alternativeChecks, [ref]: { quality, chapter: quality.title } },
+        });
     } catch (error) {
       if (!run.signal.aborted && this.qualityRun === run) {
         if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
         else {
           const message = error instanceof Error ? error.message : '获取正文失败，请重试';
-          const title = this.chrome.alternativeChapters?.find(item => item.id === chapter)?.title ?? chapter;
-          this.patch({alternativeQualityError:message,alternativeChecks:{...this.chrome.alternativeChecks,[ref]:{error:message,chapter:title}}});
+          const title = this.chrome.alternativeChapters?.find((item) => item.id === chapter)?.title ?? chapter;
+          this.patch({
+            alternativeQualityError: message,
+            alternativeChecks: { ...this.chrome.alternativeChecks, [ref]: { error: message, chapter: title } },
+          });
         }
       }
-    } finally { if (this.qualityRun === run) { this.qualityRun=null; this.patch({alternativeQualityBusy:false}); } }
+    } finally {
+      if (this.qualityRun === run) {
+        this.qualityRun = null;
+        this.patch({ alternativeQualityBusy: false });
+      }
+    }
   }
   private async switchSource(): Promise<void> {
-    const book = this.book, previous = this.manifest, token = this.loadingToken;
+    const book = this.book,
+      previous = this.manifest,
+      token = this.loadingToken;
     if (!book || !previous || !this.alternativeRef || !this.chrome.alternativeChapter) return;
     await this.sourceAction(async () => {
       await this.flushProgress();
       if (token !== this.loadingToken) return;
-      const result = await this.options.api.switchSource(book.id, this.alternativeRef, this.chrome.alternativeChapter!, String(this.content?.revision ?? previous.content?.revision ?? previous.revision));
+      const result = await this.options.api.switchSource(
+        book.id,
+        this.alternativeRef,
+        this.chrome.alternativeChapter!,
+        String(this.content?.revision ?? previous.content?.revision ?? previous.revision),
+      );
       if (token !== this.loadingToken) return;
-      const content = result.content, toc = tocOf(content.items);
-      const doc = createStagedDoc({ kind: content.kind, content, toc, orderedByBook: true, loader: { read: item => this.readStagedSection(book, item) } });
+      const content = result.content,
+        toc = tocOf(content.items);
+      const doc = createStagedDoc({
+        kind: content.kind,
+        content,
+        toc,
+        orderedByBook: true,
+        loader: { read: (item) => this.readStagedSection(book, item) },
+      });
       (doc as BookDoc & { staged?: unknown }).staged = doc;
-      const index = doc.sections.findIndex(section => section.id === result.href);
+      const index = doc.sections.findIndex((section) => section.id === result.href);
       if (index < 0) throw new Error('新目录中找不到已选章节，请刷新目录');
       await doc.loadSection(index);
       if (token !== this.loadingToken) return;
       this.stopSpeech();
-      this.pendingPosition = null; if (this.progressTimer) clearTimeout(this.progressTimer);
-      this.manifest = { ...previous, ...content, content }; this.content = content; this.doc = doc;
+      this.pendingPosition = null;
+      if (this.progressTimer) clearTimeout(this.progressTimer);
+      this.manifest = { ...previous, ...content, content };
+      this.content = content;
+      this.doc = doc;
       void this.publicationCache.putManifest(book.id, this.manifest).catch(() => undefined);
       this.closeAlternatives();
       this.patch({ toc, alternatives: null, alternativeChapters: undefined, tocOpen: false });
-      this.afterDocLoaded(); await this.view?.open(index, 0);
-      this.onPosition(this.view?.position() ?? null); await this.flushProgress();
+      this.afterDocLoaded();
+      await this.view?.open(index, 0);
+      this.onPosition(this.view?.position() ?? null);
+      await this.flushProgress();
       this.flashStatus('已切换书源，从所选章节开头继续阅读', 4000);
     });
   }
@@ -1078,7 +1512,15 @@ export class ReaderScreen {
   private async refreshPublication(): Promise<void> {
     const book = this.book;
     const previousManifest = this.manifest;
-    if (!book || book.format !== 'chapters' || !previousManifest || this.chrome.refreshing || this.chrome.switching || this.navigating) return;
+    if (
+      !book ||
+      book.format !== 'chapters' ||
+      !previousManifest ||
+      this.chrome.refreshing ||
+      this.chrome.switching ||
+      this.navigating
+    )
+      return;
     const token = this.loadingToken;
     const previousHrefs = new Set(previousManifest.content?.items.map((item) => item.href));
     this.patch({ refreshing: true });
@@ -1088,7 +1530,10 @@ export class ReaderScreen {
       if (token !== this.loadingToken) return;
       const toc = tocOf(content.items);
       const doc = createStagedDoc({
-        kind: content.kind, content, toc, orderedByBook: true,
+        kind: content.kind,
+        content,
+        toc,
+        orderedByBook: true,
         loader: { read: (item) => this.readStagedSection(book, item) },
       });
       (doc as BookDoc & { staged?: unknown }).staged = doc;
@@ -1122,9 +1567,14 @@ export class ReaderScreen {
       this.afterDocLoaded();
       await this.view?.open(index, parsed?.offset ?? 0);
       const added = content.items.filter((item) => !previousHrefs.has(item.href)).length;
-      this.flashStatus(locator && !parsed
-        ? '目录已更新，原章节已移除，从开头开始'
-        : added > 0 ? `目录已更新，新增 ${added} 章` : '目录已更新，暂无新章节', 3200);
+      this.flashStatus(
+        locator && !parsed
+          ? '目录已更新，原章节已移除，从开头开始'
+          : added > 0
+            ? `目录已更新，新增 ${added} 章`
+            : '目录已更新，暂无新章节',
+        3200,
+      );
     } catch (error) {
       if (token !== this.loadingToken) return;
       if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
@@ -1135,7 +1585,6 @@ export class ReaderScreen {
   }
 
   private async fetchBookBytes(book: Book, manifest: Manifest): Promise<Uint8Array> {
-
     // Offline first, always. A cached book must open with no network at all —
     // that is the whole point of the按书粒度 download.
     const cached = await this.publicationCache.resource(book.id, OFFLINE_FILE);
@@ -1225,7 +1674,10 @@ export class ReaderScreen {
 
   private prepareSpeechRequest(): Promise<void> | void {
     const session = this.options.api.currentSession();
-    if (session && Math.min(session.accessTokenExpiresAt, session.resourceTokenExpiresAt ?? Infinity) <= Date.now() + 5 * 60_000) {
+    if (
+      session &&
+      Math.min(session.accessTokenExpiresAt, session.resourceTokenExpiresAt ?? Infinity) <= Date.now() + 5 * 60_000
+    ) {
       return this.options.api.renewSessionIfNeeded();
     }
   }
@@ -1252,17 +1704,34 @@ export class ReaderScreen {
     });
     this.view = new ReaderView({
       onSelection: (anchor, rect) => {
-        if (epoch !== this.viewEpoch || this.toolsOpen || this.annotation?.note || this.element.querySelector('dialog[open]')) return;
-        if (anchor && rect && anchor.quote.trim()) { this.annotation = { anchor, rect }; this.patch({}); }
-        else if (this.annotation) { this.annotation = null; this.patch({}); }
+        if (
+          epoch !== this.viewEpoch ||
+          this.toolsOpen ||
+          this.annotation?.note ||
+          this.element.querySelector('dialog[open]')
+        )
+          return;
+        if (anchor && rect && anchor.quote.trim()) {
+          this.annotation = { anchor, rect };
+          this.patch({});
+        } else if (this.annotation) {
+          this.annotation = null;
+          this.patch({});
+        }
       },
       onAnnotation: (id, rect) => {
         if (epoch !== this.viewEpoch || !this.book || this.toolsOpen) return;
-        const note = this.options.offline.notesFor(this.book.id).find(note => note.id === id);
+        const note = this.options.offline.notesFor(this.book.id).find((note) => note.id === id);
         const anchor = note && decodeAnchor(note.locator);
-        if (note && anchor) { this.view?.clearSelection(); this.annotation = { anchor, rect, note }; this.patch({}); }
+        if (note && anchor) {
+          this.view?.clearSelection();
+          this.annotation = { anchor, rect, note };
+          this.patch({});
+        }
       },
-      transformText: (root, sectionId) => { applyCorrections(root,sectionId,this.overrides); },
+      transformText: (root, sectionId) => {
+        applyCorrections(root, sectionId, this.overrides);
+      },
       container: this.stage,
       doc,
       ...(this.options.pageHost ? { pageHost: this.options.pageHost } : {}),
@@ -1312,9 +1781,20 @@ export class ReaderScreen {
       // change is also what schedules the progress write — a reader could scroll
       // through a whole chapter and have the app believe they never moved.
       this.viewListeners.push(
-        addDebouncedListener(this.view.elementHost, 'scroll', () => this.onPosition(this.view?.position() ?? null), 250),
+        addDebouncedListener(
+          this.view.elementHost,
+          'scroll',
+          () => this.onPosition(this.view?.position() ?? null),
+          250,
+        ),
       );
-      this.viewListeners.push(bindChapterPull(this.view.elementHost, () => this.settings.mode !== 'paged', direction => void this.turnPage(direction)));
+      this.viewListeners.push(
+        bindChapterPull(
+          this.view.elementHost,
+          () => this.settings.mode !== 'paged',
+          (direction) => void this.turnPage(direction),
+        ),
+      );
     }
 
     // Paged mode moves the page with the finger: a drag starts once the finger has
@@ -1355,12 +1835,16 @@ export class ReaderScreen {
       },
       // On a comic a tap turns the page, so its page is opened as a picture by a
       // long press; everywhere else a long press brings the bars back.
-      onLongPress: () => { if (!this.openPagePicture()) this.setChromeVisible(true); },
+      onLongPress: () => {
+        if (!this.openPagePicture()) this.setChromeVisible(true);
+      },
       // A tap on a picture opens it, with the rest of the chapter's pictures behind it.
       onTapTarget: (path) => {
         const pictures = this.view?.picturesAt(path);
         if (!pictures) return false;
-        this.annotation = null; this.viewer = pictures; this.patch({});
+        this.annotation = null;
+        this.viewer = pictures;
+        this.patch({});
         return true;
       },
       hasSelection: () => hasTextSelection(this.stage),
@@ -1372,11 +1856,14 @@ export class ReaderScreen {
     this.viewListeners.push(
       bindKeys(this.element, (key, shift) => {
         const rtl = this.isRtl();
-        if (key === 'PageDown' || (key === ' ' && !shift) || key === (rtl ? 'ArrowLeft' : 'ArrowRight')) void this.turnPage('next');
-        else if (key === 'PageUp' || (key === ' ' && shift) || key === (rtl ? 'ArrowRight' : 'ArrowLeft')) void this.turnPage('previous');
+        if (key === 'PageDown' || (key === ' ' && !shift) || key === (rtl ? 'ArrowLeft' : 'ArrowRight'))
+          void this.turnPage('next');
+        else if (key === 'PageUp' || (key === ' ' && shift) || key === (rtl ? 'ArrowRight' : 'ArrowLeft'))
+          void this.turnPage('previous');
         else if (key === 'Escape') this.setChromeVisible(false);
         // 专注模式 reads a paragraph at a time; outside it the arrows are not ours.
-        else if (key === 'ArrowDown' || key === 'ArrowUp') return this.view?.focusStep(key === 'ArrowDown' ? 1 : -1) ?? false;
+        else if (key === 'ArrowDown' || key === 'ArrowUp')
+          return this.view?.focusStep(key === 'ArrowDown' ? 1 : -1) ?? false;
         else this.letterKey(key.toLowerCase());
         return false;
       }),
@@ -1392,16 +1879,23 @@ export class ReaderScreen {
    */
   private letterKey(key: string): void {
     if (key === 's') this.toggleSpeech();
-    else if (key === 't') { this.setChromeVisible(true); this.toggleToc(); }
-    else if (key === 'f') this.openTools();
+    else if (key === 't') {
+      this.setChromeVisible(true);
+      this.toggleToc();
+    } else if (key === 'f') this.openTools();
     else if (key === 'b') void this.toggleBookmark();
     else if (key === '[') void this.goToChapter(-1);
     else if (key === ']') void this.goToChapter(1);
     else if (key === 'h' && this.annotation && !this.annotation.note) {
       // The selection toolbar's own 高亮, in the default colour.
-      void this.saveAnnotation('highlight', '', '#ffd54f').then(() => {
-        this.annotation = null; this.annotationClosedAt = performance.now(); this.view?.clearSelection(); this.patch({});
-      }).catch((error: unknown) => this.flashStatus(error instanceof Error ? error.message : '高亮失败', 2600));
+      void this.saveAnnotation('highlight', '', '#ffd54f')
+        .then(() => {
+          this.annotation = null;
+          this.annotationClosedAt = performance.now();
+          this.view?.clearSelection();
+          this.patch({});
+        })
+        .catch((error: unknown) => this.flashStatus(error instanceof Error ? error.message : '高亮失败', 2600));
     }
   }
 
@@ -1543,7 +2037,10 @@ export class ReaderScreen {
       if (match && this.view.indexOfSection(match[2]!) < 0 && this.content) await this.goToChapterRef(match[2]!);
       const restored = await this.view.openLocator(this.compatibleLocator(locator));
       if (restored) {
-        this.flashStatus(fromElsewhere ? '已跳到其他设备上更新的阅读位置' : '已恢复到上次阅读位置', fromElsewhere ? 4000 : 2400);
+        this.flashStatus(
+          fromElsewhere ? '已跳到其他设备上更新的阅读位置' : '已恢复到上次阅读位置',
+          fromElsewhere ? 4000 : 2400,
+        );
         return;
       }
       // A locator that cannot be resolved means the book changed on disk under
@@ -1592,7 +2089,10 @@ export class ReaderScreen {
       this.patch({ historyState: 'ready', history, historyCurrent: this.view?.position()?.locator ?? '' });
     } catch (error) {
       if (this.disposed || this.book !== book) return;
-      if (error instanceof ApiError && error.isAuthFailure) { this.options.onSignedOut(); return; }
+      if (error instanceof ApiError && error.isAuthFailure) {
+        this.options.onSignedOut();
+        return;
+      }
       this.patch({ historyState: error instanceof ApiError && error.isConnectivity ? 'offline' : 'error' });
     }
   }
@@ -1629,7 +2129,9 @@ export class ReaderScreen {
   /** Bookmarks at this exact reading position — the same test 阅读工具 uses for 已加书签. */
   private bookmarksHere(locator: string | undefined): Note[] {
     if (!this.book || !locator) return [];
-    return this.options.offline.notesFor(this.book.id).filter(note => note.type === 'bookmark' && note.locator === locator);
+    return this.options.offline
+      .notesFor(this.book.id)
+      .filter((note) => note.type === 'bookmark' && note.locator === locator);
   }
 
   /**
@@ -1637,14 +2139,27 @@ export class ReaderScreen {
    * 加书签), and the same button shows whether this page already has one.
    */
   private async toggleBookmark(): Promise<void> {
-    const book = this.book, locator = this.view?.position()?.locator;
+    const book = this.book,
+      locator = this.view?.position()?.locator;
     if (!book || !locator) return;
     const here = this.bookmarksHere(locator);
     if (here.length) {
       for (const note of here) await this.options.offline.deleteNote(note.id);
       this.flashStatus('已移除本页书签', 1800);
     } else {
-      await this.options.offline.upsertNotes([{ id: newId(), bookId: book.id, type: 'bookmark', locator, text: book.title, comment: '', color: '', chapterTitle: this.view?.position()?.chapterTitle ?? '', updatedAt: Date.now() }]);
+      await this.options.offline.upsertNotes([
+        {
+          id: newId(),
+          bookId: book.id,
+          type: 'bookmark',
+          locator,
+          text: book.title,
+          comment: '',
+          color: '',
+          chapterTitle: this.view?.position()?.chapterTitle ?? '',
+          updatedAt: Date.now(),
+        },
+      ]);
       this.flashStatus('已为本页加书签', 1800);
     }
     this.options.sync.schedule();
@@ -1678,7 +2193,9 @@ export class ReaderScreen {
     // each one would otherwise be a write to IndexedDB plus a network round trip.
     // 1.5s of stillness is the point at which the reader has decided where they are.
     if (this.progressTimer) clearTimeout(this.progressTimer);
-    this.progressTimer = setTimeout(() => { void this.flushProgress().catch(() => undefined); }, 1500);
+    this.progressTimer = setTimeout(() => {
+      void this.flushProgress().catch(() => undefined);
+    }, 1500);
   }
 
   /**
@@ -1772,7 +2289,7 @@ export class ReaderScreen {
     try {
       const capabilities = await this.options.api.ttsCapabilities();
       this.httpTtsAvailable = capabilities?.http === true;
-      this.httpTtsTimeoutMs=(capabilities?.timeoutMs??20000)+5000;
+      this.httpTtsTimeoutMs = (capabilities?.timeoutMs ?? 20000) + 5000;
     } catch {
       this.httpTtsAvailable = false;
     }
@@ -1802,7 +2319,12 @@ export class ReaderScreen {
     const book = this.book;
     if (!book) return;
     if (!this.content && this.doc) {
-      this.patch({ toc: this.doc.toc.map(entry => ({ ...entry, spine: this.doc!.sections.findIndex(section => section.id === entry.id.split('#')[0]) })) });
+      this.patch({
+        toc: this.doc.toc.map((entry) => ({
+          ...entry,
+          spine: this.doc!.sections.findIndex((section) => section.id === entry.id.split('#')[0]),
+        })),
+      });
       return;
     }
     // Fetched once per book. The panel is opened and closed constantly and the
@@ -1899,7 +2421,13 @@ export class ReaderScreen {
     // The overwhelmingly common case: the chapter is one the window already
     // holds. No network, no window, no second render.
     if (local >= 0) {
-      try { await view.open(local, 0); if (fragment) view.revealFragment(fragment); this.patch({ tocOpen: false }); } catch (error) { this.handleLoadError(error); }
+      try {
+        await view.open(local, 0);
+        if (fragment) view.revealFragment(fragment);
+        this.patch({ tocOpen: false });
+      } catch (error) {
+        this.handleLoadError(error);
+      }
       return;
     }
     if (!this.content) return;
@@ -1921,7 +2449,11 @@ export class ReaderScreen {
       const content = await this.readWindow(book.id, group);
       const landed = await view.loadWindow(content, spine);
       if (!landed) this.flashStatus('这一章暂时无法跳转', 2600);
-      else { if (fragment) view.revealFragment(fragment); this.patch({ tocOpen: false }); this.hideStatus(); }
+      else {
+        if (fragment) view.revealFragment(fragment);
+        this.patch({ tocOpen: false });
+        this.hideStatus();
+      }
     } catch {
       this.flashStatus('无法跳到这一章', 2600);
       this.setStatus('error', '无法跳到这一章');
@@ -1955,8 +2487,9 @@ export class ReaderScreen {
     // A link into a chapter may name a place the contents never listed; the chapter
     // itself is still the one the contents know.
     const chapter = ref.split('#')[0];
-    const entry = this.chrome.toc.find((candidate) => candidate.id === ref)
-      ?? this.chrome.toc.find((candidate) => candidate.id.split('#')[0] === chapter);
+    const entry =
+      this.chrome.toc.find((candidate) => candidate.id === ref) ??
+      this.chrome.toc.find((candidate) => candidate.id.split('#')[0] === chapter);
     return entry?.spine ?? null;
   }
 
@@ -2034,7 +2567,9 @@ export class ReaderScreen {
    * when the client genuinely does not know.
    */
   private get chapterCount(): number {
-    return this.content ? this.manifest?.content?.total ?? this.manifest?.total ?? this.doc?.sections.length ?? 0 : this.doc?.sections.length ?? 0;
+    return this.content
+      ? (this.manifest?.content?.total ?? this.manifest?.total ?? this.doc?.sections.length ?? 0)
+      : (this.doc?.sections.length ?? 0);
   }
 
   /**
@@ -2055,7 +2590,11 @@ export class ReaderScreen {
     // not one — the two meet only through the window's own offset.
     const local = spine - view.windowOffset;
     if (local >= 0 && local < view.sectionCount) {
-      try { await view.open(local, 0); } catch (error) { this.handleLoadError(error); }
+      try {
+        await view.open(local, 0);
+      } catch (error) {
+        this.handleLoadError(error);
+      }
       return;
     }
     this.navigating = true;
@@ -2086,7 +2625,7 @@ export class ReaderScreen {
     Object.assign(this.settings, patch);
     if ('paper' in patch || 'paperFollowsDark' in patch) this.applyReadingTheme();
     // Reading information changes only the chrome, never the book's pagination.
-    if (Object.keys(patch).some(key => !READOUT_FIELDS.some(field => field.key === key))) {
+    if (Object.keys(patch).some((key) => !READOUT_FIELDS.some((field) => field.key === key))) {
       this.view?.applySettings(this.viewSettings());
     }
     this.patch({});
@@ -2154,7 +2693,7 @@ export class ReaderScreen {
     if (!kind) return null;
 
     const engine = createSpeechEngine({
-      httpTimeoutMs:()=>this.httpTtsTimeoutMs,
+      httpTimeoutMs: () => this.httpTtsTimeoutMs,
       kind,
       baseUrl: this.options.api.baseUrl,
       accessToken: () => this.options.api.currentSession()?.accessToken ?? null,
@@ -2304,7 +2843,12 @@ export class ReaderScreen {
   }
 
   private renderSpeechState(snapshot: TtsSnapshot): void {
-    this.voices = snapshot.voices.map(voice => ({ id: voice.id, name: voice.name, lang: voice.lang, default: voice.default }));
+    this.voices = snapshot.voices.map((voice) => ({
+      id: voice.id,
+      name: voice.name,
+      lang: voice.lang,
+      default: voice.default,
+    }));
     if (snapshot.state === 'unsupported') {
       this.setStatus('error', snapshot.error || '当前浏览器不支持朗读');
       this.patch({ tts: { ...this.chrome.tts, active: false, state: snapshot.state } });
@@ -2407,7 +2951,11 @@ export class ReaderScreen {
     if (this.disposed) return;
     this.chrome.statusState = state;
     this.chrome.statusText = text;
-    notify(text, { kind: state === 'loading' || state === 'syncing' ? 'loading' : state === 'error' ? 'error' : 'info', duration }, this.noticeId);
+    notify(
+      text,
+      { kind: state === 'loading' || state === 'syncing' ? 'loading' : state === 'error' ? 'error' : 'info', duration },
+      this.noticeId,
+    );
   }
 
   /**
@@ -2438,9 +2986,10 @@ export class ReaderScreen {
         return;
       }
       if (err.isConnectivity) {
-        this.setStatus('offline', this.book?.format === 'chapters'
-          ? '这一章尚未缓存，连上服务端后可读'
-          : '这本书还没有下载，连上服务端后可读');
+        this.setStatus(
+          'offline',
+          this.book?.format === 'chapters' ? '这一章尚未缓存，连上服务端后可读' : '这本书还没有下载，连上服务端后可读',
+        );
         return;
       }
       this.setStatus('error', err.message);
@@ -2464,7 +3013,9 @@ export class ReaderScreen {
       ...this.chrome,
       ...patch,
       sourceName: this.content?.sourceName ?? '',
-      chapterUrl: this.content?.items.find(item => item.href === (patch.currentSectionId ?? this.chrome.currentSectionId))?.sourceUrl ?? '',
+      chapterUrl:
+        this.content?.items.find((item) => item.href === (patch.currentSectionId ?? this.chrome.currentSectionId))
+          ?.sourceUrl ?? '',
       ...settingsView(this.settings, {
         layout: this.doc?.layout ?? 'reflowable',
         format: this.doc?.format ?? '',
@@ -2532,7 +3083,13 @@ function emptyChromeSettings(): Partial<ChromeState> {
       readoutBottomLeft: 'progress',
       readoutBottomRight: 'time',
     },
-    { layout: 'reflowable', format: '', availability: { system: false, native: false, http: false, preferred: null }, engine: null, voices: [] },
+    {
+      layout: 'reflowable',
+      format: '',
+      availability: { system: false, native: false, http: false, preferred: null },
+      engine: null,
+      voices: [],
+    },
   );
 }
 
@@ -2609,10 +3166,13 @@ function settingsView(
     showPitchRow: activeEngine !== 'http',
     showVoiceRow: activeEngine !== 'http',
     speechUnavailable: !context.availability.preferred,
-    voices: [{ value: '', label: '跟随系统' }, ...context.voices.map((voice) => ({
-      value: voice.id,
-      label: `${voice.name} · ${voice.lang}${voice.default ? ' · 默认' : ''}`,
-    }))],
+    voices: [
+      { value: '', label: '跟随系统' },
+      ...context.voices.map((voice) => ({
+        value: voice.id,
+        label: `${voice.name} · ${voice.lang}${voice.default ? ' · 默认' : ''}`,
+      })),
+    ],
   };
 }
 
@@ -2626,12 +3186,7 @@ function enginePickerOptions(
   return options;
 }
 
-function addDebouncedListener(
-  target: EventTarget,
-  event: string,
-  handler: () => void,
-  wait: number,
-): () => void {
+function addDebouncedListener(target: EventTarget, event: string, handler: () => void, wait: number): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null;
   const wrapped = (): void => {
     if (timer) clearTimeout(timer);
@@ -2659,18 +3214,33 @@ function addDebouncedListener(
  * a short window so one flick of a trackpad is one chapter, and a cooldown keeps the
  * momentum that follows from turning a second one.
  */
-function bindChapterPull(host: HTMLElement, active: () => boolean, turn: (direction: 'next' | 'previous') => void): () => void {
-  const PULL = 72, WHEEL = 240, COOLDOWN = 900;
+function bindChapterPull(
+  host: HTMLElement,
+  active: () => boolean,
+  turn: (direction: 'next' | 'previous') => void,
+): () => void {
+  const PULL = 72,
+    WHEEL = 240,
+    COOLDOWN = 900;
   const atEnd = () => host.scrollTop + host.clientHeight >= host.scrollHeight - 2;
   const atStart = () => host.scrollTop <= 2;
-  let edge: 'end' | 'start' | null = null, startY = 0, wheel = 0, wheelAt = 0, quietUntil = 0;
-  const fire = (direction: 'next' | 'previous') => { quietUntil = performance.now() + COOLDOWN; wheel = 0; turn(direction); };
+  let edge: 'end' | 'start' | null = null,
+    startY = 0,
+    wheel = 0,
+    wheelAt = 0,
+    quietUntil = 0;
+  const fire = (direction: 'next' | 'previous') => {
+    quietUntil = performance.now() + COOLDOWN;
+    wheel = 0;
+    turn(direction);
+  };
   const onTouchStart = (event: TouchEvent) => {
     edge = !active() || event.touches.length !== 1 ? null : atEnd() ? 'end' : atStart() ? 'start' : null;
     startY = event.touches[0]?.clientY ?? 0;
   };
   const onTouchEnd = (event: TouchEvent) => {
-    const from = edge; edge = null;
+    const from = edge;
+    edge = null;
     if (!from || performance.now() < quietUntil || hasTextSelection(host)) return;
     const dy = (event.changedTouches[0]?.clientY ?? startY) - startY;
     if (from === 'end' && dy < -PULL && atEnd()) fire('next');
@@ -2679,10 +3249,14 @@ function bindChapterPull(host: HTMLElement, active: () => boolean, turn: (direct
   const onWheel = (event: WheelEvent) => {
     if (!active() || event.ctrlKey || performance.now() < quietUntil) return;
     const down = event.deltaY > 0;
-    if (!(down ? atEnd() : event.deltaY < 0 && atStart())) { wheel = 0; return; }
+    if (!(down ? atEnd() : event.deltaY < 0 && atStart())) {
+      wheel = 0;
+      return;
+    }
     const now = performance.now();
     if (now - wheelAt > 600 || Math.sign(wheel) !== Math.sign(event.deltaY)) wheel = 0;
-    wheelAt = now; wheel += event.deltaY;
+    wheelAt = now;
+    wheel += event.deltaY;
     if (Math.abs(wheel) >= WHEEL) fire(down ? 'next' : 'previous');
   };
   host.addEventListener('touchstart', onTouchStart, { passive: true });

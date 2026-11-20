@@ -24,7 +24,9 @@ const methods = {
     return {
       publicationRef,
       version: '1',
-      items: [{ id: 'chapter-one', seq: 0, title: '第一章', kind: 'chapter', mediaType: 'text/plain', ref: 'chapter-one' }],
+      items: [
+        { id: 'chapter-one', seq: 0, title: '第一章', kind: 'chapter', mediaType: 'text/plain', ref: 'chapter-one' },
+      ],
     };
   },
   readResource: ({ request }) => {
@@ -46,9 +48,12 @@ for await (const line of input) {
     const result = await method(request.params);
     process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) + '\n');
   } catch (error) {
-    process.stdout.write(JSON.stringify({
-      jsonrpc: '2.0', id: request?.id,
-      error: { code: error.code ?? 'PLUGIN_ERROR', message: error.message },
-    }) + '\n');
+    process.stdout.write(
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id: request?.id,
+        error: { code: error.code ?? 'PLUGIN_ERROR', message: error.message },
+      }) + '\n',
+    );
   }
 }

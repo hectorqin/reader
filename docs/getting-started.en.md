@@ -1,6 +1,6 @@
 # Getting started
 
-[Project home](../README.en.md) · [Documentation](README.md) · [简体中文](getting-started.zh-CN.md)
+[Project home](../README.md) · [Documentation](README.md) · [简体中文](getting-started.zh-CN.md)
 
 This guide takes you through Docker deployment, account registration, and opening your first book. To run from source, use the [development guide](development.en.md).
 
@@ -59,7 +59,7 @@ Open `http://localhost:5888`, or `http://<server-ip>:5888` from another device.
 2. Wait for the initial scan, then open a book from the shelf or library.
 3. Create accounts for other members. Public registration is disabled by default after the first account.
 
-To allow later self-registration, an administrator switches Me → Registration and invitations (我的 → 注册与邀请) to open or invite-only registration. `ALLOW_REGISTRATION: "true"` in Compose only seeds the registration policy on the first start; afterwards the setting in the UI wins.
+To allow later self-registration, an administrator switches Me → Registration and invitations (我的 → 注册与邀请) to open or invite-only registration. The bundled Compose file sets no registration variables; an `ALLOW_REGISTRATION=true` left over from an older deployment only seeds the registration policy on the first start, after which the UI setting wins.
 
 The health endpoint is `/api/v1/health`. For startup failures, missing books, or write errors, see [troubleshooting](configuration.en.md#troubleshooting).
 
@@ -114,7 +114,7 @@ When running directly on Windows, use an absolute local path such as `D:\Media\M
 
 Alternatively, choose OpenList and provide its service URL, remote directory, and optional token/directory password. No local mount is needed. See [OpenList setup (中文)](media-openlist.md).
 
-Local scans read NFO and tags; online matching requires TMDB or MusicBrainz [configuration](configuration.en.md). Playback does not transcode. See the [media guide (中文)](media-user-guide.zh-CN.md).
+Local scans read NFO and tags; online matching requires TMDB or MusicBrainz credentials under Me → Service configuration (我的 → 服务配置); see [business settings (中文)](business-settings.zh-CN.md). Playback does not transcode. See the [media guide (中文)](media-user-guide.zh-CN.md).
 
 ## 6. Upgrade and back up
 

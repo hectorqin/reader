@@ -8,9 +8,14 @@ import { startSheetDrag } from '../src/ui/sheet-drag.ts';
  */
 function sheet(): HTMLDialogElement {
   const dialog = document.createElement('dialog');
-  dialog.innerHTML = '<div class="sheet-grip"></div><header class="sheet-header"><h2>标题</h2><button>关闭</button></header>';
+  dialog.innerHTML =
+    '<div class="sheet-grip"></div><header class="sheet-header"><h2>标题</h2><button>关闭</button></header>';
   dialog.getBoundingClientRect = () => {
-    const height = dialog.style.height ? parseFloat(dialog.style.height) : dialog.hasAttribute('data-expanded') ? 800 : 500;
+    const height = dialog.style.height
+      ? parseFloat(dialog.style.height)
+      : dialog.hasAttribute('data-expanded')
+        ? 800
+        : 500;
     return { height, width: 360, top: 0, left: 0, right: 360, bottom: height, x: 0, y: 0, toJSON() {} } as DOMRect;
   };
   dialog.setPointerCapture = () => {};
@@ -28,10 +33,18 @@ function pointer(type: string, y: number, target: EventTarget, dt = 100): MouseE
 }
 
 /** Press the grip at y=600, move through `path`, let go at its last point. */
-function drag(dialog: HTMLDialogElement, path: number[], options: { expandable?: boolean; busy?: boolean; on?: Element; dt?: number } = {}) {
+function drag(
+  dialog: HTMLDialogElement,
+  path: number[],
+  options: { expandable?: boolean; busy?: boolean; on?: Element; dt?: number } = {},
+) {
   const close = vi.fn();
   const target = options.on ?? dialog.querySelector('.sheet-grip')!;
-  startSheetDrag(pointer('pointerdown', 600, target) as PointerEvent, dialog, { expandable: options.expandable ?? true, busy: () => options.busy ?? false, close });
+  startSheetDrag(pointer('pointerdown', 600, target) as PointerEvent, dialog, {
+    expandable: options.expandable ?? true,
+    busy: () => options.busy ?? false,
+    close,
+  });
   for (const y of path) dispatchEvent(pointer('pointermove', y, target, options.dt));
   dispatchEvent(pointer('pointerup', path.at(-1) ?? 600, target, options.dt));
   return close;
@@ -40,9 +53,15 @@ function drag(dialog: HTMLDialogElement, path: number[], options: { expandable?:
 beforeEach(() => {
   clock = 0;
   // Reduced motion: every rest is reached at once, so the outcome is readable synchronously.
-  window.matchMedia = ((query: string) => ({ matches: query.includes('reduce'), addEventListener() {}, removeEventListener() {} })) as any;
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes('reduce'),
+    addEventListener() {},
+    removeEventListener() {},
+  })) as any;
 });
-afterEach(() => { document.body.replaceChildren(); });
+afterEach(() => {
+  document.body.replaceChildren();
+});
 
 describe('dragging a phone sheet', () => {
   it('closes when pulled down past a third of its height, and springs back from less', () => {

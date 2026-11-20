@@ -13,7 +13,10 @@ export class AppError extends Error {
 export const badRequest = (message: string, code = 'BAD_REQUEST') => new AppError(400, code, message);
 
 export class RateLimitError extends AppError {
-  constructor(readonly retryAfter: number, code = 'AUTH_RATE_LIMITED') {
+  constructor(
+    readonly retryAfter: number,
+    code = 'AUTH_RATE_LIMITED',
+  ) {
     super(429, code, '请求过于频繁，请稍后重试');
   }
 }

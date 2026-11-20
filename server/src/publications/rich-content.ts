@@ -3,13 +3,51 @@ import { badRequest, AppError } from '../lib/errors.ts';
 import type { ResourceResponse } from '../sources/types.ts';
 
 export const MAX_RICH_BYTES = 8 * 1024 * 1024;
-const TAGS = ['p', 'div', 'span', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote',
-  'strong', 'b', 'em', 'i', 'u', 's', 'sub', 'sup', 'ruby', 'rt', 'rp', 'pre', 'code', 'ul', 'ol', 'li',
-  'table', 'thead', 'tbody', 'tr', 'th', 'td', 'figure', 'figcaption', 'img'];
+const TAGS = [
+  'p',
+  'div',
+  'span',
+  'br',
+  'hr',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'blockquote',
+  'strong',
+  'b',
+  'em',
+  'i',
+  'u',
+  's',
+  'sub',
+  'sup',
+  'ruby',
+  'rt',
+  'rp',
+  'pre',
+  'code',
+  'ul',
+  'ol',
+  'li',
+  'table',
+  'thead',
+  'tbody',
+  'tr',
+  'th',
+  'td',
+  'figure',
+  'figcaption',
+  'img',
+];
 export function chapterMedia(type: string): string {
   const [media = '', ...params] = type.toLowerCase().split(';');
-  if (!['text/plain', 'text/html', 'application/xhtml+xml'].includes(media.trim()) ||
-      params.some((p) => /^charset\s*=/i.test(p.trim()) && !/^charset\s*=\s*"?utf-?8"?$/i.test(p.trim()))) {
+  if (
+    !['text/plain', 'text/html', 'application/xhtml+xml'].includes(media.trim()) ||
+    params.some((p) => /^charset\s*=/i.test(p.trim()) && !/^charset\s*=\s*"?utf-?8"?$/i.test(p.trim()))
+  ) {
     throw badRequest('chapter content must be UTF-8 text or HTML', 'UNSUPPORTED_FORMAT');
   }
   return media.trim() === 'text/plain' ? 'text/plain; charset=utf-8' : 'text/html; charset=utf-8';
@@ -23,11 +61,15 @@ export function raster(resource: ResourceResponse): { type: string; bytes: Buffe
   }
   const bytes = Buffer.from(resource.data);
   const type = resource.mediaType.split(';')[0]!.trim().toLowerCase();
-  const valid = (type === 'image/png' && bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) ||
+  const valid =
+    (type === 'image/png' && bytes.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) ||
     (type === 'image/jpeg' && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) ||
     (type === 'image/gif' && /^GIF8[79]a$/.test(bytes.subarray(0, 6).toString())) ||
-    (type === 'image/webp' && bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP');
-  if (!valid) throw badRequest('only PNG, JPEG, GIF and WebP images with matching bytes are supported', 'INVALID_RESOURCE');
+    (type === 'image/webp' &&
+      bytes.subarray(0, 4).toString() === 'RIFF' &&
+      bytes.subarray(8, 12).toString() === 'WEBP');
+  if (!valid)
+    throw badRequest('only PNG, JPEG, GIF and WebP images with matching bytes are supported', 'INVALID_RESOURCE');
   return { type, bytes };
 }
 
@@ -36,7 +78,8 @@ export async function richContent(html: string, read: (ref: string) => Promise<R
   const cleaned = sanitize(html, {
     allowedTags: TAGS,
     allowedAttributes: { img: ['src', 'alt'], th: ['colspan', 'rowspan'], td: ['colspan', 'rowspan'] },
-    allowedSchemes: ['reader-res'], allowProtocolRelative: false,
+    allowedSchemes: ['reader-res'],
+    allowProtocolRelative: false,
     transformTags: {
       img: (_tag, attrs): sanitize.Tag => {
         const src = attrs.src ?? '';
@@ -59,10 +102,15 @@ export async function richContent(html: string, read: (ref: string) => Promise<R
     images.set(`reader-res:${ref}`, url);
   }
   const result = sanitize(cleaned, {
-    allowedTags: TAGS, allowedAttributes: { '*': ['colspan', 'rowspan'], img: ['src', 'alt'] },
-    allowedSchemes: ['data'], allowedSchemesByTag: { img: ['data'] },
-    transformTags: { img: (_tag, attrs) => ({ tagName: 'img', attribs: { ...attrs, src: images.get(attrs.src ?? '') ?? '' } }) },
+    allowedTags: TAGS,
+    allowedAttributes: { '*': ['colspan', 'rowspan'], img: ['src', 'alt'] },
+    allowedSchemes: ['data'],
+    allowedSchemesByTag: { img: ['data'] },
+    transformTags: {
+      img: (_tag, attrs) => ({ tagName: 'img', attribs: { ...attrs, src: images.get(attrs.src ?? '') ?? '' } }),
+    },
   });
-  if (Buffer.byteLength(result) > MAX_RICH_BYTES) throw new AppError(413, 'CHAPTER_TOO_LARGE', 'expanded chapter exceeds 8 MiB');
+  if (Buffer.byteLength(result) > MAX_RICH_BYTES)
+    throw new AppError(413, 'CHAPTER_TOO_LARGE', 'expanded chapter exceeds 8 MiB');
   return result;
 }

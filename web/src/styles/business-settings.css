@@ -1,4 +1,6 @@
-.business-settings { min-width: 0; }
+.business-settings {
+  min-width: 0;
+}
 /*
  * A switch row: the name on the left, the box on the right, and the explanation —
  * when a setting has one — on a line of its own underneath. As one flex row the
@@ -11,14 +13,23 @@
   gap: var(--space-1) var(--space-3);
   min-height: 44px;
 }
-.business-settings .business-setting-toggle input[type=checkbox] {
+.business-settings .business-setting-toggle input[type="checkbox"] {
   width: 22px;
   height: 22px;
   min-height: 22px;
   margin: 0;
   accent-color: var(--reader-accent);
 }
-.business-settings .business-setting-toggle small { grid-column: 1 / -1; }
-.business-settings .business-secret-clear { justify-self: start; font-size: var(--text-meta); }
-.business-settings audio { width: 100%; }
-.business-settings .muted { line-height: 1.6; }
+.business-settings .business-setting-toggle small {
+  grid-column: 1 / -1;
+}
+.business-settings .business-secret-clear {
+  justify-self: start;
+  font-size: var(--text-meta);
+}
+.business-settings audio {
+  width: 100%;
+}
+.business-settings .muted {
+  line-height: 1.6;
+}

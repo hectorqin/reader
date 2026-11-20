@@ -9,7 +9,11 @@ let serviceWorker: ServiceWorkerContainer;
 let dispose: (() => void) | undefined;
 const register = vi.fn();
 beforeEach(() => {
-  registration = Object.assign(new EventTarget(), { waiting: null, installing: null, update: vi.fn().mockResolvedValue(undefined) }) as unknown as ServiceWorkerRegistration;
+  registration = Object.assign(new EventTarget(), {
+    waiting: null,
+    installing: null,
+    update: vi.fn().mockResolvedValue(undefined),
+  }) as unknown as ServiceWorkerRegistration;
   serviceWorker = Object.assign(new EventTarget(), { register, controller: {} }) as unknown as ServiceWorkerContainer;
   register.mockResolvedValue(registration);
   vi.useFakeTimers();
@@ -20,7 +24,8 @@ beforeEach(() => {
   vi.spyOn(document, 'readyState', 'get').mockReturnValue('complete');
 });
 afterEach(() => {
-  dispose?.(); dispose = undefined;
+  dispose?.();
+  dispose = undefined;
   document.body.replaceChildren();
   vi.clearAllTimers();
   vi.useRealTimers();
@@ -39,12 +44,18 @@ function pendingUpdate() {
 it('waits for successful persistence before activating and reloads only once after control changes', async () => {
   const postMessage = pendingUpdate();
   let saved!: () => void;
-  const save = vi.fn(() => new Promise<void>((resolve) => { saved = resolve; }));
+  const save = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        saved = resolve;
+      }),
+  );
   const reload = vi.fn();
   dispose = watchPwaUpdates(registration, save, reload);
   document.querySelector<HTMLButtonElement>('.pwa-update button')!.click();
   expect(postMessage).not.toHaveBeenCalled();
-  saved(); await Promise.resolve();
+  saved();
+  await Promise.resolve();
   expect(postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
   expect(reload).not.toHaveBeenCalled();
   serviceWorker.dispatchEvent(new Event('controllerchange'));
@@ -58,11 +69,13 @@ it('keeps the old page when saving fails and allows retry', async () => {
   const reload = vi.fn();
   dispose = watchPwaUpdates(registration, save, reload);
   const button = document.querySelector<HTMLButtonElement>('.pwa-update button')!;
-  button.click(); await Promise.resolve();
+  button.click();
+  await Promise.resolve();
   expect(postMessage).not.toHaveBeenCalled();
   expect(reload).not.toHaveBeenCalled();
   expect(button.disabled).toBe(false);
-  button.click(); await Promise.resolve();
+  button.click();
+  await Promise.resolve();
   expect(postMessage).toHaveBeenCalledTimes(1);
 });
 
@@ -79,7 +92,8 @@ it('offers updates that finish downloading after registration', () => {
 
 it('does not reload when another tab activates, and saves before manual refresh', async () => {
   pendingUpdate();
-  const save = vi.fn().mockResolvedValue(undefined), reload = vi.fn();
+  const save = vi.fn().mockResolvedValue(undefined),
+    reload = vi.fn();
   dispose = watchPwaUpdates(registration, save, reload);
   serviceWorker.dispatchEvent(new Event('controllerchange'));
   expect(reload).not.toHaveBeenCalled();
@@ -93,7 +107,8 @@ it('allows retry if worker activation times out', async () => {
   pendingUpdate();
   dispose = watchPwaUpdates(registration, async () => {}, vi.fn());
   const button = document.querySelector<HTMLButtonElement>('.pwa-update button')!;
-  button.click(); await Promise.resolve();
+  button.click();
+  await Promise.resolve();
   vi.advanceTimersByTime(15_000);
   expect(button.disabled).toBe(false);
   expect(button.textContent).toBe('重试更新');
@@ -103,7 +118,8 @@ it('registers the worker relative to the deployed document and bypasses the HTTP
   registerPwa();
   const base = new URL('./', document.baseURI);
   expect(register).toHaveBeenCalledWith(new URL('sw.js', base), {
-    scope: base.pathname, updateViaCache: 'none',
+    scope: base.pathname,
+    updateViaCache: 'none',
   });
 });
 

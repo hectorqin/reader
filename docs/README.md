@@ -1,6 +1,6 @@
 # 文档中心 · Documentation
 
-[项目首页](../README.md) · [English overview](../README.en.md)
+[项目首页](../README.zh-CN.md) · [English overview](../README.md)
 
 项目首页介绍阅读与影音能力；安装、日常使用、运维和开发步骤分别放在下面的指南中。
 The project README introduces reader. Use the guides below for installation, everyday use, operations, and development.
@@ -31,6 +31,7 @@ The project README introduces reader. Use the guides below for installation, eve
 | [API](api.md) | 鉴权、书籍、资源、进度、文件管理、OPDS 与影音 / Auth, books, resources, progress, file management, OPDS and media |
 | [Kindle 格式](kindle-formats.zh-CN.md) | MOBI/AZW3 如何读取与发布、无法读取时的行为、限制 |
 | [读书笔记管理](notes-library.zh-CN.md) | 全库笔记页、导出、笔记与书的生命周期，以及后续方向 |
+| [PDF 阅读](pdf.md) | PDF.js 解析、在线与离线打开、页面与文本层 |
 | [界面规范 / UI guidelines](ui.md) | 布局、交互、可访问性 / Layout, interaction, accessibility |
 
 ## 验证记录 · Review records
@@ -39,6 +40,7 @@ The project README introduces reader. Use the guides below for installation, eve
 Feature review artifacts are written to the ignored `artifacts/` directory. Use tests and CI for the current commit's results.
 
 - [互通与客户端覆盖](ecosystem-roadmap.zh-CN.md)
+- [P0 推进记录（2026-09-23）](p0-progress-2026-09-23.md)
 
 - [OPDS 服务端接入与 WebDAV 备份上传](opds-webdav.zh-CN.md)
 
@@ -46,5 +48,6 @@ Feature review artifacts are written to the ignored `artifacts/` directory. Use 
 
 - [使用指南](media-user-guide.zh-CN.md)与 [OpenList 接入](media-openlist.md)
 - [架构与实现](media-implementation.md)、[导航规则](media-navigation.md)与[写入隔离](media-write-isolation.md)
+- [Android 后台播放授权](media-background-auth.md)与[性能测量](media-catalog-performance.md)
 - [验证方式](media-validation.md)与[验收媒体包](media-acceptance-pack.md)
 - [冻结原型与最新验收参考](prototypes/media/README.md)

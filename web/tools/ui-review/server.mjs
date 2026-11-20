@@ -214,8 +214,9 @@ const CHAPTERS = [
  * where that is visible. A fixture indented with ordinary spaces would not show it,
  * because the browser collapses those.
  */
-const LONG = Array.from({ length: 40 }, (_v, i) =>
-  `　　第 ${i + 1} 段。这一段特意写长一些，用来把这一章撑到好几屏，这样翻页和页数才看得出来。`,
+const LONG = Array.from(
+  { length: 40 },
+  (_v, i) => `　　第 ${i + 1} 段。这一段特意写长一些，用来把这一章撑到好几屏，这样翻页和页数才看得出来。`,
 ).join('\n\n');
 
 const CHAPTER_BODY = CHAPTERS.map((chapter, index) =>
@@ -233,7 +234,10 @@ const MIME = {
 
 const json = (reply, body, status = 200) => {
   const text = JSON.stringify(body);
-  reply.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'content-length': Buffer.byteLength(text) });
+  reply.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'content-length': Buffer.byteLength(text),
+  });
   reply.end(text);
 };
 
@@ -478,10 +482,13 @@ export function createReviewServer({ port = 5199, ai = false } = {}) {
     const path = url.pathname;
 
     if (path.startsWith('/api/v1/books/review-pdf')) {
-      if (path.endsWith('/manifest')) return json(reply, {
-        id: 'review-pdf', format: 'pdf', total: 1,
-        files: [{ rel_path: 'document.pdf', size: 1024, missing: 0 }],
-      });
+      if (path.endsWith('/manifest'))
+        return json(reply, {
+          id: 'review-pdf',
+          format: 'pdf',
+          total: 1,
+          files: [{ rel_path: 'document.pdf', size: 1024, missing: 0 }],
+        });
       if (path.endsWith('/progress')) return json(reply, null);
       if (path.endsWith('/toc')) return json(reply, { toc: [] });
       if (path.endsWith('/content')) {
@@ -495,36 +502,61 @@ export function createReviewServer({ port = 5199, ai = false } = {}) {
         ];
         let pdf = '%PDF-1.4\n';
         const offsets = [0];
-        objects.forEach((object, index) => { offsets.push(pdf.length); pdf += `${index + 1} 0 obj\n${object}\nendobj\n`; });
+        objects.forEach((object, index) => {
+          offsets.push(pdf.length);
+          pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+        });
         const xref = pdf.length;
         pdf += 'xref\n0 6\n0000000000 65535 f \n';
-        pdf += offsets.slice(1).map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+        pdf += offsets
+          .slice(1)
+          .map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`)
+          .join('');
         pdf += `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
         reply.writeHead(200, { 'content-type': 'application/pdf' });
         return reply.end(pdf);
       }
-      return json(reply, { book: { ...book, id: 'review-pdf', title: 'PDF 测试', format: 'pdf', pageCount: 1 }, progress: null });
+      return json(reply, {
+        book: { ...book, id: 'review-pdf', title: 'PDF 测试', format: 'pdf', pageCount: 1 },
+        progress: null,
+      });
     }
 
     if (path.startsWith('/api/v1/books/review-comic')) {
       const items = Array.from({ length: 3 }, (_, seq) => ({
-        id: `page-${seq}`, seq, title: `第 ${seq + 1} 页`, kind: 'page',
-        mediaType: 'image/png', href: `page:${seq}`,
+        id: `page-${seq}`,
+        seq,
+        title: `第 ${seq + 1} 页`,
+        kind: 'page',
+        mediaType: 'image/png',
+        href: `page:${seq}`,
       }));
-      const content = { kind: 'paged', total: 3, items,
-        groups: [{ id: 'volume-0', seq: 0, title: '第一卷', count: 3, offset: 0 }] };
-      if (path.endsWith('/manifest')) return json(reply, {
-        id: 'review-comic', format: 'cbz', total: 3,
-        files: [{ rel_path: '漫画.cbz', size: 4096, missing: 0 }], content,
-      });
-      if (path.endsWith('/toc')) return json(reply, { toc: items.map(i => ({ href: i.href, title: i.title, level: 0, spine: i.seq })) });
+      const content = {
+        kind: 'paged',
+        total: 3,
+        items,
+        groups: [{ id: 'volume-0', seq: 0, title: '第一卷', count: 3, offset: 0 }],
+      };
+      if (path.endsWith('/manifest'))
+        return json(reply, {
+          id: 'review-comic',
+          format: 'cbz',
+          total: 3,
+          files: [{ rel_path: '漫画.cbz', size: 4096, missing: 0 }],
+          content,
+        });
+      if (path.endsWith('/toc'))
+        return json(reply, { toc: items.map((i) => ({ href: i.href, title: i.title, level: 0, spine: i.seq })) });
       if (path.endsWith('/items')) return json(reply, content);
       if (path.endsWith('/progress')) return json(reply, null);
       if (path.endsWith('/assets')) {
         reply.writeHead(200, { 'content-type': 'image/png' });
         return reply.end(PNG);
       }
-      return json(reply, { book: { ...book, id: 'review-comic', title: '漫画测试', format: 'cbz', pageCount: 3 }, progress: null });
+      return json(reply, {
+        book: { ...book, id: 'review-comic', title: '漫画测试', format: 'cbz', pageCount: 3 },
+        progress: null,
+      });
     }
 
     if (path === '/__seen') {
@@ -560,7 +592,7 @@ export function createReviewServer({ port = 5199, ai = false } = {}) {
     // is worse than no review, because it looks like a pass.
     let file = path === '/' ? '/index.html' : path;
     let target = join(dist, file);
-    if (!existsSync(target) || path.startsWith('/assets/') === false && !existsSync(target)) {
+    if (!existsSync(target) || (path.startsWith('/assets/') === false && !existsSync(target))) {
       target = join(dist, 'index.html');
     }
     if (!existsSync(target)) {
@@ -789,16 +821,18 @@ export function createReviewServer({ port = 5199, ai = false } = {}) {
          * reason: two screens, two sources, one question.
          */
         shelfState:
-          entry.type === 'dir'
-            ? null
-            : shelved.has(entry.path) || entry.name !== `${TITLE} 第1卷.epub`
-              ? 'on'
-              : 'off',
+          entry.type === 'dir' ? null : shelved.has(entry.path) || entry.name !== `${TITLE} 第1卷.epub` ? 'on' : 'off',
       }));
       const from = (page - 1) * pageSize;
       return json(reply, {
         path: dir,
-        crumbs: dir === '' ? [{ name: '书库', path: '' }] : [{ name: '书库', path: '' }, { name: 'folder', path: 'folder' }],
+        crumbs:
+          dir === ''
+            ? [{ name: '书库', path: '' }]
+            : [
+                { name: '书库', path: '' },
+                { name: 'folder', path: 'folder' },
+              ],
         parent: dir === '' ? null : '',
         entries: entries.slice(from, from + pageSize),
         total,
@@ -849,7 +883,10 @@ export function createReviewServer({ port = 5199, ai = false } = {}) {
       // its paragraph arrived, not merely that something came back.
       const body = jsonBodies.get(request) ?? {};
       const label = { translate: '译文', explain: '解释', ask: `回答「${body.question}」` }[body.action] ?? '未知';
-      return json(reply, { answer: `${label}：${body.text}\n\n（上下文 ${String(body.context ?? '').length} 字）`, cached: false });
+      return json(reply, {
+        answer: `${label}：${body.text}\n\n（上下文 ${String(body.context ?? '').length} 字）`,
+        cached: false,
+      });
     }
     if (path === `/api/v1/books/${BOOK_ID}/manifest`) {
       return json(reply, manifest());
@@ -1002,11 +1039,14 @@ export function createReviewServer({ port = 5199, ai = false } = {}) {
   return {
     server,
     seen,
-    listen: () => new Promise((resolve) => server.listen(port, '127.0.0.1', () => {
-      const address = server.address();
-      const actualPort = address && typeof address === 'object' ? address.port : port;
-      resolve(`http://127.0.0.1:${actualPort}`);
-    })),
+    listen: () =>
+      new Promise((resolve) =>
+        server.listen(port, '127.0.0.1', () => {
+          const address = server.address();
+          const actualPort = address && typeof address === 'object' ? address.port : port;
+          resolve(`http://127.0.0.1:${actualPort}`);
+        }),
+      ),
     close: () => new Promise((resolve) => server.close(resolve)),
   };
 }

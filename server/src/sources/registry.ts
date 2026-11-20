@@ -16,24 +16,45 @@ export class SourceRegistryError extends Error {
 
 const ID_RE = /^[a-z][a-z0-9._-]{0,127}$/;
 const CAPABILITIES = new Set<SourceCapability>([
-  'search.filters', 'search.cancel', 'search.session', 'content.alternatives', 'browse', 'search', 'detail', 'acquire.file', 'acquire.chapters',
-  'content.manifest', 'content.resource', 'content.update',
+  'search.filters',
+  'search.cancel',
+  'search.session',
+  'content.alternatives',
+  'browse',
+  'search',
+  'detail',
+  'acquire.file',
+  'acquire.chapters',
+  'content.manifest',
+  'content.resource',
+  'content.update',
 ]);
 
 function assertDescriptor(descriptor: SourceDescriptor): void {
   extensionDeclarations(descriptor.extensions);
-  if (descriptor.credentialKeys !== undefined && (!Array.isArray(descriptor.credentialKeys) ||
-      descriptor.credentialKeys.length > 16 || descriptor.credentialKeys.some((field) =>
-        !field || !/^[a-z][a-z0-9_.-]{0,63}$/.test(field.key) || typeof field.label !== 'string' || !field.label.trim()) ||
-      new Set(descriptor.credentialKeys.map((field) => field.key)).size !== descriptor.credentialKeys.length)) {
+  if (
+    descriptor.credentialKeys !== undefined &&
+    (!Array.isArray(descriptor.credentialKeys) ||
+      descriptor.credentialKeys.length > 16 ||
+      descriptor.credentialKeys.some(
+        (field) =>
+          !field ||
+          !/^[a-z][a-z0-9_.-]{0,63}$/.test(field.key) ||
+          typeof field.label !== 'string' ||
+          !field.label.trim(),
+      ) ||
+      new Set(descriptor.credentialKeys.map((field) => field.key)).size !== descriptor.credentialKeys.length)
+  ) {
     throw new SourceRegistryError('invalid credential fields');
   }
   if (!ID_RE.test(descriptor.id)) throw new SourceRegistryError(`invalid source id: ${descriptor.id}`);
   if (!descriptor.label.trim()) throw new SourceRegistryError(`source ${descriptor.id} has an empty label`);
   if (!descriptor.version.trim()) throw new SourceRegistryError(`source ${descriptor.id} has no version`);
   const capabilities = new Set(descriptor.capabilities);
-  if (capabilities.has('search.cancel') && !capabilities.has('search')) throw new SourceRegistryError('search.cancel requires search');
-  if (capabilities.has('search.session') && !capabilities.has('search.cancel')) throw new SourceRegistryError('search.session requires search.cancel');
+  if (capabilities.has('search.cancel') && !capabilities.has('search'))
+    throw new SourceRegistryError('search.cancel requires search');
+  if (capabilities.has('search.session') && !capabilities.has('search.cancel'))
+    throw new SourceRegistryError('search.session requires search.cancel');
   for (const capability of capabilities) {
     if (!CAPABILITIES.has(capability)) throw new SourceRegistryError(`unsupported capability: ${capability}`);
   }
@@ -125,12 +146,12 @@ export class SourceRegistry {
     validatePluginManifest(manifest);
     const sourceType = manifest.sourceTypes.find((type) => type.id === provider.descriptor.id);
     if (!sourceType) {
-      throw new SourceRegistryError(
-        `plugin ${manifest.id} does not declare source type ${provider.descriptor.id}`,
-      );
+      throw new SourceRegistryError(`plugin ${manifest.id} does not declare source type ${provider.descriptor.id}`);
     }
-    if (sourceType.capabilities.length !== provider.descriptor.capabilities.length ||
-        sourceType.capabilities.some((capability) => !provider.descriptor.capabilities.includes(capability))) {
+    if (
+      sourceType.capabilities.length !== provider.descriptor.capabilities.length ||
+      sourceType.capabilities.some((capability) => !provider.descriptor.capabilities.includes(capability))
+    ) {
       throw new SourceRegistryError(`provider capabilities do not match plugin manifest: ${provider.descriptor.id}`);
     }
     return this.register({ pluginId: manifest.id, provider });
@@ -178,8 +199,10 @@ export function validatePluginManifest(input: unknown): PluginManifest {
       throw new SourceRegistryError(`invalid plugin source type: ${type.id}`);
     }
     assertDescriptor({ ...type, version: manifest.version });
-    if (type.capabilities.includes('acquire.chapters') &&
-        (!type.capabilities.includes('content.manifest') || !type.capabilities.includes('content.resource'))) {
+    if (
+      type.capabilities.includes('acquire.chapters') &&
+      (!type.capabilities.includes('content.manifest') || !type.capabilities.includes('content.resource'))
+    ) {
       throw new SourceRegistryError(`chapter source ${type.id} must declare manifest and resource capabilities`);
     }
   }

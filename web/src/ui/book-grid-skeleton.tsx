@@ -6,12 +6,28 @@
  * move twice. Hidden from assistive tech — the FloatingNotice beside it announces
  * the load.
  */
-export function BookGridSkeleton({ count = 12, density, className }: { count?: number; density?: string; className?: string }) {
-  return <div className={`book-grid is-skeleton${className ? ` ${className}` : ''}`} data-density={density} aria-hidden="true">
-    {Array.from({ length: count }, (_, index) => <div className="book-card" key={index}>
-      <div className="cover" />
-      <span className="skeleton-line" />
-      <span className="skeleton-line short" />
-    </div>)}
-  </div>;
+export function BookGridSkeleton({
+  count = 12,
+  density,
+  className,
+}: {
+  count?: number;
+  density?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`book-grid is-skeleton${className ? ` ${className}` : ''}`}
+      data-density={density}
+      aria-hidden="true"
+    >
+      {Array.from({ length: count }, (_, index) => (
+        <div className="book-card" key={index}>
+          <div className="cover" />
+          <span className="skeleton-line" />
+          <span className="skeleton-line short" />
+        </div>
+      ))}
+    </div>
+  );
 }

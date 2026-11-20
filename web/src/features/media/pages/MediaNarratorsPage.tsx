@@ -26,11 +26,11 @@ export function MediaNarratorsPage() {
   const channel: MediaChannel = routeChannel === 'audiobook' ? 'audiobook' : 'audiobook';
   const [params] = useSearchParams();
   const libraries = useQuery(librariesQuery(runtime));
-  const available = (libraries.data?.items ?? []).filter(item => item.kind === channel);
+  const available = (libraries.data?.items ?? []).filter((item) => item.kind === channel);
   const requested = params.get('library') ?? '';
-  const libraryId = available.some(item => item.id === requested) ? requested : (available[0]?.id ?? '');
-  const role = useAuthStore(state => state.verifiedUser?.role);
-  const routeName = routeNarrator ? decodeURIComponent(routeNarrator) : (params.get('narrator') || null);
+  const libraryId = available.some((item) => item.id === requested) ? requested : (available[0]?.id ?? '');
+  const role = useAuthStore((state) => state.verifiedUser?.role);
+  const routeName = routeNarrator ? decodeURIComponent(routeNarrator) : params.get('narrator') || null;
   const routeWork = routeWorkId ? decodeURIComponent(routeWorkId) : (params.get('work') ?? '');
   const initialLocation: NarratorLocation = {
     libraryId,
@@ -62,37 +62,86 @@ export function MediaNarratorsPage() {
     if (`${currentLocation.pathname}${currentLocation.search}` !== target) navigate(target, { replace: true });
   };
   const play = async (parts: Part[], index: number, title: string) => {
-    await runtime.player.play(parts.map(part => ({ part, title: `${title} · ${part.title}`, video: false })), index);
+    await runtime.player.play(
+      parts.map((part) => ({ part, title: `${title} · ${part.title}`, video: false })),
+      index,
+    );
   };
 
-  const actions = <>
-    <Link to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Icon name="search" size={18} /></Link>
-    <ChannelMenu channel="audiobook" />
-  </>;
-  return <MediaPageFrame className="media-catalog-page" title="有声书" actions={actions} emptyChannel={!libraries.isPending && !libraries.error && !libraryId}>
-    {/* 演播者 is 有声书's second category: the directory carries the same tab row as the catalog.
+  const actions = (
+    <>
+      <Link to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索">
+        <Icon name="search" size={18} />
+      </Link>
+      <ChannelMenu channel="audiobook" />
+    </>
+  );
+  return (
+    <MediaPageFrame
+      className="media-catalog-page"
+      title="有声书"
+      actions={actions}
+      emptyChannel={!libraries.isPending && !libraries.error && !libraryId}
+    >
+      {/* 演播者 is 有声书's second category: the directory carries the same tab row as the catalog.
         A narrator's own page is a push page with its back button instead. Without any
         library the channel is one empty page and shows no tabs, as in the catalog. */}
-    {!routeName && libraryId && <CatalogTabs channel="audiobook" />}
-    <QueryFeedback pending={libraries.isPending} error={libraries.error} retry={() => { void libraries.refetch(); }} />
-    {!libraries.isPending && !libraries.error && !libraryId && <EmptyMediaLibrary channel="audiobook" hasLibraries={false} admin={role === 'admin'} category="演播者" onCreate={() => navigate('/media/audiobook/settings/libraries/new')} onManage={() => navigate('/media/audiobook/settings/libraries')} />}
-    {!libraries.isPending && !libraries.error && libraryId && <Narrators
-      key={`${routeName ?? ''}:${routeWork}`}
-      api={runtime.mediaApi}
-      libraryId={libraryId}
-      showLibraryName={!requested}
-      initialLocation={initialLocation}
-      onLocationChange={updateLocation}
-      libraryControl={<MediaSelect variant="plain" aria-label="媒体库" value={libraryId} onChange={event => {
-        const value = event.currentTarget.value;
-        const next = new URLSearchParams(params);
-        if (value) next.set('library', value); else next.delete('library');
-        for (const key of ['narrator', 'work', 'edition', 'offset']) next.delete(key);
-        navigate(`/media/audiobook/narrators${next.toString() ? `?${next.toString()}` : ''}`, { replace: true });
-      }}>{available.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</MediaSelect>}
-      onPlay={play}
-      onQueue={async ids => { await runtime.mediaApi.request('queue', 'POST', { partIds: ids }); }}
-      onDetail={id => navigate(`/media/audiobook/items/${encodeURIComponent(id)}`)}
-    />}
-  </MediaPageFrame>;
+      {!routeName && libraryId && <CatalogTabs channel="audiobook" />}
+      <QueryFeedback
+        pending={libraries.isPending}
+        error={libraries.error}
+        retry={() => {
+          void libraries.refetch();
+        }}
+      />
+      {!libraries.isPending && !libraries.error && !libraryId && (
+        <EmptyMediaLibrary
+          channel="audiobook"
+          hasLibraries={false}
+          admin={role === 'admin'}
+          category="演播者"
+          onCreate={() => navigate('/media/audiobook/settings/libraries/new')}
+          onManage={() => navigate('/media/audiobook/settings/libraries')}
+        />
+      )}
+      {!libraries.isPending && !libraries.error && libraryId && (
+        <Narrators
+          key={`${routeName ?? ''}:${routeWork}`}
+          api={runtime.mediaApi}
+          libraryId={libraryId}
+          showLibraryName={!requested}
+          initialLocation={initialLocation}
+          onLocationChange={updateLocation}
+          libraryControl={
+            <MediaSelect
+              variant="plain"
+              aria-label="媒体库"
+              value={libraryId}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                const next = new URLSearchParams(params);
+                if (value) next.set('library', value);
+                else next.delete('library');
+                for (const key of ['narrator', 'work', 'edition', 'offset']) next.delete(key);
+                navigate(`/media/audiobook/narrators${next.toString() ? `?${next.toString()}` : ''}`, {
+                  replace: true,
+                });
+              }}
+            >
+              {available.map((item) => (
+                <option value={item.id} key={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </MediaSelect>
+          }
+          onPlay={play}
+          onQueue={async (ids) => {
+            await runtime.mediaApi.request('queue', 'POST', { partIds: ids });
+          }}
+          onDetail={(id) => navigate(`/media/audiobook/items/${encodeURIComponent(id)}`)}
+        />
+      )}
+    </MediaPageFrame>
+  );
 }

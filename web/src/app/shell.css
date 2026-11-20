@@ -1,12 +1,28 @@
 /* V3 shell: one navigation for reading and media.
  * A tab bar up to 700px, a sidebar from 701px up. Colours are the theme's --color-*
  * tokens (styles/theme-tokens.css), so every theme restyles it. */
-:root { --app-nav-width: 232px; --app-nav-bar: 64px; }
+:root {
+  --app-nav-width: 232px;
+  --app-nav-bar: 64px;
+}
 
-.app-shell { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
 /* Pages were direct children of #app (a flex column that clips); keep exactly that
  * contract for them one level down. */
-.app-shell-body { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.app-shell-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
 
 .app-nav {
   --nav-ink: var(--color-ink);
@@ -21,67 +37,249 @@
   color: var(--nav-ink);
   border-color: var(--nav-line);
 }
-.app-nav ul { list-style: none; margin: 0; padding: 0; }
-.app-nav a { color: inherit; text-decoration: none; }
-.app-nav a:focus-visible { outline: 2px solid var(--nav-accent); outline-offset: 2px; }
-.app-nav-icon { display: grid; place-items: center; }
+.app-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.app-nav a {
+  color: inherit;
+  text-decoration: none;
+}
+.app-nav a:focus-visible {
+  outline: 2px solid var(--nav-accent);
+  outline-offset: 2px;
+}
+.app-nav-icon {
+  display: grid;
+  place-items: center;
+}
 
 /* ---- phone: tab bar ---- */
 @media (max-width: 700px) {
-  .app-nav { order: 2; display: flex; height: calc(var(--app-nav-bar) + var(--safe-bottom)); padding: 6px 12px var(--safe-bottom); border-top: 1px solid var(--nav-line); }
-  .app-nav[data-mode='push'] { display: none; }
-  .app-nav-brand, .app-nav-sub, .app-nav-user, .app-nav-search { display: none; }
-  .app-nav-list { display: flex; flex: 1; }
-  .app-nav-list > li { flex: 1; min-width: 0; }
-  .app-nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; height: 52px; font-size: var(--text-meta); font-weight: 500; color: var(--nav-muted); }
-  .app-nav-item[aria-current='page'] { color: var(--nav-accent); font-weight: 600; }
-  .app-nav-item .app-nav-icon { width: 52px; height: 30px; border-radius: var(--radius-pill); }
-  .app-nav-item[aria-current='page'] .app-nav-icon { background: var(--nav-soft); }
+  .app-nav {
+    order: 2;
+    display: flex;
+    height: calc(var(--app-nav-bar) + var(--safe-bottom));
+    padding: 6px 12px var(--safe-bottom);
+    border-top: 1px solid var(--nav-line);
+  }
+  .app-nav[data-mode="push"] {
+    display: none;
+  }
+  .app-nav-brand,
+  .app-nav-sub,
+  .app-nav-user,
+  .app-nav-search {
+    display: none;
+  }
+  .app-nav-list {
+    display: flex;
+    flex: 1;
+  }
+  .app-nav-list > li {
+    flex: 1;
+    min-width: 0;
+  }
+  .app-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    height: 52px;
+    font-size: var(--text-meta);
+    font-weight: 500;
+    color: var(--nav-muted);
+  }
+  .app-nav-item[aria-current="page"] {
+    color: var(--nav-accent);
+    font-weight: 600;
+  }
+  .app-nav-item .app-nav-icon {
+    width: 52px;
+    height: 30px;
+    border-radius: var(--radius-pill);
+  }
+  .app-nav-item[aria-current="page"] .app-nav-icon {
+    background: var(--nav-soft);
+  }
 }
 
 /* ---- desktop: sidebar ---- */
 @media (min-width: 701px) {
-  .app-shell { flex-direction: row; }
+  .app-shell {
+    flex-direction: row;
+  }
   /* After the page in the DOM (so the phone bar follows the content), before it on screen. */
-  .app-nav { order: -1; display: flex; flex-direction: column; width: var(--app-nav-width); padding: 24px 14px; border-right: 1px solid var(--nav-line); overflow-y: auto; }
-  .app-nav-brand { padding: 0 14px 22px; font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; font-size: 26px; font-weight: 700; color: var(--nav-accent); }
-  .app-nav-item { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px; border-radius: var(--radius-md); font-size: var(--text-body); color: var(--nav-ink); }
+  .app-nav {
+    order: -1;
+    display: flex;
+    flex-direction: column;
+    width: var(--app-nav-width);
+    padding: 24px 14px;
+    border-right: 1px solid var(--nav-line);
+    overflow-y: auto;
+  }
+  .app-nav-brand {
+    padding: 0 14px 22px;
+    font-family: "Songti SC", "Noto Serif SC", "Source Han Serif SC", serif;
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--nav-accent);
+  }
+  .app-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 44px;
+    padding: 0 14px;
+    border-radius: var(--radius-md);
+    font-size: var(--text-body);
+    color: var(--nav-ink);
+  }
   /* ui.md §2.5: hover only where a pointer can hover, or a tap leaves the item looking selected. */
   @media (hover: hover) and (pointer: fine) {
-    .app-nav-item:hover:not([aria-current='page']),
-    .app-nav-subitem:hover:not([aria-current='page']) { background: color-mix(in srgb, var(--color-surface-2) 60%, transparent); }
+    .app-nav-item:hover:not([aria-current="page"]),
+    .app-nav-subitem:hover:not([aria-current="page"]) {
+      background: color-mix(in srgb, var(--color-surface-2) 60%, transparent);
+    }
   }
-  .app-nav-item[aria-current='page'] { background: var(--nav-soft); color: var(--nav-accent); font-weight: 600; }
-  .app-nav-sub { margin-top: 2px; }
-  .app-nav-subitem { display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 14px 0 46px; border-radius: var(--radius-md); font-size: var(--text-ui); color: var(--nav-muted); }
-  .app-nav-subitem i { width: 8px; height: 8px; border-radius: 50%; background: var(--color-ch-video); }
-  .app-nav-subitem[data-channel='music'] i { background: var(--color-ch-music); }
-  .app-nav-subitem[data-channel='audiobook'] i { background: var(--color-ch-audio); }
-  .app-nav-subitem[aria-current='page'] { background: var(--color-surface-2); color: var(--nav-ink); font-weight: 600; }
-  .app-nav-user { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 10px 12px; border-radius: var(--radius-lg); background: var(--color-bg); }
-  .app-nav-avatar { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--color-brand); color: var(--color-on-brand); font-weight: 600; }
-  .app-nav-user-text { min-width: 0; }
-  .app-nav-user-text strong, .app-nav-user-text small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .app-nav-user-text strong { font-size: var(--text-ui); }
-  .app-nav-user-text small { display: flex; align-items: center; gap: 5px; font-size: var(--text-meta); color: var(--nav-muted); }
-  .app-nav-status { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--color-ch-audio); }
-  .app-nav-status[data-state='offline'] { background: var(--nav-muted); }
-  .app-nav-status[data-state='error'] { background: var(--color-danger); }
-  .app-nav-search { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; padding: 0 12px; border-radius: var(--radius-md); background: var(--color-surface-2); color: var(--nav-muted); }
-  .app-nav-search input { flex: 1; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--nav-ink); font: inherit; font-size: var(--text-label); text-overflow: ellipsis; outline: none; }
+  .app-nav-item[aria-current="page"] {
+    background: var(--nav-soft);
+    color: var(--nav-accent);
+    font-weight: 600;
+  }
+  .app-nav-sub {
+    margin-top: 2px;
+  }
+  .app-nav-subitem {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 38px;
+    padding: 0 14px 0 46px;
+    border-radius: var(--radius-md);
+    font-size: var(--text-ui);
+    color: var(--nav-muted);
+  }
+  .app-nav-subitem i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-ch-video);
+  }
+  .app-nav-subitem[data-channel="music"] i {
+    background: var(--color-ch-music);
+  }
+  .app-nav-subitem[data-channel="audiobook"] i {
+    background: var(--color-ch-audio);
+  }
+  .app-nav-subitem[aria-current="page"] {
+    background: var(--color-surface-2);
+    color: var(--nav-ink);
+    font-weight: 600;
+  }
+  .app-nav-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: auto;
+    padding: 10px 12px;
+    border-radius: var(--radius-lg);
+    background: var(--color-bg);
+  }
+  .app-nav-avatar {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--color-brand);
+    color: var(--color-on-brand);
+    font-weight: 600;
+  }
+  .app-nav-user-text {
+    min-width: 0;
+  }
+  .app-nav-user-text strong,
+  .app-nav-user-text small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .app-nav-user-text strong {
+    font-size: var(--text-ui);
+  }
+  .app-nav-user-text small {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: var(--text-meta);
+    color: var(--nav-muted);
+  }
+  .app-nav-status {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--color-ch-audio);
+  }
+  .app-nav-status[data-state="offline"] {
+    background: var(--nav-muted);
+  }
+  .app-nav-status[data-state="error"] {
+    background: var(--color-danger);
+  }
+  .app-nav-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 16px;
+    padding: 0 12px;
+    border-radius: var(--radius-md);
+    background: var(--color-surface-2);
+    color: var(--nav-muted);
+  }
+  .app-nav-search input {
+    flex: 1;
+    min-width: 0;
+    height: 40px;
+    border: 0;
+    background: transparent;
+    color: var(--nav-ink);
+    font: inherit;
+    font-size: var(--text-label);
+    text-overflow: ellipsis;
+    outline: none;
+  }
   /* On the search page the page's own field is the search; this one keeps its place and steps aside. */
-  .app-nav-search[hidden] { visibility: hidden; }
-  .app-nav-search input::-webkit-search-cancel-button { display: none; }
-  .app-nav-search:focus-within { box-shadow: 0 0 0 2px var(--nav-accent); }
+  .app-nav-search[hidden] {
+    visibility: hidden;
+  }
+  .app-nav-search input::-webkit-search-cancel-button {
+    display: none;
+  }
+  .app-nav-search:focus-within {
+    box-shadow: 0 0 0 2px var(--nav-accent);
+  }
   /* iOS zooms the page into any field under 16px when it is focused (it ignores
      maximum-scale), so a finger-driven sidebar (iPad, phone in landscape) gets 16px. */
-  @media (pointer: coarse) { .app-nav-search input { font-size: var(--text-title); } }
+  @media (pointer: coarse) {
+    .app-nav-search input {
+      font-size: var(--text-title);
+    }
+  }
   /* A phone in landscape is wide enough for the sidebar, with a notch on either side.
      The sidebar takes the left inset; the page column takes the right one once, here,
      because its centred bands are sized from the column and do not add --safe-right.
      Inside the column both insets are then zero, or a band that does add them would be
      indented a second time (or by a notch it does not touch). */
-  .app-nav { padding-left: calc(14px + var(--safe-left)); }
+  .app-nav {
+    padding-left: calc(14px + var(--safe-left));
+  }
   body[data-app-nav] .app-shell-body {
     --safe-left: 0px;
     --safe-right: 0px;
@@ -92,10 +290,14 @@
 
 /* ---- the persistent mini player sits clear of the bar / sidebar ---- */
 @media (max-width: 700px) {
-  body[data-app-nav='top'] .media-player:is(.media-player-audio, .media-player-native-video) { bottom: calc(var(--app-nav-bar) + var(--safe-bottom) + 10px); }
+  body[data-app-nav="top"] .media-player:is(.media-player-audio, .media-player-native-video) {
+    bottom: calc(var(--app-nav-bar) + var(--safe-bottom) + 10px);
+  }
 }
 @media (min-width: 701px) {
-  body[data-app-nav] .media-player:is(.media-player-audio, .media-player-native-video) { left: calc(var(--app-nav-width) + 24px); }
+  body[data-app-nav] .media-player:is(.media-player-audio, .media-player-native-video) {
+    left: calc(var(--app-nav-width) + 24px);
+  }
 }
 
 /* ---- reading pages wear the theme too; their --reader-* names alias the tokens
@@ -116,7 +318,9 @@
  * scrollers, so the column is made with padding (the scrollbar stays at the window
  * edge); the shelf caps its bands instead, which keeps its sticky toolbar working. */
 @media (min-width: 701px) {
-  :root { --page-gutter: 32px; }
+  :root {
+    --page-gutter: 32px;
+  }
 }
 .media-screen:is(.home-page, .mine-page, .media-catalog-page) {
   max-width: none;
@@ -125,37 +329,65 @@
 /* Phone: the same 20px top as the shelf's header, clear of the notch; the shelf's
  * 0.9rem band padding is topped up to the shared gutter. */
 @media (max-width: 700px) {
-  .media-screen:is(.home-page, .mine-page) { padding-top: calc(20px + var(--safe-top)); }
-  .shelf { padding-inline: calc(var(--page-gutter) - 0.9rem); }
+  .media-screen:is(.home-page, .mine-page) {
+    padding-top: calc(20px + var(--safe-top));
+  }
+  .shelf {
+    padding-inline: calc(var(--page-gutter) - 0.9rem);
+  }
 }
 @media (min-width: 701px) {
-  .shelf { --shelf-measure: var(--collection-measure); }
-  .shelf-head, .shelf-discovery, .shelf-section { width: calc(100% - 2 * var(--page-gutter) + 1.8rem); }
-  .shelf-head { padding-top: 24px; }
+  .shelf {
+    --shelf-measure: var(--collection-measure);
+  }
+  .shelf-head,
+  .shelf-discovery,
+  .shelf-section {
+    width: calc(100% - 2 * var(--page-gutter) + 1.8rem);
+  }
+  .shelf-head {
+    padding-top: 24px;
+  }
 }
 /* Between the sidebar breakpoint and 64rem the discovery row is display: contents,
  * so its two children are bands of their own. */
 @media (min-width: 701px) and (max-width: 63.99rem) {
-  .shelf-links, .shelf-search { width: calc(100% - 2 * var(--page-gutter) + 1.8rem); }
+  .shelf-links,
+  .shelf-search {
+    width: calc(100% - 2 * var(--page-gutter) + 1.8rem);
+  }
 }
 
 /* The old fixed channel rail is gone; its top gutter goes with it. */
 @media (min-width: 701px) {
   /* Only pages whose header scrolls with them; pages with a fixed header keep their 68px. */
-  body[data-app-nav] .media-screen:is(.media-catalog-page, .mine-page, .home-page) { padding-top: 24px; }
+  body[data-app-nav] .media-screen:is(.media-catalog-page, .mine-page, .home-page) {
+    padding-top: 24px;
+  }
   /* Search and the ⋯ menu used to hang from the rail with a negative offset. They end
    * where the page column ends, not at the window edge. */
-  body[data-app-nav] .media-heading:has(.media-mobile-title) .media-heading-actions { position: fixed; z-index: 81; top: 12px; right: max(var(--page-gutter), calc((100vw - var(--app-nav-width) - var(--page-measure)) / 2)); }
+  body[data-app-nav] .media-heading:has(.media-mobile-title) .media-heading-actions {
+    position: fixed;
+    z-index: 81;
+    top: 12px;
+    right: max(var(--page-gutter), calc((100vw - var(--app-nav-width) - var(--page-measure)) / 2));
+  }
 }
 
 /* Fixed page headers were placed to clear the old rail's brand; they now clear the sidebar. */
 @media (min-width: 701px) {
   body[data-app-nav] .media-screen .media-mobile-title,
   body[data-app-nav] .media-screen.media-secondary-page > .media-heading,
-  body[data-app-nav] .media-narrators:not([data-view=directory]) > .media-narrator-heading,
+  body[data-app-nav] .media-narrators:not([data-view="directory"]) > .media-narrator-heading,
   body[data-app-nav] .media-screen.media-metadata-workspace > .media-metadata-host > .media-heading,
-  body[data-app-nav] .media-manager-workspace > .media-heading { left: calc(var(--app-nav-width) + 24px); right: 32px; }
-  body[data-app-nav] .media-screen.media-detail-shell > .media-heading { left: var(--app-nav-width); right: 0; }
+  body[data-app-nav] .media-manager-workspace > .media-heading {
+    left: calc(var(--app-nav-width) + 24px);
+    right: 32px;
+  }
+  body[data-app-nav] .media-screen.media-detail-shell > .media-heading {
+    left: var(--app-nav-width);
+    right: 0;
+  }
 }
 
 /* ---- reader chrome, V3: a rounded bottom sheet and a quiet top bar ---- */
@@ -164,12 +396,19 @@
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   box-shadow: 0 -8px 30px color-mix(in srgb, var(--color-ink) 10%, transparent);
 }
-.reader-screen .topbar { border-bottom: 1px solid var(--reader-line); box-shadow: none; }
-.reader-screen .reader-actions button[aria-current='true'],
-.reader-screen .reader-actions button:active { color: var(--reader-accent); }
+.reader-screen .topbar {
+  border-bottom: 1px solid var(--reader-line);
+  box-shadow: none;
+}
+.reader-screen .reader-actions button[aria-current="true"],
+.reader-screen .reader-actions button:active {
+  color: var(--reader-accent);
+}
 
 /* Page titles in the serif face, the way the prototype sets them. */
-.shelf-title { font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; }
+.shelf-title {
+  font-family: "Songti SC", "Noto Serif SC", "Source Han Serif SC", serif;
+}
 
 body {
   background: var(--color-bg);
@@ -193,22 +432,79 @@ body {
     padding: 20px 32px 32px;
   }
   .media-video-workspace:has(.media-episode-rail) > div:not(.media-video-stage),
-  .media-video-workspace:has(.media-episode-rail) .media-video-controls { display: contents; }
-  .media-video-workspace:has(.media-episode-rail) .media-video-stage { grid-column: 1; grid-row: 1; overflow: hidden; border-radius: var(--radius-xl); }
-  .media-video-workspace:has(.media-episode-rail) .media-video-controls > :not(.media-episode-rail) { grid-column: 1; width: auto; max-width: none; justify-self: stretch; }
-  .media-video-workspace:has(.media-episode-rail) .media-video-caption { margin-top: 16px; }
-  .media-video-workspace:has(.media-episode-rail) .media-episode-rail { position: static; inset: auto; width: auto; margin: 0; grid-column: 2; grid-row: 1 / span 8; align-self: start; max-height: calc(100dvh - 120px); overflow-y: auto; }
+  .media-video-workspace:has(.media-episode-rail) .media-video-controls {
+    display: contents;
+  }
+  .media-video-workspace:has(.media-episode-rail) .media-video-stage {
+    grid-column: 1;
+    grid-row: 1;
+    overflow: hidden;
+    border-radius: var(--radius-xl);
+  }
+  .media-video-workspace:has(.media-episode-rail) .media-video-controls > :not(.media-episode-rail) {
+    grid-column: 1;
+    width: auto;
+    max-width: none;
+    justify-self: stretch;
+  }
+  .media-video-workspace:has(.media-episode-rail) .media-video-caption {
+    margin-top: 16px;
+  }
+  .media-video-workspace:has(.media-episode-rail) .media-episode-rail {
+    position: static;
+    inset: auto;
+    width: auto;
+    margin: 0;
+    grid-column: 2;
+    grid-row: 1 / span 8;
+    align-self: start;
+    max-height: calc(100dvh - 120px);
+    overflow-y: auto;
+  }
 }
 
 /* ---- phone: the channel switch is three segments in the page header ---- */
-.media-channel-segments { display: flex; flex: 1; gap: 2px; padding: 4px; border-radius: var(--radius-lg); background: var(--media-surface, var(--surface)); }
-.media-channel-segments a { flex: 1; display: grid; place-items: center; min-height: 36px; border-radius: var(--radius-md); color: var(--muted); font-size: var(--text-ui); text-decoration: none; }
-.media-channel-segments a[aria-current='page'] { background: var(--media-paper, #fff); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px color-mix(in srgb, var(--color-ink) 18%, transparent); }
-.media-channel-segments a:focus-visible { outline: 2px solid var(--media-accent); outline-offset: 2px; }
-@media (min-width: 701px) { .media-mobile-title { display: none !important; } }
+.media-channel-segments {
+  display: flex;
+  flex: 1;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-lg);
+  background: var(--media-surface, var(--surface));
+}
+.media-channel-segments a {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  border-radius: var(--radius-md);
+  color: var(--muted);
+  font-size: var(--text-ui);
+  text-decoration: none;
+}
+.media-channel-segments a[aria-current="page"] {
+  background: var(--media-paper, #fff);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-ink) 18%, transparent);
+}
+.media-channel-segments a:focus-visible {
+  outline: 2px solid var(--media-accent);
+  outline-offset: 2px;
+}
+@media (min-width: 701px) {
+  .media-mobile-title {
+    display: none !important;
+  }
+}
 @media (max-width: 700px) {
-  .media-screen .media-mobile-title { width: 100%; max-width: 300px; }
-  .media-channel-segments a { white-space: nowrap; }
+  .media-screen .media-mobile-title {
+    width: 100%;
+    max-width: 300px;
+  }
+  .media-channel-segments a {
+    white-space: nowrap;
+  }
 }
 
 /* iOS zooms the page when a focused field's text is under 16px (ui.md §3.3, `--text-title`).
@@ -216,7 +512,19 @@ body {
    enforced once here for every typed field on a touch screen rather than screen by screen;
    `!important` because it must win over any screen's own field rule. */
 @media (pointer: coarse) {
-  :is(input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color], [type=button], [type=submit]), textarea, select) {
+  :is(
+    input:not(
+      [type="checkbox"],
+      [type="radio"],
+      [type="range"],
+      [type="file"],
+      [type="color"],
+      [type="button"],
+      [type="submit"]
+    ),
+    textarea,
+    select
+  ) {
     font-size: max(var(--text-title), 1em) !important;
   }
 }

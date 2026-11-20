@@ -1,5 +1,12 @@
 /** Text offsets plus an exact quote keep search and annotations independent of pagination. */
-export interface TextAnchor { sectionId: string; start: number; end: number; quote: string; prefix: string; suffix: string }
+export interface TextAnchor {
+  sectionId: string;
+  start: number;
+  end: number;
+  quote: string;
+  prefix: string;
+  suffix: string;
+}
 
 export function textNodes(root: Node): Text[] {
   const walker = root.ownerDocument!.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -14,21 +21,41 @@ export function textNodes(root: Node): Text[] {
 }
 
 export function anchorFor(sectionId: string, text: string, start: number, end: number): TextAnchor {
-  return { sectionId, start, end, quote: text.slice(start, end), prefix: text.slice(Math.max(0, start - 32), start), suffix: text.slice(end, end + 32) };
+  return {
+    sectionId,
+    start,
+    end,
+    quote: text.slice(start, end),
+    prefix: text.slice(Math.max(0, start - 32), start),
+    suffix: text.slice(end, end + 32),
+  };
 }
-export function encodeAnchor(anchor: TextAnchor): string { return 'rt1:' + JSON.stringify(anchor); }
+export function encodeAnchor(anchor: TextAnchor): string {
+  return 'rt1:' + JSON.stringify(anchor);
+}
 export function decodeAnchor(locator: string): TextAnchor | null {
   if (!locator.startsWith('rt1:')) return null;
   try {
     const a = JSON.parse(locator.slice(4)) as TextAnchor;
-    return typeof a.sectionId === 'string' && typeof a.quote === 'string' && a.quote.length > 0 &&
-      typeof a.prefix === 'string' && typeof a.suffix === 'string' && Number.isSafeInteger(a.start) &&
-      Number.isSafeInteger(a.end) && a.start >= 0 && a.end > a.start ? a : null;
-  } catch { return null; }
+    return typeof a.sectionId === 'string' &&
+      typeof a.quote === 'string' &&
+      a.quote.length > 0 &&
+      typeof a.prefix === 'string' &&
+      typeof a.suffix === 'string' &&
+      Number.isSafeInteger(a.start) &&
+      Number.isSafeInteger(a.end) &&
+      a.start >= 0 &&
+      a.end > a.start
+      ? a
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 export function anchorRange(root: Node, anchor: TextAnchor): Range | null {
-  const nodes = textNodes(root), text = nodes.map(n => n.data).join('');
+  const nodes = textNodes(root),
+    text = nodes.map((n) => n.data).join('');
   let start = anchor.start;
   if (text.slice(start, start + anchor.quote.length) !== anchor.quote) {
     const context = anchor.prefix + anchor.quote + anchor.suffix;
@@ -42,11 +69,18 @@ export function anchorRange(root: Node, anchor: TextAnchor): Range | null {
   }
   const range = root.ownerDocument!.createRange();
   const end = start + anchor.quote.length;
-  let offset = 0, started = false;
+  let offset = 0,
+    started = false;
   for (const node of nodes) {
     const next = offset + node.length;
-    if (!started && start < next) { range.setStart(node, start - offset); started = true; }
-    if (started && end <= next) { range.setEnd(node, end - offset); return range; }
+    if (!started && start < next) {
+      range.setStart(node, start - offset);
+      started = true;
+    }
+    if (started && end <= next) {
+      range.setEnd(node, end - offset);
+      return range;
+    }
     offset = next;
   }
   return null;
@@ -54,50 +88,85 @@ export function anchorRange(root: Node, anchor: TextAnchor): Range | null {
 
 export function selectedRange(root: Node, selection: Selection | null): Range | null {
   if (!selection) return null;
-  const inside = (range: AbstractRange) => !range.collapsed && root.contains(range.startContainer) && root.contains(range.endContainer);
+  const inside = (range: AbstractRange) =>
+    !range.collapsed && root.contains(range.startContainer) && root.contains(range.endContainer);
   // Document ranges may be re-scoped to the shadow host even though the native
   // mobile selection visibly highlights text inside it.
   const shadow = root.getRootNode();
-  const composed = selection as Selection & { getComposedRanges?: (options: {shadowRoots: ShadowRoot[]}) => StaticRange[] };
+  const composed = selection as Selection & {
+    getComposedRanges?: (options: { shadowRoots: ShadowRoot[] }) => StaticRange[];
+  };
   if (shadow instanceof ShadowRoot && composed.getComposedRanges) {
     try {
-      const selected = composed.getComposedRanges({shadowRoots:[shadow]}).find(inside);
-      if (selected) { const range = root.ownerDocument!.createRange(); range.setStart(selected.startContainer,selected.startOffset); range.setEnd(selected.endContainer,selected.endOffset); return range; }
-    } catch { /* Older engines use the range or anchor/focus fallback below. */ }
+      const selected = composed.getComposedRanges({ shadowRoots: [shadow] }).find(inside);
+      if (selected) {
+        const range = root.ownerDocument!.createRange();
+        range.setStart(selected.startContainer, selected.startOffset);
+        range.setEnd(selected.endContainer, selected.endOffset);
+        return range;
+      }
+    } catch {
+      /* Older engines use the range or anchor/focus fallback below. */
+    }
   }
-  if (selection.rangeCount > 0) { const range = selection.getRangeAt(0); if (inside(range)) return range; }
-  const {anchorNode,anchorOffset,focusNode,focusOffset} = selection;
+  if (selection.rangeCount > 0) {
+    const range = selection.getRangeAt(0);
+    if (inside(range)) return range;
+  }
+  const { anchorNode, anchorOffset, focusNode, focusOffset } = selection;
   if (!anchorNode || !focusNode || !root.contains(anchorNode) || !root.contains(focusNode)) return null;
   const range = root.ownerDocument!.createRange();
-  range.setStart(anchorNode,anchorOffset); range.setEnd(focusNode,focusOffset);
-  if (range.collapsed) { range.setStart(focusNode,focusOffset); range.setEnd(anchorNode,anchorOffset); }
+  range.setStart(anchorNode, anchorOffset);
+  range.setEnd(focusNode, focusOffset);
+  if (range.collapsed) {
+    range.setStart(focusNode, focusOffset);
+    range.setEnd(anchorNode, anchorOffset);
+  }
   return inside(range) ? range : null;
 }
 
 export function selectedAnchor(root: Node, sectionId: string, selection: Selection | null): TextAnchor | null {
-  const range = selectedRange(root,selection);
+  const range = selectedRange(root, selection);
   if (!range) return null;
-  const prefix = range.cloneRange(); prefix.selectNodeContents(root); prefix.setEnd(range.startContainer, range.startOffset);
-  const text = textNodes(root).map(n => n.data).join('');
+  const prefix = range.cloneRange();
+  prefix.selectNodeContents(root);
+  prefix.setEnd(range.startContainer, range.startOffset);
+  const text = textNodes(root)
+    .map((n) => n.data)
+    .join('');
   // cloneContents excludes styles via the same traversal used by search.
-  const start = textNodes(prefix.cloneContents()).map(n => n.data).join('').length;
-  const quote = textNodes(range.cloneContents()).map(n => n.data).join('');
+  const start = textNodes(prefix.cloneContents())
+    .map((n) => n.data)
+    .join('').length;
+  const quote = textNodes(range.cloneContents())
+    .map((n) => n.data)
+    .join('');
   return quote ? anchorFor(sectionId, text, start, start + quote.length) : null;
 }
 
 export function searchableText(html: string, markup = true): string {
   if (!markup) return html;
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  return textNodes(doc.body).map(n => n.data).join('');
+  return textNodes(doc.body)
+    .map((n) => n.data)
+    .join('');
 }
 
-export interface SearchHit { title: string; excerpt: string; anchor: TextAnchor }
+export interface SearchHit {
+  title: string;
+  excerpt: string;
+  anchor: TextAnchor;
+}
 export function findText(sectionId: string, title: string, text: string, query: string, limit = 200): SearchHit[] {
   const result: SearchHit[] = [];
   if (!query.trim()) return result;
   let start = text.indexOf(query);
   while (start >= 0 && result.length < limit) {
-    result.push({ title, excerpt: text.slice(Math.max(0, start - 35), start + query.length + 65), anchor: anchorFor(sectionId, text, start, start + query.length) });
+    result.push({
+      title,
+      excerpt: text.slice(Math.max(0, start - 35), start + query.length + 65),
+      anchor: anchorFor(sectionId, text, start, start + query.length),
+    });
     start = text.indexOf(query, start + Math.max(1, query.length));
   }
   return result;

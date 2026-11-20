@@ -13,7 +13,7 @@
   align-items: center;
   justify-content: center;
   gap: 1rem;
-  padding: .625rem .625rem .625rem 1rem;
+  padding: 0.625rem 0.625rem 0.625rem 1rem;
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-lg);
   background: var(--reader-surface);
@@ -23,20 +23,31 @@
   line-height: 1.5;
 }
 @media (max-width: 700px) {
-  body[data-app-nav] .pwa-update { bottom: calc(var(--app-nav-bar) + var(--safe-bottom) + .75rem); }
+  body[data-app-nav] .pwa-update {
+    bottom: calc(var(--app-nav-bar) + var(--safe-bottom) + 0.75rem);
+  }
 }
-body:has(.reader-screen) .pwa-update { bottom: calc(1.8rem + var(--safe-bottom) + .5rem); }
-body:has(.reader-screen[data-chrome='visible']) .pwa-update { bottom: calc(8.5rem + var(--safe-bottom) + .5rem); }
+body:has(.reader-screen) .pwa-update {
+  bottom: calc(1.8rem + var(--safe-bottom) + 0.5rem);
+}
+body:has(.reader-screen[data-chrome="visible"]) .pwa-update {
+  bottom: calc(8.5rem + var(--safe-bottom) + 0.5rem);
+}
 @media (min-width: 64rem) {
-  body:has(.reader-screen[data-chrome='visible']) .pwa-update { bottom: calc(5.5rem + .5rem); }
+  body:has(.reader-screen[data-chrome="visible"]) .pwa-update {
+    bottom: calc(5.5rem + 0.5rem);
+  }
 }
 .pwa-update .button {
   min-height: 44px;
   flex: none;
-  padding: .625rem 1rem;
+  padding: 0.625rem 1rem;
   border-radius: var(--radius-md);
   font: inherit;
   font-weight: 600;
   white-space: nowrap;
 }
-.pwa-update button:focus-visible { outline: 2px solid var(--reader-accent); outline-offset: 2px; }
+.pwa-update button:focus-visible {
+  outline: 2px solid var(--reader-accent);
+  outline-offset: 2px;
+}

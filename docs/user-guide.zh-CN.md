@@ -1,6 +1,6 @@
 # 使用手册
 
-[项目首页](../README.md) · [文档中心](README.md) · [安装部署](getting-started.zh-CN.md)
+[项目首页](../README.zh-CN.md) · [文档中心](README.md) · [安装部署](getting-started.zh-CN.md)
 
 本页介绍安装后的日常使用。部署参数见[配置指南](configuration.zh-CN.md)，协议细节见 [API](api.md)。
 

@@ -56,16 +56,26 @@ export interface SheetProps {
 }
 
 export function Sheet({
-  title, onClose, children, busy = false, subtitle, actions, footer,
-  size = 'regular', className, initialFocus, role = 'dialog',
+  title,
+  onClose,
+  children,
+  busy = false,
+  subtitle,
+  actions,
+  footer,
+  size = 'regular',
+  className,
+  initialFocus,
+  role = 'dialog',
 }: SheetProps): JSX.Element {
-  const host = typeof window !== 'undefined'
-    ? window.ReaderAndroid
-      ? 'android'
-      : typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches
-        ? 'pwa'
-        : undefined
-    : undefined;
+  const host =
+    typeof window !== 'undefined'
+      ? window.ReaderAndroid
+        ? 'android'
+        : typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches
+          ? 'pwa'
+          : undefined
+      : undefined;
   const ref = useRef<HTMLDialogElement>(null);
   /** Whether the platform opened it as a modal; without it Escape is ours to handle. */
   const native = useRef(false);
@@ -79,7 +89,12 @@ export function Sheet({
     const previous = document.activeElement as HTMLElement | null;
     native.current = false;
     if (typeof dialog.showModal === 'function') {
-      try { dialog.showModal(); native.current = true; } catch { dialog.setAttribute('open', ''); }
+      try {
+        dialog.showModal();
+        native.current = true;
+      } catch {
+        dialog.setAttribute('open', '');
+      }
     } else {
       dialog.setAttribute('open', '');
     }
@@ -87,27 +102,45 @@ export function Sheet({
     placeNotifications();
     // A compact sheet on a wide window opens where the hand is, not at the far edge.
     const anchor = size === 'compact' ? anchorPoint(previous) : null;
-    const place = () => { if (anchor) placeNear(dialog, anchor); };
+    const place = () => {
+      if (anchor) placeNear(dialog, anchor);
+    };
     place();
     if (anchor) addEventListener('resize', place);
     return () => {
       if (anchor) removeEventListener('resize', place);
-      if (typeof dialog.close === 'function' && dialog.open) dialog.close(); else dialog.removeAttribute('open');
+      if (typeof dialog.close === 'function' && dialog.open) dialog.close();
+      else dialog.removeAttribute('open');
       placeNotifications();
-      queueMicrotask(() => { if (previous?.isConnected) previous.focus({ preventScroll: true }); });
+      queueMicrotask(() => {
+        if (previous?.isConnected) previous.focus({ preventScroll: true });
+      });
     };
   }, []);
 
-  const requestClose = () => { if (!state.current.busy) state.current.onClose(); };
+  const requestClose = () => {
+    if (!state.current.busy) state.current.onClose();
+  };
   // On a phone the grip and title bar drag the sheet: down to close, up to expand.
   const drag = (event: React.PointerEvent) => {
     if (typeof matchMedia !== 'function' || matchMedia(WIDE).matches) return;
-    startSheetDrag(event.nativeEvent, ref.current!, { expandable: size !== 'compact', busy: () => state.current.busy, close: requestClose });
+    startSheetDrag(event.nativeEvent, ref.current!, {
+      expandable: size !== 'compact',
+      busy: () => state.current.busy,
+      close: requestClose,
+    });
   };
-  const outside = (event: { clientX: number; clientY: number; target: EventTarget; currentTarget: HTMLDialogElement }) => {
+  const outside = (event: {
+    clientX: number;
+    clientY: number;
+    target: EventTarget;
+    currentTarget: HTMLDialogElement;
+  }) => {
     if (event.target !== event.currentTarget) return false;
     const rect = event.currentTarget.getBoundingClientRect();
-    return event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom;
+    return (
+      event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom
+    );
   };
 
   return (
@@ -119,8 +152,13 @@ export function Sheet({
       role={role}
       aria-label={title}
       aria-busy={busy}
-      onCancel={(event) => { event.preventDefault(); requestClose(); }}
-      onPointerDown={(event) => { pressedOutside.current = outside(event); }}
+      onCancel={(event) => {
+        event.preventDefault();
+        requestClose();
+      }}
+      onPointerDown={(event) => {
+        pressedOutside.current = outside(event);
+      }}
       onClick={(event) => {
         if (pressedOutside.current && outside(event)) requestClose();
         pressedOutside.current = false;
@@ -151,15 +189,26 @@ export function Sheet({
 
 /** The wide-window breakpoint; below it every sheet is a bottom sheet. */
 const WIDE = '(min-width: 701px)';
-const MARGIN = 16, GAP = 8;
+const MARGIN = 16,
+  GAP = 8;
 
 /** The last press, so a compact sheet opened by a tap can appear beside that tap. */
 let lastPress: { x: number; y: number; at: number } | null = null;
 if (typeof document !== 'undefined') {
-  document.addEventListener('pointerdown', (event) => { lastPress = { x: event.clientX, y: event.clientY, at: Date.now() }; }, true);
+  document.addEventListener(
+    'pointerdown',
+    (event) => {
+      lastPress = { x: event.clientX, y: event.clientY, at: Date.now() };
+    },
+    true,
+  );
 }
 
-interface Anchor { x: number; top: number; bottom: number }
+interface Anchor {
+  x: number;
+  top: number;
+  bottom: number;
+}
 
 /**
  * Where the opener is: the press that opened it, else the focused control (keyboard),
@@ -177,25 +226,52 @@ function anchorPoint(opener: HTMLElement | null): Anchor | null {
 
 /** Below the anchor if it fits, otherwise above it; always inside the window. */
 function placeNear(dialog: HTMLDialogElement, anchor: Anchor): void {
-  if (!matchMedia(WIDE).matches) { dialog.removeAttribute('data-anchored'); dialog.style.removeProperty('left'); dialog.style.removeProperty('top'); return; }
+  if (!matchMedia(WIDE).matches) {
+    dialog.removeAttribute('data-anchored');
+    dialog.style.removeProperty('left');
+    dialog.style.removeProperty('top');
+    return;
+  }
   dialog.setAttribute('data-anchored', '');
   const { width, height } = dialog.getBoundingClientRect();
   const left = Math.min(Math.max(MARGIN, anchor.x - width / 2), innerWidth - width - MARGIN);
-  const below = anchor.bottom + GAP, above = anchor.top - GAP - height;
-  const top = below + height <= innerHeight - MARGIN ? below : above >= MARGIN ? above : Math.max(MARGIN, innerHeight - height - MARGIN);
+  const below = anchor.bottom + GAP,
+    above = anchor.top - GAP - height;
+  const top =
+    below + height <= innerHeight - MARGIN
+      ? below
+      : above >= MARGIN
+        ? above
+        : Math.max(MARGIN, innerHeight - height - MARGIN);
   dialog.style.left = `${Math.round(left)}px`;
   dialog.style.top = `${Math.round(top)}px`;
 }
 
 /** `showModal` makes the page inert but lets Tab leave for the browser chrome; keep it inside. */
 function trapTab(dialog: HTMLDialogElement, event: { shiftKey: boolean; preventDefault(): void }): void {
-  const controls = [...dialog.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary, [tabindex]')]
-    .filter((element) => element.tabIndex >= 0 && !element.matches(':disabled') && element.closest('dialog') === dialog && element.getClientRects().length > 0);
-  const first = controls[0], last = controls.at(-1);
-  if (!first || !last) { event.preventDefault(); return; }
+  const controls = [
+    ...dialog.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], summary, [tabindex]'),
+  ].filter(
+    (element) =>
+      element.tabIndex >= 0 &&
+      !element.matches(':disabled') &&
+      element.closest('dialog') === dialog &&
+      element.getClientRects().length > 0,
+  );
+  const first = controls[0],
+    last = controls.at(-1);
+  if (!first || !last) {
+    event.preventDefault();
+    return;
+  }
   const active = document.activeElement as HTMLElement | null;
-  if (event.shiftKey && (active === first || !controls.includes(active!))) { event.preventDefault(); last.focus(); }
-  else if (!event.shiftKey && active === last) { event.preventDefault(); first.focus(); }
+  if (event.shiftKey && (active === first || !controls.includes(active!))) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 export interface ConfirmSheetProps {
@@ -216,14 +292,34 @@ export interface ConfirmSheetProps {
  * Focus starts on 取消, so an Enter pressed out of habit does not delete anything.
  */
 export function ConfirmSheet({
-  title = '确认操作', text, confirmText = '确认', cancelText = '取消', danger = false, busy = false, onConfirm, onCancel,
+  title = '确认操作',
+  text,
+  confirmText = '确认',
+  cancelText = '取消',
+  danger = false,
+  busy = false,
+  onConfirm,
+  onCancel,
 }: ConfirmSheetProps): JSX.Element {
   return (
-    <Sheet title={title} size="compact" role="alertdialog" busy={busy} onClose={onCancel} initialFocus=".sheet-cancel"
-      footer={<>
-        <Button className="sheet-cancel" disabled={busy} onClick={onCancel}>{cancelText}</Button>
-        <Button className={danger ? 'primary danger' : 'primary'} disabled={busy} onClick={onConfirm}>{confirmText}</Button>
-      </>}>
+    <Sheet
+      title={title}
+      size="compact"
+      role="alertdialog"
+      busy={busy}
+      onClose={onCancel}
+      initialFocus=".sheet-cancel"
+      footer={
+        <>
+          <Button className="sheet-cancel" disabled={busy} onClick={onCancel}>
+            {cancelText}
+          </Button>
+          <Button className={danger ? 'primary danger' : 'primary'} disabled={busy} onClick={onConfirm}>
+            {confirmText}
+          </Button>
+        </>
+      }
+    >
       <p className="sheet-text">{text}</p>
     </Sheet>
   );

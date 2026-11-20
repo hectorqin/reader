@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
-import {settingsDefaults,type BusinessValues} from './business-settings.ts';
+import { settingsDefaults, type BusinessValues } from './business-settings.ts';
 
 /**
  * Server-side speech synthesis, for a client that has no engine of its own.
@@ -46,7 +46,7 @@ const MAX_TEXT_LENGTH = 800;
 
 /** What the client is told this instance supports. */
 export interface TtsCapabilities {
-  timeoutMs:number;
+  timeoutMs: number;
   /** True when `TTS_URL` is configured, i.e. this instance can synthesise. */
   http: boolean;
   /** Content types the proxy may answer with, for the client's own checks. */
@@ -88,19 +88,23 @@ export class TtsService {
   private cacheBytes = 0;
   private cacheFiles: string[] = [];
 
-  constructor(config: AppConfig,input:BusinessValues['tts']=settingsDefaults('tts')) {
+  constructor(config: AppConfig, input: BusinessValues['tts'] = settingsDefaults('tts')) {
     const url = input.url.trim().replace(/\/+$/, '');
-    this.config = input.enabled&&url
-      ? {
-          url,
-          token: input.token,
-          voicesUrl: input.voicesUrl,
-          timeoutMs: input.timeoutMs,
-          cacheDir: join(config.dataDir, 'tts-cache'),
-          cacheMaxBytes: input.cacheMaxBytes,
-        }
-      : null;
-    if (this.config) {this.loadCacheIndex();if(this.config.cacheMaxBytes>0)this.evict();}
+    this.config =
+      input.enabled && url
+        ? {
+            url,
+            token: input.token,
+            voicesUrl: input.voicesUrl,
+            timeoutMs: input.timeoutMs,
+            cacheDir: join(config.dataDir, 'tts-cache'),
+            cacheMaxBytes: input.cacheMaxBytes,
+          }
+        : null;
+    if (this.config) {
+      this.loadCacheIndex();
+      if (this.config.cacheMaxBytes > 0) this.evict();
+    }
   }
 
   /** Whether this instance can synthesise at all. */
@@ -110,7 +114,7 @@ export class TtsService {
 
   capabilities(): TtsCapabilities {
     return {
-      timeoutMs:this.config?.timeoutMs??20000,
+      timeoutMs: this.config?.timeoutMs ?? 20000,
       http: this.enabled,
       formats: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4'],
       maxLength: MAX_TEXT_LENGTH,
@@ -145,7 +149,14 @@ export class TtsService {
     const speed = input.speed === undefined ? 1 : clamp(input.speed, 0.25, 4);
     const voice = (input.voice ?? '').slice(0, 120);
 
-    const key = hashKey({ text, voice, speed, format: input.format ?? '', url: config.url,credential:hashKey({token:config.token}) });
+    const key = hashKey({
+      text,
+      voice,
+      speed,
+      format: input.format ?? '',
+      url: config.url,
+      credential: hashKey({ token: config.token }),
+    });
     const cached = this.readCache(key);
     if (cached) return { ...cached, cached: true };
 
@@ -155,20 +166,27 @@ export class TtsService {
     let bytes: Uint8Array, contentType: string;
     try {
       const response = await fetch(target, {
-        method: 'GET', headers: { accept: 'audio/*', ...(config.token ? { authorization: 'Bearer ' + config.token } : {}) },
+        method: 'GET',
+        headers: { accept: 'audio/*', ...(config.token ? { authorization: 'Bearer ' + config.token } : {}) },
         signal: controller.signal,
       });
-      if (!response.ok) throw badRequest('HTTP TTS service answered ' + response.status,
-        response.status === 401 || response.status === 403 ? 'TTS_AUTH' : 'TTS_UPSTREAM');
+      if (!response.ok)
+        throw badRequest(
+          'HTTP TTS service answered ' + response.status,
+          response.status === 401 || response.status === 403 ? 'TTS_AUTH' : 'TTS_UPSTREAM',
+        );
       contentType = (response.headers.get('content-type') ?? '').split(';')[0]!.trim();
-      if (!contentType.startsWith('audio/')) throw badRequest('HTTP TTS service returned non-audio content', 'TTS_CONTENT');
+      if (!contentType.startsWith('audio/'))
+        throw badRequest('HTTP TTS service returned non-audio content', 'TTS_CONTENT');
       bytes = new Uint8Array(await response.arrayBuffer());
       if (!bytes.length) throw badRequest('HTTP TTS service returned empty audio', 'TTS_EMPTY');
     } catch (error) {
       if (controller.signal.aborted) throw badRequest('HTTP TTS service timed out', 'TTS_TIMEOUT');
       if (error && typeof error === 'object' && 'code' in error) throw error;
       throw badRequest('HTTP TTS service unreachable', 'TTS_UPSTREAM');
-    } finally { clearTimeout(timer); }
+    } finally {
+      clearTimeout(timer);
+    }
 
     this.writeCache(key, bytes, contentType);
     return { bytes, contentType, cached: false };
@@ -250,7 +268,7 @@ export class TtsService {
 
   private readCache(key: string): { bytes: Uint8Array; contentType: string } | null {
     const config = this.config;
-    if (!config||config.cacheMaxBytes<=0) return null;
+    if (!config || config.cacheMaxBytes <= 0) return null;
     const meta = join(config.cacheDir, `${key}.meta`);
     const data = join(config.cacheDir, `${key}.bin`);
     try {
@@ -307,9 +325,10 @@ export class TtsService {
     }
   }
 
-  clearCache():void {
-    if(!this.config)return;
-    for(const name of readdirSync(this.config.cacheDir))if(/^[a-f0-9]{32}\.(bin|meta)$/.test(name))unlinkSync(join(this.config.cacheDir,name));
+  clearCache(): void {
+    if (!this.config) return;
+    for (const name of readdirSync(this.config.cacheDir))
+      if (/^[a-f0-9]{32}\.(bin|meta)$/.test(name)) unlinkSync(join(this.config.cacheDir, name));
     this.loadCacheIndex();
   }
 }
@@ -338,5 +357,5 @@ function clamp(value: number, min: number, max: number): number {
 
 /** Wired in `main.ts`; kept out of `AppContext` so tests can build one freely. */
 export function createTtsService(ctx: AppContext): TtsService {
-  return new TtsService(ctx.config,ctx.settings?.read('tts'));
+  return new TtsService(ctx.config, ctx.settings?.read('tts'));
 }

@@ -28,7 +28,8 @@ describe('isNoteReference', () => {
       '<a href="#n1">（注2）</a>',
       '<a href="#n1">*</a>',
       '<a class="duokan-footnote" href="#n1"><img src="note.png"></a>',
-    ]) expect(isNoteReference(link(html)), html).toBe(true);
+    ])
+      expect(isNoteReference(link(html)), html).toBe(true);
   });
 
   it('leaves cross-references and ways back as links', () => {
@@ -37,7 +38,8 @@ describe('isNoteReference', () => {
       '<a href="#fig2">Figure 2</a>',
       '<a href="#r1">↩</a>',
       '<a href="#r1">返回正文</a>',
-    ]) expect(isNoteReference(link(html)), html).toBe(false);
+    ])
+      expect(isNoteReference(link(html)), html).toBe(false);
   });
 });
 
@@ -66,7 +68,8 @@ describe('noteAt', () => {
 
 describe('noteInMarkup', () => {
   it('reads a note out of a chapter that is not on screen, as text only', () => {
-    const chapter = '<html><body><h1>注释</h1><p id="n12"><a href="ch1.xhtml#r12">12</a> 书后的<b>注释</b><script>alert(1)</script>。</p></body></html>';
+    const chapter =
+      '<html><body><h1>注释</h1><p id="n12"><a href="ch1.xhtml#r12">12</a> 书后的<b>注释</b><script>alert(1)</script>。</p></body></html>';
     expect(noteInMarkup(chapter, 'n12')).toEqual(['12 书后的注释。']);
   });
 });

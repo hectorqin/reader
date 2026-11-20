@@ -5,7 +5,9 @@ export function createPdfFixture(padding = 8 * 1024 * 1024) {
     if (page === 2 && padding) objects.push(`<< /Length ${padding} >>\nstream\n${'x'.repeat(padding)}\nendstream`);
     const pageId = objects.length + 1;
     pages.push(`${pageId} 0 R`);
-    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageId + 1} 0 R >>`);
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageId + 1} 0 R >>`,
+    );
     const content = `BT /F1 24 Tf 50 700 Td (PDF page ${page}) Tj ET`;
     objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
   }
@@ -19,7 +21,7 @@ export function createPdfFixture(padding = 8 * 1024 * 1024) {
   });
   const xref = pdf.length;
   pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  pdf += offsets.map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+  pdf += offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
   return Buffer.from(pdf);
 }

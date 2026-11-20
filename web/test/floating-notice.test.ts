@@ -7,12 +7,19 @@ import { dismissAllNotices, dismissNotice, notify, placeNotifications } from '..
 import { noticeText, visibleNotices } from './helpers/notices.ts';
 
 const root = document.createElement('div');
-beforeEach(() => { document.body.replaceChildren(root); });
-afterEach(() => { render(null, root); dismissAllNotices(); vi.useRealTimers(); });
+beforeEach(() => {
+  document.body.replaceChildren(root);
+});
+afterEach(() => {
+  render(null, root);
+  dismissAllNotices();
+  vi.useRealTimers();
+});
 const show = (message: string, busy = false) => render(createElement(FloatingNotice, { message, busy }), root);
 
 it('keeps ongoing operations visible, then expires completed feedback', async () => {
-  vi.useFakeTimers(); show('正在安装', true);
+  vi.useFakeTimers();
+  show('正在安装', true);
   await vi.advanceTimersByTimeAsync(20_000);
   expect(noticeText()).toContain('正在安装');
   expect(root.textContent).toBe('');
@@ -23,14 +30,17 @@ it('keeps ongoing operations visible, then expires completed feedback', async ()
 });
 
 it('allows dismissal and shows the next operation without retaining an old timer', async () => {
-  vi.useFakeTimers(); show('第一条');
+  vi.useFakeTimers();
+  show('第一条');
   document.querySelector<HTMLButtonElement>('.notyf button')!.click();
   await vi.advanceTimersByTimeAsync(1);
   expect(visibleNotices()).toHaveLength(0);
-  show('第二条'); await vi.advanceTimersByTimeAsync(1);
+  show('第二条');
+  await vi.advanceTimersByTimeAsync(1);
   expect(noticeText()).toContain('第二条');
   await vi.advanceTimersByTimeAsync(4000);
-  show('第三条'); await vi.advanceTimersByTimeAsync(3000);
+  show('第三条');
+  await vi.advanceTimersByTimeAsync(3000);
   expect(noticeText()).toContain('第三条');
   render(null, root);
   expect(visibleNotices()).toHaveLength(0);
@@ -57,11 +67,15 @@ it('keeps app notifications across screen disposal and moves the host into nativ
   show('正在加载', true);
   render(null, root);
   expect(noticeText()).toBe('已返回书架');
-  const dialog = document.createElement('dialog'); document.body.append(dialog);
-  dialog.open = true; placeNotifications();
+  const dialog = document.createElement('dialog');
+  document.body.append(dialog);
+  dialog.open = true;
+  placeNotifications();
   expect(dialog.querySelector('.notyf')).not.toBeNull();
   expect(noticeText()).toBe('已返回书架');
-  dialog.open = false; placeNotifications(); dialog.remove();
+  dialog.open = false;
+  placeNotifications();
+  dialog.remove();
   expect(document.body.querySelector(':scope > .notyf')).not.toBeNull();
   dismissNotice(appNotice);
   expect(visibleNotices()).toHaveLength(0);

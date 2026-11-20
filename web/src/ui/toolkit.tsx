@@ -56,7 +56,15 @@ export interface IconButtonProps {
  * The glyph is passed as a *name*, so it is always `.icon` — which is what makes the
  * control's own alignment guaranteed rather than inherited from a caller's layout.
  */
-export function IconButton({ label, icon, onClick, disabled, hidden, className, pressed }: IconButtonProps): JSX.Element {
+export function IconButton({
+  label,
+  icon,
+  onClick,
+  disabled,
+  hidden,
+  className,
+  pressed,
+}: IconButtonProps): JSX.Element {
   return (
     <button
       type="button"
@@ -206,10 +214,17 @@ export function SwitchRow({ label, hint, checked, onChange }: SwitchRowProps): J
   // The whole row is the hit target, as the note above promises: a press on the
   // words toggles too. The button keeps the semantics and takes its name from them.
   return (
-    <div className="field switch-field" onClick={event => { if (!(event.target as Element).closest('.switch')) onChange(!checked); }}>
+    <div
+      className="field switch-field"
+      onClick={(event) => {
+        if (!(event.target as Element).closest('.switch')) onChange(!checked);
+      }}
+    >
       <div className="switch-text">
         <div id={`${id}-label`}>{label}</div>
-        <div className="muted" id={`${id}-hint`}>{hint}</div>
+        <div className="muted" id={`${id}-hint`}>
+          {hint}
+        </div>
       </div>
       <button
         type="button"

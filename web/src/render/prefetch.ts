@@ -17,9 +17,11 @@
  * so the bandwidth is better left for the foreground.
  */
 export function shouldPrefetch(): boolean {
-  const connection = (navigator as Navigator & {
-    connection?: { saveData?: boolean; effectiveType?: string };
-  }).connection;
+  const connection = (
+    navigator as Navigator & {
+      connection?: { saveData?: boolean; effectiveType?: string };
+    }
+  ).connection;
   if (!connection) return true;
   if (connection.saveData) return false;
   return connection.effectiveType !== 'slow-2g' && connection.effectiveType !== '2g';

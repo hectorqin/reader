@@ -78,11 +78,17 @@ export function isStrictUtf8(bytes: Buffer): boolean {
     let min: number;
     let code: number;
     if ((byte & 0xe0) === 0xc0) {
-      needed = 1; min = 0x80; code = byte & 0x1f;
+      needed = 1;
+      min = 0x80;
+      code = byte & 0x1f;
     } else if ((byte & 0xf0) === 0xe0) {
-      needed = 2; min = 0x800; code = byte & 0x0f;
+      needed = 2;
+      min = 0x800;
+      code = byte & 0x0f;
     } else if ((byte & 0xf8) === 0xf0) {
-      needed = 3; min = 0x10000; code = byte & 0x07;
+      needed = 3;
+      min = 0x10000;
+      code = byte & 0x07;
     } else {
       return false;
     }
@@ -171,7 +177,10 @@ function isbn13ChecksumOk(raw: string): boolean {
 }
 
 export function normalizeIsbn(candidate: string): string {
-  const cleaned = candidate.replace(/^urn:isbn:/i, '').replace(/[^0-9Xx]/g, '').toUpperCase();
+  const cleaned = candidate
+    .replace(/^urn:isbn:/i, '')
+    .replace(/[^0-9Xx]/g, '')
+    .toUpperCase();
   if (cleaned.length === 13 && isbn13ChecksumOk(cleaned)) return cleaned;
   if (cleaned.length === 10) {
     let sum = 0;
@@ -235,12 +244,16 @@ export async function parseEpub(source: Buffer | EpubZip, relPath: string): Prom
   const metadata = pkg?.metadata ?? {};
 
   const title = textOf(metadata['dc:title'] ?? metadata.title);
-  const creators = asArray(metadata['dc:creator'] ?? metadata.creator).map(textOf).filter(Boolean);
+  const creators = asArray(metadata['dc:creator'] ?? metadata.creator)
+    .map(textOf)
+    .filter(Boolean);
   const publisher = textOf(metadata['dc:publisher'] ?? metadata.publisher);
   const language = textOf(metadata['dc:language'] ?? metadata.language);
   const description = textOf(metadata['dc:description'] ?? metadata.description);
   const pubdate = textOf(metadata['dc:date'] ?? metadata.date);
-  const identifiers = asArray(metadata['dc:identifier'] ?? metadata.identifier).map(textOf).filter(Boolean);
+  const identifiers = asArray(metadata['dc:identifier'] ?? metadata.identifier)
+    .map(textOf)
+    .filter(Boolean);
 
   let isbn = '';
   for (const id of identifiers) {
@@ -263,7 +276,9 @@ export async function parseEpub(source: Buffer | EpubZip, relPath: string): Prom
     }
   }
 
-  const tags = asArray(metadata['dc:subject'] ?? metadata.subject).map(textOf).filter(Boolean);
+  const tags = asArray(metadata['dc:subject'] ?? metadata.subject)
+    .map(textOf)
+    .filter(Boolean);
 
   let series = '';
   let seriesIndex: number | null = null;
@@ -377,7 +392,9 @@ export function comicDirectoryMetadata(relDir: string, pages: string[], totalByt
  * Covers are cached into DATA_DIR/covers by the caller; the library directory is
  * never written to.
  */
-export async function extractEpubCover(source: Buffer | EpubZip): Promise<{ data: Buffer; contentType: string } | undefined> {
+export async function extractEpubCover(
+  source: Buffer | EpubZip,
+): Promise<{ data: Buffer; contentType: string } | undefined> {
   const zip = await openEpubZip(source);
   const opfPath = await findOpfPath(zip);
   if (!opfPath) return undefined;
@@ -391,12 +408,9 @@ export async function extractEpubCover(source: Buffer | EpubZip): Promise<{ data
     .map((entry) => (typeof entry === 'object' && entry !== null ? (entry as Record<string, unknown>) : {}))
     .find((entry) => String(entry['@_name'] ?? '') === 'cover')?.['@_content'];
 
-  const isImage = (item: Record<string, any>) =>
-    String(item['@_media-type'] ?? '').startsWith('image/');
+  const isImage = (item: Record<string, any>) => String(item['@_media-type'] ?? '').startsWith('image/');
 
-  let item = coverId
-    ? manifest.find((entry) => entry?.['@_id'] === coverId)
-    : undefined;
+  let item = coverId ? manifest.find((entry) => entry?.['@_id'] === coverId) : undefined;
   if (!item) {
     item = manifest.find(
       (entry) => isImage(entry) && /cover/i.test(String(entry?.['@_id'] ?? entry?.['@_href'] ?? '')),
@@ -456,9 +470,7 @@ export async function findEpubCoverTarget(
     );
   }
   if (!item) {
-    item = manifest.find(
-      (entry) => isImage(entry) && /\.(jpe?g|png|gif|webp)$/i.test(String(entry?.['@_href'] ?? '')),
-    );
+    item = manifest.find((entry) => isImage(entry) && /\.(jpe?g|png|gif|webp)$/i.test(String(entry?.['@_href'] ?? '')));
   }
   if (!item) return undefined;
 

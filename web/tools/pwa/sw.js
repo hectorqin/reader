@@ -10,8 +10,9 @@ const manifest = new URL('manifest.webmanifest', scope).href;
 self.addEventListener('install', (event) => {
   // Reload bypasses HTTP caches for the fixed-name Android-compatible bundle.
   // Wait for the reader's explicit update action before replacing open pages.
-  event.waitUntil(caches.open(cacheName).then((cache) =>
-    cache.addAll(urls.map((url) => new Request(url, { cache: 'reload' })))));
+  event.waitUntil(
+    caches.open(cacheName).then((cache) => cache.addAll(urls.map((url) => new Request(url, { cache: 'reload' })))),
+  );
 });
 
 self.addEventListener('message', (event) => {
@@ -19,12 +20,14 @@ self.addEventListener('message', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil((async () => {
-    for (const key of await caches.keys()) {
-      if (key.startsWith(prefix) && key !== cacheName) await caches.delete(key);
-    }
-    await self.clients.claim();
-  })());
+  event.waitUntil(
+    (async () => {
+      for (const key of await caches.keys()) {
+        if (key.startsWith(prefix) && key !== cacheName) await caches.delete(key);
+      }
+      await self.clients.claim();
+    })(),
+  );
 });
 
 self.addEventListener('fetch', (event) => {
@@ -37,17 +40,21 @@ self.addEventListener('fetch', (event) => {
   const isHome = request.mode === 'navigate' && (url.pathname === home || url.pathname === new URL(shell).pathname);
   const key = isHome ? shell : url.href;
   if (!isHome && !urls.includes(key)) return;
-  event.respondWith((async () => {
-    const cache = await caches.open(cacheName);
-    // The manifest is network-first: Chrome re-reads it to update an installed app
-    // (orientation, icons, colours), and a cache-first copy would pin every install to
-    // the manifest it first cached until the reader happened to accept an update.
-    if (key === manifest) {
-      try {
-        const response = await fetch(request, { cache: 'no-cache' });
-        if (response.ok) return response;
-      } catch { /* Offline: the cached copy below. */ }
-    }
-    return (await cache.match(key)) ?? fetch(request);
-  })());
+  event.respondWith(
+    (async () => {
+      const cache = await caches.open(cacheName);
+      // The manifest is network-first: Chrome re-reads it to update an installed app
+      // (orientation, icons, colours), and a cache-first copy would pin every install to
+      // the manifest it first cached until the reader happened to accept an update.
+      if (key === manifest) {
+        try {
+          const response = await fetch(request, { cache: 'no-cache' });
+          if (response.ok) return response;
+        } catch {
+          /* Offline: the cached copy below. */
+        }
+      }
+      return (await cache.match(key)) ?? fetch(request);
+    })(),
+  );
 });

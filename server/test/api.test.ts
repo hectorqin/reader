@@ -31,7 +31,13 @@ let ctx: AppContext;
 let root: string;
 let booksDir: string;
 
-const OPF = (opts: { id: string; title: string; creator: string; series?: string; index?: string }) => `<?xml version="1.0" encoding="utf-8"?>
+const OPF = (opts: {
+  id: string;
+  title: string;
+  creator: string;
+  series?: string;
+  index?: string;
+}) => `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
 <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
 <dc:identifier id="bookid">${opts.id}</dc:identifier>
@@ -42,10 +48,20 @@ ${opts.series ? `<meta name="calibre:series" content="${opts.series}"/><meta nam
 <manifest><item id="c" href="c.xhtml" media-type="application/xhtml+xml"/></manifest>
 <spine><itemref idref="c"/></spine></package>`;
 
-async function makeEpub(opts: { id: string; title: string; creator: string; series?: string; index?: string; extra?: string }) {
+async function makeEpub(opts: {
+  id: string;
+  title: string;
+  creator: string;
+  series?: string;
+  index?: string;
+  extra?: string;
+}) {
   const zip = new JSZip();
   zip.file('mimetype', 'application/epub+zip');
-  zip.file('META-INF/container.xml', '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>');
+  zip.file(
+    'META-INF/container.xml',
+    '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>',
+  );
   zip.file('OEBPS/content.opf', OPF(opts));
   zip.file('OEBPS/c.xhtml', `<html><body><p>${opts.title}${opts.extra ?? ''}</p></body></html>`);
   return zip.generateAsync({ type: 'nodebuffer' });
@@ -100,7 +116,8 @@ interface Session {
 
 async function register(username: string, password = 'password123'): Promise<Session> {
   const res = await app.inject({
-    method: 'POST', url: '/api/v1/auth/register',
+    method: 'POST',
+    url: '/api/v1/auth/register',
     payload: { username, password },
   });
   assert.equal(res.statusCode, 201, res.body);
@@ -122,7 +139,9 @@ function auth(token: string) {
 async function createUser(username: string, password = 'password123'): Promise<Session> {
   const user = await ctx.users.createAsAdmin({ username, password });
   const res = await app.inject({
-    method: 'POST', url: '/api/v1/auth/login', payload: { username, password },
+    method: 'POST',
+    url: '/api/v1/auth/login',
+    payload: { username, password },
   });
   assert.equal(res.statusCode, 200, res.body);
   const body = res.json() as { accessToken: string; user: { id: string } };
@@ -135,7 +154,8 @@ test('first account becomes admin, later public registrations are refused', asyn
   assert.equal((me.json() as { user: { role: string } }).user.role, 'admin');
 
   const second = await app.inject({
-    method: 'POST', url: '/api/v1/auth/register',
+    method: 'POST',
+    url: '/api/v1/auth/register',
     payload: { username: 'intruder', password: 'password123' },
   });
   assert.equal(second.statusCode, 400);
@@ -143,9 +163,16 @@ test('first account becomes admin, later public registrations are refused', asyn
 });
 
 test('book identity survives a rename and a move', async () => {
-  await writeFile(join(booksDir, '三体 - 刘慈欣.epub'), await makeEpub({
-    id: 'urn:isbn:9787536692930', title: '三体', creator: '刘慈欣', series: '地球往事', index: '1',
-  }));
+  await writeFile(
+    join(booksDir, '三体 - 刘慈欣.epub'),
+    await makeEpub({
+      id: 'urn:isbn:9787536692930',
+      title: '三体',
+      creator: '刘慈欣',
+      series: '地球往事',
+      index: '1',
+    }),
+  );
   await ctx.scanner.scan();
 
   const before = ctx.db.get<{ id: string; title: string }>('SELECT id, title FROM books');
@@ -170,17 +197,33 @@ test('book identity survives a rename and a move', async () => {
 test('progress and notes survive a library re-organisation', async () => {
   const owner = ctx.db.get<{ id: string }>('SELECT id FROM users WHERE username = ?', 'owner')!;
   const book = ctx.db.get<{ id: string }>('SELECT id FROM books')!;
-  ctx.sync.push(owner.id, { progress: [{
-    bookId: book.id, locator: 'epubcfi(/6/4!/4/2)', percentage: 0.5,
-    chapterTitle: '第七章', device: 'test', updatedAt: 1000,
-  }] });
+  ctx.sync.push(owner.id, {
+    progress: [
+      {
+        bookId: book.id,
+        locator: 'epubcfi(/6/4!/4/2)',
+        percentage: 0.5,
+        chapterTitle: '第七章',
+        device: 'test',
+        updatedAt: 1000,
+      },
+    ],
+  });
 
   // Touch the file so the scanner re-reads it.
   const file = ctx.db.get<{ rel_path: string }>('SELECT rel_path FROM book_files LIMIT 1')!;
   const abs = join(booksDir, file.rel_path);
-  await writeFile(abs, await makeEpub({
-    id: 'urn:isbn:9787536692930', title: '三体', creator: '刘慈欣', series: '地球往事', index: '1', extra: '!',
-  }));
+  await writeFile(
+    abs,
+    await makeEpub({
+      id: 'urn:isbn:9787536692930',
+      title: '三体',
+      creator: '刘慈欣',
+      series: '地球往事',
+      index: '1',
+      extra: '!',
+    }),
+  );
   await ctx.scanner.scan();
 
   assert.equal(
@@ -209,13 +252,18 @@ test('deleting one of two identical copies renames the book after the copy that 
   await ctx.scanner.scan();
   await writeFile(join(booksDir, '同书改名2.txt'), text);
   await ctx.scanner.scan();
-  const title = () => ctx.db.get<{ title: string }>(
-    `SELECT b.title FROM books b JOIN book_files f ON f.book_id = b.id WHERE f.rel_path = '同书原名.txt'`)?.title;
+  const title = () =>
+    ctx.db.get<{ title: string }>(
+      `SELECT b.title FROM books b JOIN book_files f ON f.book_id = b.id WHERE f.rel_path = '同书原名.txt'`,
+    )?.title;
   assert.equal(title(), '同书改名2', 'the copy parsed last named the shared book');
   await rm(join(booksDir, '同书改名2.txt'));
   await ctx.scanner.scan();
   assert.equal(title(), '同书原名', 'with that copy gone, the book is named after the file that remains');
-  assert.equal(ctx.db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM book_files WHERE rel_path = '同书改名2.txt'`)!.n, 0);
+  assert.equal(
+    ctx.db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM book_files WHERE rel_path = '同书改名2.txt'`)!.n,
+    0,
+  );
   await rm(join(booksDir, '同书原名.txt'));
   await ctx.scanner.scan();
 });
@@ -225,7 +273,9 @@ test('manual metadata is never overwritten by a rescan, and can be undone', asyn
   const book = ctx.db.get<{ id: string }>('SELECT id FROM books WHERE identifier = ?', 'urn:isbn:9787536692930')!;
 
   const patched = await app.inject({
-    method: 'PATCH', url: `/api/v1/books/${book.id}/metadata`, headers: auth(owner.token),
+    method: 'PATCH',
+    url: `/api/v1/books/${book.id}/metadata`,
+    headers: auth(owner.token),
     payload: { title: '三体（修订版）', tags: '科幻,雨果奖' },
   });
   assert.equal(patched.statusCode, 200);
@@ -243,7 +293,9 @@ test('manual metadata is never overwritten by a rescan, and can be undone', asyn
   );
 
   const undone = await app.inject({
-    method: 'DELETE', url: `/api/v1/books/${book.id}/metadata/title`, headers: auth(owner.token),
+    method: 'DELETE',
+    url: `/api/v1/books/${book.id}/metadata/title`,
+    headers: auth(owner.token),
   });
   assert.equal((undone.json() as { book: { title: string } }).book.title, '三体', 'undo restores the embedded value');
 });
@@ -251,7 +303,9 @@ test('manual metadata is never overwritten by a rescan, and can be undone', asyn
 test('members cannot reach admin endpoints', async () => {
   const owner = await login('owner');
   const created = await app.inject({
-    method: 'POST', url: '/api/v1/admin/users', headers: auth(owner.token),
+    method: 'POST',
+    url: '/api/v1/admin/users',
+    headers: auth(owner.token),
     payload: { username: 'family', password: 'familypass123' },
   });
   assert.equal(created.statusCode, 201);
@@ -272,24 +326,42 @@ test('per-user state is isolated', async () => {
   const book = ctx.db.get<{ id: string }>('SELECT id FROM books')!;
 
   await app.inject({
-    method: 'PUT', url: `/api/v1/sync/progress/${book.id}`, headers: auth(owner.token),
+    method: 'PUT',
+    url: `/api/v1/sync/progress/${book.id}`,
+    headers: auth(owner.token),
     payload: { locator: 'owner-pos', percentage: 0.6, updatedAt: 5000 },
   });
   await app.inject({
-    method: 'PUT', url: `/api/v1/sync/progress/${book.id}`, headers: auth(member.token),
+    method: 'PUT',
+    url: `/api/v1/sync/progress/${book.id}`,
+    headers: auth(member.token),
     payload: { locator: 'member-pos', percentage: 0.1, updatedAt: 5000 },
   });
 
-  const ownerView = await app.inject({ method: 'GET', url: `/api/v1/sync/progress/${book.id}`, headers: auth(owner.token) });
-  const memberView = await app.inject({ method: 'GET', url: `/api/v1/sync/progress/${book.id}`, headers: auth(member.token) });
+  const ownerView = await app.inject({
+    method: 'GET',
+    url: `/api/v1/sync/progress/${book.id}`,
+    headers: auth(owner.token),
+  });
+  const memberView = await app.inject({
+    method: 'GET',
+    url: `/api/v1/sync/progress/${book.id}`,
+    headers: auth(member.token),
+  });
   assert.equal((ownerView.json() as { progress: { locator: string } }).progress.locator, 'owner-pos');
   assert.equal((memberView.json() as { progress: { locator: string } }).progress.locator, 'member-pos');
 
   await app.inject({
-    method: 'POST', url: '/api/v1/notes', headers: auth(owner.token),
+    method: 'POST',
+    url: '/api/v1/notes',
+    headers: auth(owner.token),
     payload: { bookId: book.id, type: 'note', locator: 'x', text: 'owner only' },
   });
-  const memberNotes = await app.inject({ method: 'GET', url: `/api/v1/notes?bookId=${book.id}`, headers: auth(member.token) });
+  const memberNotes = await app.inject({
+    method: 'GET',
+    url: `/api/v1/notes?bookId=${book.id}`,
+    headers: auth(member.token),
+  });
   assert.equal((memberNotes.json() as { notes: unknown[] }).notes.length, 0, 'notes must not leak across accounts');
 });
 
@@ -298,16 +370,36 @@ test('a stale offline device cannot roll back newer progress', async () => {
   const book = ctx.db.get<{ id: string }>('SELECT id FROM books')!;
 
   await app.inject({
-    method: 'POST', url: '/api/v1/sync', headers: auth(owner.token),
-    payload: { progress: [{
-      bookId: book.id, locator: 'fresh', percentage: 0.8, device: 'a', updatedAt: 9000,
-    }] },
+    method: 'POST',
+    url: '/api/v1/sync',
+    headers: auth(owner.token),
+    payload: {
+      progress: [
+        {
+          bookId: book.id,
+          locator: 'fresh',
+          percentage: 0.8,
+          device: 'a',
+          updatedAt: 9000,
+        },
+      ],
+    },
   });
   await app.inject({
-    method: 'POST', url: '/api/v1/sync', headers: auth(owner.token),
-    payload: { progress: [{
-      bookId: book.id, locator: 'stale', percentage: 0.05, device: 'b', updatedAt: 100,
-    }] },
+    method: 'POST',
+    url: '/api/v1/sync',
+    headers: auth(owner.token),
+    payload: {
+      progress: [
+        {
+          bookId: book.id,
+          locator: 'stale',
+          percentage: 0.05,
+          device: 'b',
+          updatedAt: 100,
+        },
+      ],
+    },
   });
 
   const view = await app.inject({ method: 'GET', url: `/api/v1/sync/progress/${book.id}`, headers: auth(owner.token) });
@@ -318,26 +410,65 @@ test('progress history keeps the places a write replaced, one entry per stretch 
   const owner = await login('owner');
   const member = await login('family');
   const book = ctx.db.get<{ id: string }>('SELECT id FROM books')!;
-  const push = (items: Array<{ locator: string; percentage: number; chapterTitle: string; device: string; updatedAt: number }>, token = owner.token) =>
-    app.inject({ method: 'POST', url: '/api/v1/sync', headers: auth(token), payload: { progress: items.map(item => ({ bookId: book.id, ...item })) } });
-  const minute = 60_000, base = 1_000_000_000_000;
+  const push = (
+    items: Array<{ locator: string; percentage: number; chapterTitle: string; device: string; updatedAt: number }>,
+    token = owner.token,
+  ) =>
+    app.inject({
+      method: 'POST',
+      url: '/api/v1/sync',
+      headers: auth(token),
+      payload: { progress: items.map((item) => ({ bookId: book.id, ...item })) },
+    });
+  const minute = 60_000,
+    base = 1_000_000_000_000;
   // Reading on through chapter 3 on the phone: one entry that moves forward.
-  await push([{ locator: 'c3-a', percentage: 0.30, chapterTitle: '第三章', device: 'phone', updatedAt: base }]);
-  await push([{ locator: 'c3-b', percentage: 0.31, chapterTitle: '第三章', device: 'phone', updatedAt: base + minute }]);
+  await push([{ locator: 'c3-a', percentage: 0.3, chapterTitle: '第三章', device: 'phone', updatedAt: base }]);
+  await push([
+    { locator: 'c3-b', percentage: 0.31, chapterTitle: '第三章', device: 'phone', updatedAt: base + minute },
+  ]);
   // A mistapped 目录 entry jumps to chapter 40: a new entry, and chapter 3 stays restorable.
-  await push([{ locator: 'c40', percentage: 0.90, chapterTitle: '第四十章', device: 'phone', updatedAt: base + 2 * minute }]);
+  await push([
+    { locator: 'c40', percentage: 0.9, chapterTitle: '第四十章', device: 'phone', updatedAt: base + 2 * minute },
+  ]);
   // A stale tablet loses the merge, but where it was is history too.
-  await push([{ locator: 'c2', percentage: 0.20, chapterTitle: '第二章', device: 'tablet', updatedAt: base - minute }]);
-  const read = async (token = owner.token) => (await app.inject({ method: 'GET', url: `/api/v1/sync/progress/${book.id}/history`, headers: auth(token) })).json() as { history: Array<{ locator: string; device: string }> };
+  await push([{ locator: 'c2', percentage: 0.2, chapterTitle: '第二章', device: 'tablet', updatedAt: base - minute }]);
+  const read = async (token = owner.token) =>
+    (
+      await app.inject({ method: 'GET', url: `/api/v1/sync/progress/${book.id}/history`, headers: auth(token) })
+    ).json() as { history: Array<{ locator: string; device: string }> };
   // Newest first; earlier tests in this file left older entries for the same book behind.
-  assert.deepEqual((await read()).history.slice(0, 3).map(item => [item.locator, item.device]), [['c40', 'phone'], ['c3-b', 'phone'], ['c2', 'tablet']]);
-  const current = await app.inject({ method: 'GET', url: `/api/v1/sync/progress/${book.id}`, headers: auth(owner.token) });
+  assert.deepEqual(
+    (await read()).history.slice(0, 3).map((item) => [item.locator, item.device]),
+    [
+      ['c40', 'phone'],
+      ['c3-b', 'phone'],
+      ['c2', 'tablet'],
+    ],
+  );
+  const current = await app.inject({
+    method: 'GET',
+    url: `/api/v1/sync/progress/${book.id}`,
+    headers: auth(owner.token),
+  });
   assert.equal((current.json() as { progress: { locator: string } }).progress.locator, 'c40');
   // Another account sees none of it (only its own places).
-  assert.ok((await read(member.token)).history.every(item => !['c40', 'c3-b', 'c2'].includes(item.locator)));
+  assert.ok((await read(member.token)).history.every((item) => !['c40', 'c3-b', 'c2'].includes(item.locator)));
   // Kept bounded: the newest 50.
-  await push(Array.from({ length: 60 }, (_, index) => ({ locator: `x${index}`, percentage: index / 60, chapterTitle: `第${index}章`, device: 'phone', updatedAt: base + (10 + index) * minute })));
-  const all = await app.inject({ method: 'GET', url: `/api/v1/sync/progress/${book.id}/history?limit=100`, headers: auth(owner.token) });
+  await push(
+    Array.from({ length: 60 }, (_, index) => ({
+      locator: `x${index}`,
+      percentage: index / 60,
+      chapterTitle: `第${index}章`,
+      device: 'phone',
+      updatedAt: base + (10 + index) * minute,
+    })),
+  );
+  const all = await app.inject({
+    method: 'GET',
+    url: `/api/v1/sync/progress/${book.id}/history?limit=100`,
+    headers: auth(owner.token),
+  });
   const entries = (all.json() as { history: Array<{ locator: string }> }).history;
   assert.equal(entries.length, 50);
   assert.equal(entries[0]!.locator, 'x59');
@@ -348,18 +479,32 @@ test('deleting a note leaves a tombstone that a stale device cannot undo', async
   const book = ctx.db.get<{ id: string }>('SELECT id FROM books')!;
 
   const created = await app.inject({
-    method: 'POST', url: '/api/v1/notes', headers: auth(owner.token),
+    method: 'POST',
+    url: '/api/v1/notes',
+    headers: auth(owner.token),
     payload: { bookId: book.id, type: 'highlight', locator: 'l1', text: 'highlight', comment: 'note' },
   });
   const noteId = (created.json() as { note: { id: string } }).note.id;
 
   await app.inject({ method: 'DELETE', url: `/api/v1/notes/${noteId}`, headers: auth(owner.token) });
   await app.inject({
-    method: 'POST', url: '/api/v1/sync', headers: auth(owner.token),
-    payload: { notes: [{
-      id: noteId, bookId: book.id, type: 'highlight', locator: 'l1',
-      text: 'highlight', comment: 'note', updatedAt: 1, deleted: false,
-    }] },
+    method: 'POST',
+    url: '/api/v1/sync',
+    headers: auth(owner.token),
+    payload: {
+      notes: [
+        {
+          id: noteId,
+          bookId: book.id,
+          type: 'highlight',
+          locator: 'l1',
+          text: 'highlight',
+          comment: 'note',
+          updatedAt: 1,
+          deleted: false,
+        },
+      ],
+    },
   });
 
   const list = await app.inject({ method: 'GET', url: `/api/v1/notes?bookId=${book.id}`, headers: auth(owner.token) });
@@ -374,13 +519,19 @@ test('deleting a note leaves a tombstone that a stale device cannot undo', async
 test('malformed and oversized sync payloads are rejected cleanly', async () => {
   const owner = await login('owner');
   const bad = await app.inject({
-    method: 'POST', url: '/api/v1/sync', headers: auth(owner.token), payload: { progress: 'nope' },
+    method: 'POST',
+    url: '/api/v1/sync',
+    headers: auth(owner.token),
+    payload: { progress: 'nope' },
   });
   assert.equal(bad.statusCode, 400);
   assert.equal((bad.json() as { error: { code: string } }).error.code, 'BAD_PAYLOAD');
 
   const empty = await app.inject({
-    method: 'POST', url: '/api/v1/sync', headers: auth(owner.token), payload: {},
+    method: 'POST',
+    url: '/api/v1/sync',
+    headers: auth(owner.token),
+    payload: {},
   });
   assert.equal(empty.statusCode, 400);
 
@@ -417,7 +568,11 @@ test('malformed authentication and sync fields return client errors', async () =
     assert.equal(response.statusCode, 400);
   }
   for (const since of ['123oops', '-1', '1.5', '9007199254740992']) {
-    const response = await app.inject({ method: 'GET', url: `/api/v1/sync?since=${since}`, headers: auth(owner.token) });
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/sync?since=${since}`,
+      headers: auth(owner.token),
+    });
     assert.equal(response.statusCode, 400);
   }
 });
@@ -428,12 +583,17 @@ test('sync pushes return only changes after the supplied server cursor', async (
   const since = (before.json() as { serverTime: number }).serverTime;
   const book = ctx.db.get<{ id: string }>('SELECT id FROM books')!;
   const response = await app.inject({
-    method: 'POST', url: '/api/v1/sync', headers: auth(owner.token),
+    method: 'POST',
+    url: '/api/v1/sync',
+    headers: auth(owner.token),
     payload: { since, notes: [{ id: 'delta-note', bookId: book.id, text: 'delta', updatedAt: 1 }] },
   });
   assert.equal(response.statusCode, 200);
   const result = response.json() as { notes: Array<{ id: string }>; progress: unknown[]; hasMore: boolean };
-  assert.deepEqual(result.notes.map(note => note.id), ['delta-note']);
+  assert.deepEqual(
+    result.notes.map((note) => note.id),
+    ['delta-note'],
+  );
   assert.equal(result.progress.length, 0);
   assert.equal(result.hasMore, false);
 });
@@ -467,13 +627,16 @@ test('the read-only library mount is never written to by the server', async () =
   const entriesAfter = (await readdir(booksDir, { recursive: true })).sort();
   assert.deepEqual(entriesAfter, entriesBefore, 'the scanner must not create files in the library');
   // Covers live in DATA_DIR, not next to the books.
-  assert.ok(ctx.db.get<{ cover_path: string | null }>('SELECT cover_path FROM books WHERE cover_path IS NOT NULL') === undefined
-    || true);
+  assert.ok(
+    ctx.db.get<{ cover_path: string | null }>('SELECT cover_path FROM books WHERE cover_path IS NOT NULL') ===
+      undefined || true,
+  );
 });
 
 async function login(username: string, password?: string): Promise<Session> {
   const res = await app.inject({
-    method: 'POST', url: '/api/v1/auth/login',
+    method: 'POST',
+    url: '/api/v1/auth/login',
     payload: { username, password: password ?? (username === 'owner' ? 'password123' : 'familypass123') },
   });
   assert.equal(res.statusCode, 200, res.body);
@@ -527,18 +690,35 @@ test('a book whose file is gone is not offered as "continue reading"', async () 
    * reports as "这本书不在书架上了". The message was true and the card was the bug.
    */
   const session = await createUser('continueuser');
-  await writeFile(join(booksDir, '会消失的书.epub'), await makeEpub({
-    id: 'urn:isbn:9780000000042', title: '会消失的书', creator: '某人',
-  }));
+  await writeFile(
+    join(booksDir, '会消失的书.epub'),
+    await makeEpub({
+      id: 'urn:isbn:9780000000042',
+      title: '会消失的书',
+      creator: '某人',
+    }),
+  );
   await ctx.scanner.scan();
 
-  const listing = await app.inject({ method: 'GET', url: '/api/v1/books?search=%E4%BC%9A%E6%B6%88%E5%A4%B1', headers: auth(session.token) });
+  const listing = await app.inject({
+    method: 'GET',
+    url: '/api/v1/books?search=%E4%BC%9A%E6%B6%88%E5%A4%B1',
+    headers: auth(session.token),
+  });
   const book = (listing.json() as { items: Array<{ id: string }> }).items[0]!;
   const user = ctx.db.get<{ id: string }>('SELECT id FROM users WHERE username = ?', 'continueuser')!;
-  ctx.sync.push(user.id, { progress: [{
-    bookId: book.id, locator: 'r1:0:c0', percentage: 0.3,
-    chapterTitle: '第一章', device: 'test', updatedAt: Date.now(),
-  }] });
+  ctx.sync.push(user.id, {
+    progress: [
+      {
+        bookId: book.id,
+        locator: 'r1:0:c0',
+        percentage: 0.3,
+        chapterTitle: '第一章',
+        device: 'test',
+        updatedAt: Date.now(),
+      },
+    ],
+  });
 
   const before = await app.inject({ method: 'GET', url: '/api/v1/library/continue', headers: auth(session.token) });
   assert.equal((before.json() as { items: unknown[] }).items.length, 1, 'a live book with progress is offered');
@@ -555,7 +735,11 @@ test('a book whose file is gone is not offered as "continue reading"', async () 
     'a book with no live file must not be offered by the continue row',
   );
   // And the shelf agrees, because the two now share the predicate.
-  const shelf = await app.inject({ method: 'GET', url: '/api/v1/books?search=%E4%BC%9A%E6%B6%88%E5%A4%B1', headers: auth(session.token) });
+  const shelf = await app.inject({
+    method: 'GET',
+    url: '/api/v1/books?search=%E4%BC%9A%E6%B6%88%E5%A4%B1',
+    headers: auth(session.token),
+  });
   assert.equal((shelf.json() as { total: number }).total, 0);
 });
 
@@ -576,17 +760,32 @@ test('a continue-reading item is the same book the shelf serves', async () => {
    * second, unofficial kind of book.
    */
   const session = await createUser('continueuser2');
-  await writeFile(join(booksDir, '接着读.epub'), await makeEpub({
-    id: 'urn:isbn:9780000000043', title: '接着读', creator: '某作者',
-  }));
+  await writeFile(
+    join(booksDir, '接着读.epub'),
+    await makeEpub({
+      id: 'urn:isbn:9780000000043',
+      title: '接着读',
+      creator: '某作者',
+    }),
+  );
   await ctx.scanner.scan();
 
-  const listing = await app.inject({ method: 'GET', url: '/api/v1/books?search=%E6%8E%A5%E7%9D%80%E8%AF%BB', headers: auth(session.token) });
+  const listing = await app.inject({
+    method: 'GET',
+    url: '/api/v1/books?search=%E6%8E%A5%E7%9D%80%E8%AF%BB',
+    headers: auth(session.token),
+  });
   const shelfBook = (listing.json() as { items: Array<Record<string, unknown>> }).items[0]!;
   ctx.db.run(
     `INSERT INTO reading_progress (user_id, book_id, locator, percentage, chapter_title, device, updated_at)
      VALUES (?,?,?,?,?,?,?)`,
-    session.userId, shelfBook.id, 'r1:0:c0', 0.4, '第二章', 'test', Date.now(),
+    session.userId,
+    shelfBook.id,
+    'r1:0:c0',
+    0.4,
+    '第二章',
+    'test',
+    Date.now(),
   );
 
   const res = await app.inject({ method: 'GET', url: '/api/v1/library/continue', headers: auth(session.token) });
@@ -603,7 +802,11 @@ test('a continue-reading item is the same book the shelf serves', async () => {
   assert.equal(item.chapterTitle, '第二章');
   assert.equal(typeof item.lastReadAt, 'number');
   // And the id it carries is directly openable — the check the tap performs.
-  const opened = await app.inject({ method: 'GET', url: `/api/v1/books/${String(item.id)}`, headers: auth(session.token) });
+  const opened = await app.inject({
+    method: 'GET',
+    url: `/api/v1/books/${String(item.id)}`,
+    headers: auth(session.token),
+  });
   assert.equal(opened.statusCode, 200, 'the id a continue card carries must resolve to a book');
 });
 
@@ -618,24 +821,41 @@ test('a manual metadata override reaches the continue-reading card', async () =>
    * same book, two names, one screen.
    */
   const session = await createUser('overrideuser');
-  await writeFile(join(booksDir, '待改名.epub'), await makeEpub({
-    id: 'urn:isbn:9780000000044', title: '待改名', creator: '某人',
-  }));
+  await writeFile(
+    join(booksDir, '待改名.epub'),
+    await makeEpub({
+      id: 'urn:isbn:9780000000044',
+      title: '待改名',
+      creator: '某人',
+    }),
+  );
   await ctx.scanner.scan();
 
-  const listing = await app.inject({ method: 'GET', url: '/api/v1/books?search=%E5%BE%85%E6%94%B9%E5%90%8D', headers: auth(session.token) });
+  const listing = await app.inject({
+    method: 'GET',
+    url: '/api/v1/books?search=%E5%BE%85%E6%94%B9%E5%90%8D',
+    headers: auth(session.token),
+  });
   const book = (listing.json() as { items: Array<{ id: string }> }).items[0]!;
   // A local book's metadata is the library's, edited by an administrator.
   const owner = await login('owner');
   const renamed = await app.inject({
-    method: 'PATCH', url: `/api/v1/books/${book.id}/metadata`,
-    headers: auth(owner.token), payload: { title: '改好的名字' },
+    method: 'PATCH',
+    url: `/api/v1/books/${book.id}/metadata`,
+    headers: auth(owner.token),
+    payload: { title: '改好的名字' },
   });
   assert.equal(renamed.statusCode, 200, renamed.body);
   ctx.db.run(
     `INSERT INTO reading_progress (user_id, book_id, locator, percentage, chapter_title, device, updated_at)
      VALUES (?,?,?,?,?,?,?)`,
-    session.userId, book.id, 'r1:0:c0', 0.1, '第一章', 'test', Date.now(),
+    session.userId,
+    book.id,
+    'r1:0:c0',
+    0.1,
+    '第一章',
+    'test',
+    Date.now(),
   );
 
   const res = await app.inject({ method: 'GET', url: '/api/v1/library/continue', headers: auth(session.token) });
@@ -653,7 +873,9 @@ test('an ambiguous "title - author" file name is kept whole rather than guessed 
   await ctx.scanner.scan();
 
   const res = await app.inject({
-    method: 'GET', url: `/api/v1/books?search=${encodeURIComponent('长篇')}`, headers: auth(session.token),
+    method: 'GET',
+    url: `/api/v1/books?search=${encodeURIComponent('长篇')}`,
+    headers: auth(session.token),
   });
   const body = res.json() as { items: Array<{ title: string; author: string }> };
   assert.equal(body.items[0]!.title, '长篇 - 某作者');
@@ -686,16 +908,24 @@ test('a folder holding a real book is a shelf, not a comic', async () => {
   await writeFile(join(dir, 'cover2.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
   await ctx.scanner.scan();
 
-  const shelf = (await app.inject({
-    method: 'GET', url: '/api/v1/books?format=epub&search=架上的书', headers: auth(session.token),
-  })).json() as { items: Array<{ format: string }> };
+  const shelf = (
+    await app.inject({
+      method: 'GET',
+      url: '/api/v1/books?format=epub&search=架上的书',
+      headers: auth(session.token),
+    })
+  ).json() as { items: Array<{ format: string }> };
   assert.equal(shelf.items.length, 1, 'the book inside the folder must stay on the shelf');
   assert.equal(shelf.items[0]!.format, 'epub');
 
   // And the folder itself must NOT be one giant comic.
-  const comics = (await app.inject({
-    method: 'GET', url: '/api/v1/books?format=comic-dir&search=混合目录', headers: auth(session.token),
-  })).json() as { items: unknown[] };
+  const comics = (
+    await app.inject({
+      method: 'GET',
+      url: '/api/v1/books?format=comic-dir&search=混合目录',
+      headers: auth(session.token),
+    })
+  ).json() as { items: unknown[] };
   assert.equal(comics.items.length, 0);
 });
 
@@ -715,7 +945,9 @@ test('a series filed as one archive beside volume folders is one book', async ()
   await ctx.scanner.scan();
 
   const res = await app.inject({
-    method: 'GET', url: '/api/v1/books?search=' + encodeURIComponent('混合卷漫画'), headers: auth(session.token),
+    method: 'GET',
+    url: '/api/v1/books?search=' + encodeURIComponent('混合卷漫画'),
+    headers: auth(session.token),
   });
   const body = res.json() as { items: Array<{ format: string; pageCount: number | null }> };
   assert.equal(body.items.length, 1, 'the series must be one book, not one book per volume');
@@ -736,9 +968,13 @@ test('a nested shelf inside a comic folder keeps its own books', async () => {
   await writeFile(join(outer, '2.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
   await ctx.scanner.scan();
 
-  const deep = (await app.inject({
-    method: 'GET', url: '/api/v1/books?search=深处的书', headers: auth(session.token),
-  })).json() as { items: Array<{ format: string }> };
+  const deep = (
+    await app.inject({
+      method: 'GET',
+      url: '/api/v1/books?search=深处的书',
+      headers: auth(session.token),
+    })
+  ).json() as { items: Array<{ format: string }> };
   assert.equal(deep.items.length, 1, 'a book nested inside a comic folder must still be indexed');
   assert.equal(deep.items[0]!.format, 'epub');
 });
@@ -766,15 +1002,13 @@ test('a folder of images becomes one book with every page as a file', async () =
   assert.equal(body.items[0]!.pageCount, 3);
 
   const manifest = await app.inject({
-    method: 'GET', url: `/api/v1/books/${body.items[0]!.id}/manifest`, headers: auth(session.token),
+    method: 'GET',
+    url: `/api/v1/books/${body.items[0]!.id}/manifest`,
+    headers: auth(session.token),
   });
   const files = (manifest.json() as { files: Array<{ rel_path: string }> }).files;
   // Every page is a separate file row, and the folder is one book — not three.
-  assert.deepEqual(files.map((file) => file.rel_path).sort(), [
-    '图片漫画/1.jpg',
-    '图片漫画/10.jpg',
-    '图片漫画/2.jpg',
-  ]);
+  assert.deepEqual(files.map((file) => file.rel_path).sort(), ['图片漫画/1.jpg', '图片漫画/10.jpg', '图片漫画/2.jpg']);
 });
 
 test('a comic folder keeps its identity when a page is added', async () => {
@@ -784,31 +1018,50 @@ test('a comic folder keeps its identity when a page is added', async () => {
   await writeFile(join(dir, '1.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1]));
   await writeFile(join(dir, '2.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 2]));
   await ctx.scanner.scan();
-  const before = (await app.inject({
-    method: 'GET', url: '/api/v1/books?format=comic-dir&search=系列漫画', headers: auth(session.token),
-  })).json() as { items: Array<{ id: string }> };
+  const before = (
+    await app.inject({
+      method: 'GET',
+      url: '/api/v1/books?format=comic-dir&search=系列漫画',
+      headers: auth(session.token),
+    })
+  ).json() as { items: Array<{ id: string }> };
   assert.equal(before.items.length, 1);
 
   // Sync some progress, then add a page.
   await app.inject({
-    method: 'PUT', url: `/api/v1/sync/progress/${before.items[0]!.id}`,
+    method: 'PUT',
+    url: `/api/v1/sync/progress/${before.items[0]!.id}`,
     headers: { ...auth(session.token), 'content-type': 'application/json' },
-    payload: { locator: 'r1:0.0000:系列漫画/2.jpg', percentage: 0.5, chapterTitle: '第 2 页', device: 'test', updatedAt: Date.now() },
+    payload: {
+      locator: 'r1:0.0000:系列漫画/2.jpg',
+      percentage: 0.5,
+      chapterTitle: '第 2 页',
+      device: 'test',
+      updatedAt: Date.now(),
+    },
   });
   await writeFile(join(dir, '3.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 3]));
   await ctx.scanner.scan();
 
-  const after = (await app.inject({
-    method: 'GET', url: '/api/v1/books?format=comic-dir&search=系列漫画', headers: auth(session.token),
-  })).json() as { items: Array<{ id: string; pageCount: number | null }> };
+  const after = (
+    await app.inject({
+      method: 'GET',
+      url: '/api/v1/books?format=comic-dir&search=系列漫画',
+      headers: auth(session.token),
+    })
+  ).json() as { items: Array<{ id: string; pageCount: number | null }> };
   assert.equal(after.items.length, 1, 'adding a page must not create a second book');
   assert.equal(after.items[0]!.id, before.items[0]!.id);
   assert.equal(after.items[0]!.pageCount, 3);
 
   // The reading position survives, which is the actual point of the identity rule.
-  const progress = (await app.inject({
-    method: 'GET', url: `/api/v1/sync/progress/${before.items[0]!.id}`, headers: auth(session.token),
-  })).json() as { progress: { percentage: number } | null };
+  const progress = (
+    await app.inject({
+      method: 'GET',
+      url: `/api/v1/sync/progress/${before.items[0]!.id}`,
+      headers: auth(session.token),
+    })
+  ).json() as { progress: { percentage: number } | null };
   assert.equal(progress.progress?.percentage, 0.5);
 });
 
@@ -818,13 +1071,18 @@ test('a folder of EPUBs is not mistaken for a comic', async () => {
   const session = await createUser('shelfdirectory');
   const dir = join(booksDir, '藏书目录');
   await mkdir(dir, { recursive: true });
-  await writeFile(join(dir, '一本书.epub'), await makeEpub({ id: 'urn:uuid:in-dir', title: '目录里的书', creator: '某人' }));
+  await writeFile(
+    join(dir, '一本书.epub'),
+    await makeEpub({ id: 'urn:uuid:in-dir', title: '目录里的书', creator: '某人' }),
+  );
   await writeFile(join(dir, 'cover.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
   await writeFile(join(dir, 'cover2.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
   await ctx.scanner.scan();
 
   const res = await app.inject({
-    method: 'GET', url: '/api/v1/books?search=目录里的书', headers: auth(session.token),
+    method: 'GET',
+    url: '/api/v1/books?search=目录里的书',
+    headers: auth(session.token),
   });
   const body = res.json() as { items: Array<{ format: string }> };
   assert.equal(body.items.length, 1);
@@ -848,19 +1106,30 @@ test('every page of a comic folder is listed and served by the paths the manifes
   await writeFile(join(dir, '第01卷.cbz'), await makeCbz(['001.png', '002.png']));
   await ctx.scanner.scan();
 
-  const list = (await app.inject({
-    method: 'GET', url: '/api/v1/books?search=压缩包漫画', headers: auth(session.token),
-  })).json() as { items: Array<{ id: string; title: string; pageCount: number | null }> };
+  const list = (
+    await app.inject({
+      method: 'GET',
+      url: '/api/v1/books?search=压缩包漫画',
+      headers: auth(session.token),
+    })
+  ).json() as { items: Array<{ id: string; title: string; pageCount: number | null }> };
   assert.equal(list.items.length, 1, 'the folder must be one book, not one book per volume');
   // Three pages: one archive plus two loose images. A page inside an archive is
   // addressed by ref, which is why the archive is one entry in the list below.
   assert.equal(list.items[0]!.pageCount, 3);
 
-  const manifest = (await app.inject({
-    method: 'GET', url: `/api/v1/books/${list.items[0]!.id}/manifest`, headers: auth(session.token),
-  })).json() as { files: Array<{ rel_path: string; missing: number }> };
+  const manifest = (
+    await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${list.items[0]!.id}/manifest`,
+      headers: auth(session.token),
+    })
+  ).json() as { files: Array<{ rel_path: string; missing: number }> };
 
-  const paths = manifest.files.filter((file) => file.missing === 0).map((file) => file.rel_path).sort();
+  const paths = manifest.files
+    .filter((file) => file.missing === 0)
+    .map((file) => file.rel_path)
+    .sort();
   assert.deepEqual(paths, ['压缩包漫画/第01卷.cbz', '压缩包漫画/第02卷/001.jpg', '压缩包漫画/第02卷/002.jpg']);
 
   // Every path the manifest offered must actually serve. This is the assertion
@@ -887,11 +1156,16 @@ test('every page of a comic folder is listed and served by the paths the manifes
   // And the ref route reaches a page through the manifest's own ref, which is how
   // the reader fetches a page inside an archive.
   const assets = await app.inject({
-    method: 'GET', url: `/api/v1/books/${list.items[0]!.id}/assets?ref=${encodeURIComponent('page:0:0')}`,
+    method: 'GET',
+    url: `/api/v1/books/${list.items[0]!.id}/assets?ref=${encodeURIComponent('page:0:0')}`,
     headers: auth(session.token),
   });
   assert.equal(assets.statusCode, 200);
-  assert.equal(assets.headers['content-type'], 'image/jpeg', 'page:0:0 is the first page of the first volume, whichever kind of source it is');
+  assert.equal(
+    assets.headers['content-type'],
+    'image/jpeg',
+    'page:0:0 is the first page of the first volume, whichever kind of source it is',
+  );
 });
 
 test('one page of a comic folder can be fetched by path', async () => {
@@ -902,13 +1176,18 @@ test('one page of a comic folder can be fetched by path', async () => {
   await writeFile(join(dir, '2.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 8, 8]));
   await ctx.scanner.scan();
 
-  const list = (await app.inject({
-    method: 'GET', url: '/api/v1/books?search=取图漫画', headers: auth(session.token),
-  })).json() as { items: Array<{ id: string }> };
+  const list = (
+    await app.inject({
+      method: 'GET',
+      url: '/api/v1/books?search=取图漫画',
+      headers: auth(session.token),
+    })
+  ).json() as { items: Array<{ id: string }> };
   const id = list.items[0]!.id;
 
   const page = await app.inject({
-    method: 'GET', url: `/api/v1/books/${id}/file?path=${encodeURIComponent('取图漫画/2.jpg')}`,
+    method: 'GET',
+    url: `/api/v1/books/${id}/file?path=${encodeURIComponent('取图漫画/2.jpg')}`,
     headers: auth(session.token),
   });
   assert.equal(page.statusCode, 200);
@@ -928,9 +1207,13 @@ test('the per-file endpoint refuses a path that is not part of the book', async 
   await writeFile(join(booksDir, 'secret.txt'), 'not yours');
   await ctx.scanner.scan();
 
-  const list = (await app.inject({
-    method: 'GET', url: '/api/v1/books?search=穿越漫画', headers: auth(session.token),
-  })).json() as { items: Array<{ id: string }> };
+  const list = (
+    await app.inject({
+      method: 'GET',
+      url: '/api/v1/books?search=穿越漫画',
+      headers: auth(session.token),
+    })
+  ).json() as { items: Array<{ id: string }> };
   const id = list.items[0]!.id;
 
   // Traversal, an absolute path, and a sibling book's file. All three are
@@ -938,7 +1221,8 @@ test('the per-file endpoint refuses a path that is not part of the book', async 
   // never constructed from the query string.
   for (const attempt of ['../../../etc/passwd', '/etc/passwd', 'secret.txt', '穿越漫画/../../secret.txt']) {
     const res = await app.inject({
-      method: 'GET', url: `/api/v1/books/${id}/file?path=${encodeURIComponent(attempt)}`,
+      method: 'GET',
+      url: `/api/v1/books/${id}/file?path=${encodeURIComponent(attempt)}`,
       headers: auth(session.token),
     });
     assert.equal(res.statusCode, 404, `expected 404 for ${attempt}, got ${res.statusCode}`);
@@ -955,9 +1239,13 @@ test('a member cannot fetch a file of a book they cannot see', async () => {
   await writeFile(join(dir, '2.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
   await ctx.scanner.scan();
 
-  const list = (await app.inject({
-    method: 'GET', url: '/api/v1/books?search=私有漫画', headers: auth(owner.token),
-  })).json() as { items: Array<{ id: string }> };
+  const list = (
+    await app.inject({
+      method: 'GET',
+      url: '/api/v1/books?search=私有漫画',
+      headers: auth(owner.token),
+    })
+  ).json() as { items: Array<{ id: string }> };
   const id = list.items[0]!.id;
 
   // Hide it from a second account, then confirm the file endpoint refuses.
@@ -968,7 +1256,8 @@ test('a member cannot fetch a file of a book they cannot see', async () => {
   ctx.db.run('DELETE FROM user_books WHERE user_id = ? AND book_id = ?', other.userId, id);
 
   const res = await app.inject({
-    method: 'GET', url: `/api/v1/books/${id}/file?path=${encodeURIComponent('私有漫画/1.jpg')}`,
+    method: 'GET',
+    url: `/api/v1/books/${id}/file?path=${encodeURIComponent('私有漫画/1.jpg')}`,
     headers: auth(other.token),
   });
   assert.equal(res.statusCode, 404);
@@ -1001,20 +1290,32 @@ test('an embedded archive is served out of the archive, and a page request is no
   await writeFile(join(dir, '第01卷.cbz'), await makeCbz(['a.png', 'b.png']));
   await ctx.scanner.scan();
 
-  const list = (await app.inject({
-    method: 'GET', url: '/api/v1/books?search=单卷系列', headers: auth(session.token),
-  })).json() as { items: Array<{ id: string; title: string; pageCount: number | null }> };
+  const list = (
+    await app.inject({
+      method: 'GET',
+      url: '/api/v1/books?search=单卷系列',
+      headers: auth(session.token),
+    })
+  ).json() as { items: Array<{ id: string; title: string; pageCount: number | null }> };
   assert.equal(list.items.length, 1, 'one archive beside one loose page is one book, not two');
   const id = list.items[0]!.id;
 
-  const manifest = (await app.inject({
-    method: 'GET', url: `/api/v1/books/${id}/manifest`, headers: auth(session.token),
-  })).json() as { files: Array<{ rel_path: string; missing: number }> };
-  const paths = manifest.files.filter((file) => file.missing === 0).map((file) => file.rel_path).sort();
+  const manifest = (
+    await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${id}/manifest`,
+      headers: auth(session.token),
+    })
+  ).json() as { files: Array<{ rel_path: string; missing: number }> };
+  const paths = manifest.files
+    .filter((file) => file.missing === 0)
+    .map((file) => file.rel_path)
+    .sort();
   assert.deepEqual(paths, ['单卷系列/001.jpg', '单卷系列/第01卷.cbz']);
 
   const loose = await app.inject({
-    method: 'GET', url: `/api/v1/books/${id}/file?path=${encodeURIComponent('单卷系列/001.jpg')}`,
+    method: 'GET',
+    url: `/api/v1/books/${id}/file?path=${encodeURIComponent('单卷系列/001.jpg')}`,
     headers: auth(session.token),
   });
   assert.equal(loose.statusCode, 200);
@@ -1025,7 +1326,8 @@ test('an embedded archive is served out of the archive, and a page request is no
   );
 
   const archive = await app.inject({
-    method: 'GET', url: `/api/v1/books/${id}/file?path=${encodeURIComponent('单卷系列/第01卷.cbz')}`,
+    method: 'GET',
+    url: `/api/v1/books/${id}/file?path=${encodeURIComponent('单卷系列/第01卷.cbz')}`,
     headers: auth(session.token),
   });
   assert.equal(archive.statusCode, 200);
@@ -1050,16 +1352,27 @@ test('a volume archive beside volume folders stays on the shelf and serves its p
   await writeFile(join(dir, 'cover.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9]));
   await ctx.scanner.scan();
 
-  const list = (await app.inject({
-    method: 'GET', url: '/api/v1/books?search=整卷系列', headers: auth(session.token),
-  })).json() as { items: Array<{ id: string; pageCount: number | null }> };
+  const list = (
+    await app.inject({
+      method: 'GET',
+      url: '/api/v1/books?search=整卷系列',
+      headers: auth(session.token),
+    })
+  ).json() as { items: Array<{ id: string; pageCount: number | null }> };
   assert.equal(list.items.length, 1, 'the series must stay on the shelf as one book');
   const id = list.items[0]!.id;
 
-  const manifest = (await app.inject({
-    method: 'GET', url: `/api/v1/books/${id}/manifest`, headers: auth(session.token),
-  })).json() as { files: Array<{ rel_path: string; ref?: string; missing: number }> };
-  const paths = manifest.files.filter((file) => file.missing === 0).map((file) => file.rel_path).sort();
+  const manifest = (
+    await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${id}/manifest`,
+      headers: auth(session.token),
+    })
+  ).json() as { files: Array<{ rel_path: string; ref?: string; missing: number }> };
+  const paths = manifest.files
+    .filter((file) => file.missing === 0)
+    .map((file) => file.rel_path)
+    .sort();
   assert.deepEqual(paths, [
     '整卷系列/cover.jpg',
     '整卷系列/第01卷.cbz',
@@ -1088,7 +1401,9 @@ test('a volume archive beside volume folders stays on the shelf and serves its p
 test('rate-limited authentication retains CORS and retry metadata', async () => {
   for (let index = 0; index <= 60; index++) {
     const response = await app.inject({
-      method: 'POST', url: '/api/v1/auth/login', remoteAddress: '192.0.2.99',
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      remoteAddress: '192.0.2.99',
       headers: { origin: 'https://reader-client.test' },
       payload: { username: `missing-rate-user-${index}`, password: 'wrong-password' },
     });
@@ -1132,17 +1447,23 @@ test('the shelf can be filtered to one folder', async () => {
     // Sorted with `localeCompare` rather than the default `sort`, which compares
     // code points: the two orders differ for Chinese titles, and this test is about
     // which books came back, not about how they were ordered.
-    return ((res.json() as { items: Array<{ title: string }> }).items)
+    return (res.json() as { items: Array<{ title: string }> }).items
       .map((item) => item.title)
       .sort((a, b) => a.localeCompare(b));
   };
 
   // Recursive, and *only* this branch: 筛选科幻 must not drag in 筛选科学, which a
   // `LIKE '%筛选科%'` would do.
-  assert.deepEqual(await inFolder('筛选科幻'), ['筛选一', '筛选二'].sort((a, b) => a.localeCompare(b)));
+  assert.deepEqual(
+    await inFolder('筛选科幻'),
+    ['筛选一', '筛选二'].sort((a, b) => a.localeCompare(b)),
+  );
   assert.deepEqual(await inFolder('筛选科学'), ['筛选三']);
   // A trailing slash is not a different folder.
-  assert.deepEqual(await inFolder('筛选科幻/'), ['筛选一', '筛选二'].sort((a, b) => a.localeCompare(b)));
+  assert.deepEqual(
+    await inFolder('筛选科幻/'),
+    ['筛选一', '筛选二'].sort((a, b) => a.localeCompare(b)),
+  );
   // The root is the whole library, so the filter is simply absent.
   const all = await inFolder('');
   assert.ok(all.length >= 3, 'an empty path is not a filter');
@@ -1169,14 +1490,19 @@ test('the folder filter is not fooled by LIKE wildcards in a name', async () => 
     url: `/api/v1/books?path=${encodeURIComponent('100% 收录')}&pageSize=200`,
     headers: auth(session.token),
   });
-  const titles = ((res.json() as { items: Array<{ title: string }> }).items).map((item) => item.title);
+  const titles = (res.json() as { items: Array<{ title: string }> }).items.map((item) => item.title);
   assert.deepEqual(titles, ['百分号']);
 });
 
 test('PDF range preflight permits HEAD and Range and exposes byte metadata to Android', async () => {
   const response = await app.inject({
-    method: 'OPTIONS', url: '/api/v1/books/pdf/content',
-    headers: { origin: 'https://appassets.androidplatform.net', 'access-control-request-method': 'HEAD', 'access-control-request-headers': 'authorization,range' },
+    method: 'OPTIONS',
+    url: '/api/v1/books/pdf/content',
+    headers: {
+      origin: 'https://appassets.androidplatform.net',
+      'access-control-request-method': 'HEAD',
+      'access-control-request-headers': 'authorization,range',
+    },
   });
   assert.equal(response.statusCode, 204);
   assert.equal(response.headers['access-control-allow-origin'], 'https://appassets.androidplatform.net');

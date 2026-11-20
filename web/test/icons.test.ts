@@ -13,17 +13,37 @@ import { IconButton } from '../src/ui/toolkit.tsx';
  * them from drifting back.
  */
 const BORROWED = [
-  'bars', 'magnifying-glass', 'xmark', 'file-lines', 'file-arrow-up', 'file-arrow-down',
-  'trash-can', 'arrows-rotate', 'table-columns', 'circle-info', 'triangle-exclamation',
-  'folder-open', 'ellipsis', 'power-off', 'right-from-bracket', 'circle-plus',
-  'backward-step', 'forward-step', 'volume-high', 'gear', 'books', 'pen',
-  'arrow-down-wide-short', 'up-down', 'font',
-  ];
+  'bars',
+  'magnifying-glass',
+  'xmark',
+  'file-lines',
+  'file-arrow-up',
+  'file-arrow-down',
+  'trash-can',
+  'arrows-rotate',
+  'table-columns',
+  'circle-info',
+  'triangle-exclamation',
+  'folder-open',
+  'ellipsis',
+  'power-off',
+  'right-from-bracket',
+  'circle-plus',
+  'backward-step',
+  'forward-step',
+  'volume-high',
+  'gear',
+  'books',
+  'pen',
+  'arrow-down-wide-short',
+  'up-down',
+  'font',
+];
 
 describe('the icon names', () => {
   it('does not borrow another icon set’s names', () => {
     const names = Object.keys(ICONS);
-    expect(names.filter(name => BORROWED.includes(name))).toEqual([]);
+    expect(names.filter((name) => BORROWED.includes(name))).toEqual([]);
   });
 });
 
@@ -83,14 +103,7 @@ describe('the stylesheet', () => {
   it('is applied by every icon button, including the hand-built ones', () => {
     // The glyph has to be `.icon` for any of the above to reach it, and a button that
     // builds its own markup is where that gets forgotten.
-    const sources = [
-      'toolkit.tsx',
-      'reader-chrome.tsx',
-      'shelf-settings.tsx',
-      'sheet.tsx',
-      'dialog.tsx',
-      'pager.tsx',
-    ];
+    const sources = ['toolkit.tsx', 'reader-chrome.tsx', 'shelf-settings.tsx', 'sheet.tsx', 'dialog.tsx', 'pager.tsx'];
     for (const source of sources) {
       const text = readFileSync(join(process.cwd(), 'src/ui', source), 'utf8');
       // A raw `<button className="icon-button">` is the shape that drifts; the primitive
@@ -129,10 +142,14 @@ describe('one icon set', () => {
   it('draws every icon through ui/icon.tsx (ui.md §1)', () => {
     // A screen that imports lucide-react itself picks its own glyph, size and stroke;
     // that is how the set drifted to three gears and five stroke weights.
-    const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
-      entry.isDirectory() ? walk(join(dir, entry.name)) : /\.tsx?$/.test(entry.name) ? [join(dir, entry.name)] : []);
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory() ? walk(join(dir, entry.name)) : /\.tsx?$/.test(entry.name) ? [join(dir, entry.name)] : [],
+      );
     const src = join(process.cwd(), 'src');
-    const importers = walk(src).filter(file => /from 'lucide-react'/.test(readFileSync(file, 'utf8'))).map(file => relative(src, file));
+    const importers = walk(src)
+      .filter((file) => /from 'lucide-react'/.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(src, file));
     expect(importers).toEqual([join('ui', 'icon.tsx')]);
   });
 });

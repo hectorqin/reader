@@ -51,9 +51,7 @@ describe('sanitiseInjectedContent', () => {
   });
 
   it('keeps the internal resource scheme and blob/data URLs', () => {
-    const node = parse(
-      '<img src="reader-res:OEBPS/a.png"/><img src="data:image/png;base64,AA"/><img src="blob:xyz"/>',
-    );
+    const node = parse('<img src="reader-res:OEBPS/a.png"/><img src="data:image/png;base64,AA"/><img src="blob:xyz"/>');
     sanitiseInjectedContent(node);
     const sources = [...node.querySelectorAll('img')].map((img) => img.getAttribute('src'));
     expect(sources).toEqual(['reader-res:OEBPS/a.png', 'data:image/png;base64,AA', 'blob:xyz']);
@@ -79,9 +77,7 @@ describe('sanitiseInjectedContent', () => {
     // origin, not the API's — so every rewritten `src` was dropped. The check has
     // to be "is this the book's resource", which is what the marker says, rather
     // than "does this look like our origin", which is a guess that was wrong.
-    const node = parse(
-      `<img src="/api/v1/books/abc/assets?${BOOK_RESOURCE_MARKER}=1&ref=OEBPS%2Fimages%2Fpic.png"/>`,
-    );
+    const node = parse(`<img src="/api/v1/books/abc/assets?${BOOK_RESOURCE_MARKER}=1&ref=OEBPS%2Fimages%2Fpic.png"/>`);
     sanitiseInjectedContent(node);
     const src = node.querySelector('img')?.getAttribute('src') ?? '';
     expect(src).toContain('ref=OEBPS%2Fimages%2Fpic.png');
@@ -112,9 +108,7 @@ describe('sanitiseInjectedContent', () => {
   });
 
   it('drops a remote srcset and keeps the local candidates', () => {
-    const node = parse(
-      '<img srcset="images/a.png 1x, https://tracker.example/b.png 2x, images/c.png 3x"/>',
-    );
+    const node = parse('<img srcset="images/a.png 1x, https://tracker.example/b.png 2x, images/c.png 3x"/>');
     sanitiseInjectedContent(node);
     const srcset = node.querySelector('img')?.getAttribute('srcset') ?? '';
     expect(srcset).not.toContain('tracker.example');
@@ -133,9 +127,7 @@ describe('sanitiseInjectedContent', () => {
     // browser, not by the client, so "did the client ask correctly" has nothing to do
     // with it. What can be asserted is that the address the browser is *handed* is
     // self-authenticating.
-    const node = parse(
-      `<img src="/api/v1/books/abc/assets?${BOOK_RESOURCE_MARKER}=1&ref=OEBPS%2Fimages%2Fpic.png"/>`,
-    );
+    const node = parse(`<img src="/api/v1/books/abc/assets?${BOOK_RESOURCE_MARKER}=1&ref=OEBPS%2Fimages%2Fpic.png"/>`);
     sanitiseInjectedContent(node, {
       signAssetUrl: (url) => `${url}&access_token=tok`,
     });
@@ -183,9 +175,7 @@ describe('sanitiseInjectedContent', () => {
     // No signer means no session (a test, a local file, a signed-out shell), and the
     // chapter must still render: the function returns null and the address is passed
     // through exactly as the allow-list left it.
-    const node = parse(
-      `<img src="/api/v1/books/abc/assets?${BOOK_RESOURCE_MARKER}=1&ref=a.png"/>`,
-    );
+    const node = parse(`<img src="/api/v1/books/abc/assets?${BOOK_RESOURCE_MARKER}=1&ref=a.png"/>`);
     sanitiseInjectedContent(node, { signAssetUrl: () => null });
     expect(node.querySelector('img')?.getAttribute('src')).toBe(
       `/api/v1/books/abc/assets?${BOOK_RESOURCE_MARKER}=1&ref=a.png`,
@@ -193,7 +183,9 @@ describe('sanitiseInjectedContent', () => {
   });
 
   it('removes a base element and a meta refresh, which would navigate away', () => {
-    const node = parse('<base href="https://evil.example/"/><meta http-equiv="refresh" content="0;url=https://evil.example"/>');
+    const node = parse(
+      '<base href="https://evil.example/"/><meta http-equiv="refresh" content="0;url=https://evil.example"/>',
+    );
     sanitiseInjectedContent(node);
     expect(node.querySelector('base')).toBeNull();
     expect(node.querySelector('meta')).toBeNull();
@@ -287,10 +279,21 @@ describe('BookShadowHost', () => {
     const sheet = host.shadow.querySelector('style')?.textContent ?? '';
     const fixedSelector = ":host([data-layout='fixed']) .book-flow";
     const fixed = /:host\(\[data-layout='fixed'\]\) \.book-flow \{[^}]*\}/.exec(sheet)?.[0] ?? '';
-    for (const declaration of ['width: 100%', 'height: 100%', 'min-width: 0', 'min-height: 0', 'max-inline-size: none', 'margin: 0', 'padding: 0', 'columns: auto']) {
+    for (const declaration of [
+      'width: 100%',
+      'height: 100%',
+      'min-width: 0',
+      'min-height: 0',
+      'max-inline-size: none',
+      'margin: 0',
+      'padding: 0',
+      'columns: auto',
+    ]) {
       expect(fixed).toContain(declaration);
     }
-    expect(sheet.indexOf(fixedSelector)).toBeGreaterThan(sheet.indexOf(":host([data-paginated='true']) .book-flow > *"));
+    expect(sheet.indexOf(fixedSelector)).toBeGreaterThan(
+      sheet.indexOf(":host([data-paginated='true']) .book-flow > *"),
+    );
   });
 
   it('injects the reading column rules into the shadow root', () => {
@@ -357,7 +360,8 @@ describe('BookShadowHost', () => {
     const host = createBookHost();
     const sheet = host.shadow.querySelector('style')?.textContent ?? '';
     const paged = /:host\(\[data-animating\]\[data-paginated='true'\]\) \{[^}]*\}/.exec(sheet)?.[0] ?? '';
-    const scroll = /:host\(\[data-animating\]:not\(\[data-paginated='true'\]\)\) \.book-flow \{[^}]*\}/.exec(sheet)?.[0] ?? '';
+    const scroll =
+      /:host\(\[data-animating\]:not\(\[data-paginated='true'\]\)\) \.book-flow \{[^}]*\}/.exec(sheet)?.[0] ?? '';
     expect(paged).toContain('overflow: clip');
     expect(scroll).toContain('overflow: clip');
     // And the old form — the clip unconditionally on the flow, which is the scroller in

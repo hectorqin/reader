@@ -17,8 +17,15 @@ const HISTORY_SESSION_MS = 30 * 60 * 1000;
 const HISTORY_JUMP = 0.05;
 const SYNC_PAGE_SIZE = 5000;
 const SYNC_STRING_LIMITS: Record<string, number> = {
-  id: 16_384, bookId: 16_384, locator: 65_536, chapterTitle: 4096,
-  device: 1024, type: 32, text: 1_048_576, comment: 1_048_576, color: 100,
+  id: 16_384,
+  bookId: 16_384,
+  locator: 65_536,
+  chapterTitle: 4096,
+  device: 1024,
+  type: 32,
+  text: 1_048_576,
+  comment: 1_048_576,
+  color: 100,
 };
 
 export interface ProgressRecord {
@@ -61,7 +68,7 @@ export const NOTE_TAGS_MAX = 10;
  * matches a tag that merely contains another. No tags is the empty string.
  */
 export function encodeTags(tags: readonly string[]): string {
-  const clean = [...new Set(tags.map(tag => tag.replace(/\s+/g, ' ').trim()).filter(Boolean))];
+  const clean = [...new Set(tags.map((tag) => tag.replace(/\s+/g, ' ').trim()).filter(Boolean))];
   return clean.length ? `\n${clean.join('\n')}\n` : '';
 }
 export function decodeTags(stored: string): string[] {
@@ -81,19 +88,34 @@ export interface SyncPullResult {
 }
 
 export function validateSyncRecord(value: unknown): void {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw badRequest('sync records must be objects', 'BAD_PAYLOAD');
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw badRequest('sync records must be objects', 'BAD_PAYLOAD');
   const record = value as Record<string, unknown>;
   for (const [field, limit] of Object.entries(SYNC_STRING_LIMITS)) {
     const fieldValue = record[field];
-    if (fieldValue !== undefined && (typeof fieldValue !== 'string' || fieldValue.length > limit)) throw badRequest(`invalid ${field}`, 'BAD_PAYLOAD');
+    if (fieldValue !== undefined && (typeof fieldValue !== 'string' || fieldValue.length > limit))
+      throw badRequest(`invalid ${field}`, 'BAD_PAYLOAD');
   }
-  if (record.updatedAt !== undefined && (typeof record.updatedAt !== 'number' || !Number.isSafeInteger(record.updatedAt) || record.updatedAt < 0)) throw badRequest('invalid updatedAt', 'BAD_PAYLOAD');
-  if (record.percentage !== undefined && (typeof record.percentage !== 'number' || !Number.isFinite(record.percentage))) throw badRequest('invalid percentage', 'BAD_PAYLOAD');
-  if (record.deleted !== undefined && typeof record.deleted !== 'boolean') throw badRequest('invalid deleted', 'BAD_PAYLOAD');
+  if (
+    record.updatedAt !== undefined &&
+    (typeof record.updatedAt !== 'number' || !Number.isSafeInteger(record.updatedAt) || record.updatedAt < 0)
+  )
+    throw badRequest('invalid updatedAt', 'BAD_PAYLOAD');
+  if (record.percentage !== undefined && (typeof record.percentage !== 'number' || !Number.isFinite(record.percentage)))
+    throw badRequest('invalid percentage', 'BAD_PAYLOAD');
+  if (record.deleted !== undefined && typeof record.deleted !== 'boolean')
+    throw badRequest('invalid deleted', 'BAD_PAYLOAD');
   if (record.tags !== undefined) {
     const tags = record.tags;
-    if (!Array.isArray(tags) || tags.length > NOTE_TAGS_MAX || tags.some(tag => typeof tag !== 'string' || !tag.trim() || tag.trim().length > NOTE_TAG_MAX_LENGTH)) {
-      throw badRequest(`tags must be at most ${NOTE_TAGS_MAX} non-empty strings of at most ${NOTE_TAG_MAX_LENGTH} characters`, 'BAD_PAYLOAD');
+    if (
+      !Array.isArray(tags) ||
+      tags.length > NOTE_TAGS_MAX ||
+      tags.some((tag) => typeof tag !== 'string' || !tag.trim() || tag.trim().length > NOTE_TAG_MAX_LENGTH)
+    ) {
+      throw badRequest(
+        `tags must be at most ${NOTE_TAGS_MAX} non-empty strings of at most ${NOTE_TAG_MAX_LENGTH} characters`,
+        'BAD_PAYLOAD',
+      );
     }
   }
 }
@@ -146,7 +168,13 @@ export class SyncService {
 
     this.db.transaction(() => {
       for (const item of payload.progress ?? []) {
-        if (!item || typeof item.bookId !== 'string' || !item.bookId || !Number.isSafeInteger(item.updatedAt) || item.updatedAt < 0) {
+        if (
+          !item ||
+          typeof item.bookId !== 'string' ||
+          !item.bookId ||
+          !Number.isSafeInteger(item.updatedAt) ||
+          item.updatedAt < 0
+        ) {
           rejected += 1;
           continue;
         }
@@ -158,8 +186,14 @@ export class SyncService {
           rejected += 1;
           continue;
         }
-        const owner = this.db.get<{user_id:string;book_id:string}>('SELECT user_id,book_id FROM notes WHERE id=?',item.id);
-        if (owner && (owner.user_id !== userId || owner.book_id !== item.bookId)) { rejected++; continue; }
+        const owner = this.db.get<{ user_id: string; book_id: string }>(
+          'SELECT user_id,book_id FROM notes WHERE id=?',
+          item.id,
+        );
+        if (owner && (owner.user_id !== userId || owner.book_id !== item.bookId)) {
+          rejected++;
+          continue;
+        }
         this.upsertNote(userId, item);
         accepted += 1;
       }
@@ -179,8 +213,13 @@ export class SyncService {
          chapter_title = CASE WHEN excluded.updated_at >= reading_progress.updated_at THEN excluded.chapter_title ELSE reading_progress.chapter_title END,
          device = CASE WHEN excluded.updated_at >= reading_progress.updated_at THEN excluded.device ELSE reading_progress.device END,
          updated_at = MAX(excluded.updated_at, reading_progress.updated_at)`,
-      userId, record.bookId, record.locator ?? '', percentage,
-      record.chapterTitle ?? '', record.device ?? '', record.updatedAt,
+      userId,
+      record.bookId,
+      record.locator ?? '',
+      percentage,
+      record.chapterTitle ?? '',
+      record.device ?? '',
+      record.updatedAt,
     );
     this.recordHistory(userId, record, percentage);
   }
@@ -196,47 +235,72 @@ export class SyncService {
    * want back. The newest 50 per book are kept.
    */
   private recordHistory(userId: string, record: ProgressRecord, percentage: number): void {
-    const device = record.device ?? '', chapter = record.chapterTitle ?? '';
+    const device = record.device ?? '',
+      chapter = record.chapterTitle ?? '';
     const latest = this.db.get<{ id: number; chapter_title: string; percentage: number; updated_at: number }>(
       `SELECT id, chapter_title, percentage, updated_at FROM reading_progress_history
        WHERE user_id = ? AND book_id = ? AND device = ? ORDER BY updated_at DESC, id DESC LIMIT 1`,
-      userId, record.bookId, device,
+      userId,
+      record.bookId,
+      device,
     );
-    const continues = latest
-      && record.updatedAt >= latest.updated_at
-      && record.updatedAt - latest.updated_at <= HISTORY_SESSION_MS
-      && latest.chapter_title === chapter
-      && Math.abs(latest.percentage - percentage) < HISTORY_JUMP;
+    const continues =
+      latest &&
+      record.updatedAt >= latest.updated_at &&
+      record.updatedAt - latest.updated_at <= HISTORY_SESSION_MS &&
+      latest.chapter_title === chapter &&
+      Math.abs(latest.percentage - percentage) < HISTORY_JUMP;
     if (continues) {
       this.db.run(
         'UPDATE reading_progress_history SET locator = ?, percentage = ?, updated_at = ? WHERE id = ?',
-        record.locator ?? '', percentage, record.updatedAt, latest.id,
+        record.locator ?? '',
+        percentage,
+        record.updatedAt,
+        latest.id,
       );
       return;
     }
     this.db.run(
       `INSERT INTO reading_progress_history (user_id, book_id, locator, percentage, chapter_title, device, updated_at)
        VALUES (?,?,?,?,?,?,?)`,
-      userId, record.bookId, record.locator ?? '', percentage, chapter, device, record.updatedAt,
+      userId,
+      record.bookId,
+      record.locator ?? '',
+      percentage,
+      chapter,
+      device,
+      record.updatedAt,
     );
     this.db.run(
       `DELETE FROM reading_progress_history WHERE user_id = ? AND book_id = ? AND id NOT IN (
          SELECT id FROM reading_progress_history WHERE user_id = ? AND book_id = ?
          ORDER BY updated_at DESC, id DESC LIMIT ?)`,
-      userId, record.bookId, userId, record.bookId, HISTORY_KEEP,
+      userId,
+      record.bookId,
+      userId,
+      record.bookId,
+      HISTORY_KEEP,
     );
   }
 
   /** The book's reading history, newest first. */
   progressHistory(userId: string, bookId: string, limit = 30): ProgressRecord[] {
-    return this.db.all<{ locator: string; percentage: number; chapter_title: string; device: string; updated_at: number }>(
-      `SELECT locator, percentage, chapter_title, device, updated_at FROM reading_progress_history
+    return this.db
+      .all<{ locator: string; percentage: number; chapter_title: string; device: string; updated_at: number }>(
+        `SELECT locator, percentage, chapter_title, device, updated_at FROM reading_progress_history
        WHERE user_id = ? AND book_id = ? ORDER BY updated_at DESC, id DESC LIMIT ?`,
-      userId, bookId, Math.max(1, Math.min(HISTORY_KEEP, limit)),
-    ).map((row) => ({
-      bookId, locator: row.locator, percentage: row.percentage,
-      chapterTitle: row.chapter_title, device: row.device, updatedAt: row.updated_at,
-    }));
+        userId,
+        bookId,
+        Math.max(1, Math.min(HISTORY_KEEP, limit)),
+      )
+      .map((row) => ({
+        bookId,
+        locator: row.locator,
+        percentage: row.percentage,
+        chapterTitle: row.chapter_title,
+        device: row.device,
+        updatedAt: row.updated_at,
+      }));
   }
 
   private upsertNote(userId: string, record: NoteRecord): void {
@@ -246,11 +310,15 @@ export class SyncService {
     // A client that predates chapter titles and tags sends neither. Its edit of the
     // comment must not wipe what a newer client stored, so a missing field means
     // "as it was", not "empty".
-    const stored = record.chapterTitle === undefined || record.tags === undefined
-      ? this.db.get<{ chapter_title: string; tags: string }>('SELECT chapter_title, tags FROM notes WHERE id = ?', record.id)
-      : undefined;
+    const stored =
+      record.chapterTitle === undefined || record.tags === undefined
+        ? this.db.get<{ chapter_title: string; tags: string }>(
+            'SELECT chapter_title, tags FROM notes WHERE id = ?',
+            record.id,
+          )
+        : undefined;
     const chapterTitle = record.chapterTitle ?? stored?.chapter_title ?? '';
-    const tags = record.tags ? encodeTags(record.tags) : stored?.tags ?? '';
+    const tags = record.tags ? encodeTags(record.tags) : (stored?.tags ?? '');
     this.db.run(
       `INSERT INTO notes (id, user_id, book_id, type, locator, text, comment, color, updated_at, deleted, chapter_title, tags)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
@@ -265,9 +333,18 @@ export class SyncService {
          deleted = CASE WHEN excluded.updated_at >= notes.updated_at THEN excluded.deleted ELSE notes.deleted END,
          updated_at = MAX(excluded.updated_at, notes.updated_at)
        WHERE notes.user_id = excluded.user_id AND notes.book_id = excluded.book_id`,
-      record.id, userId, record.bookId, record.type ?? 'note', record.locator ?? '',
-      record.text ?? '', record.comment ?? '', record.color ?? '',
-      record.updatedAt ?? Date.now(), record.deleted ? 1 : 0, chapterTitle, tags,
+      record.id,
+      userId,
+      record.bookId,
+      record.type ?? 'note',
+      record.locator ?? '',
+      record.text ?? '',
+      record.comment ?? '',
+      record.color ?? '',
+      record.updatedAt ?? Date.now(),
+      record.deleted ? 1 : 0,
+      chapterTitle,
+      tags,
     );
   }
 
@@ -276,23 +353,44 @@ export class SyncService {
     return this.db.transaction(() => this.pullPage(userId, since, bookId, includeProgress));
   }
 
-  private pullPage(userId: string, since: number, bookId: string | undefined, includeProgress: boolean): SyncPullResult {
+  private pullPage(
+    userId: string,
+    since: number,
+    bookId: string | undefined,
+    includeProgress: boolean,
+  ): SyncPullResult {
     this.db.run('UPDATE sync_clock SET revision = MAX(revision, ?) WHERE id = 1', Date.now());
     const watermark = this.db.get<{ revision: number }>('SELECT revision FROM sync_clock WHERE id = 1')!.revision;
-    const progressRows = includeProgress ? this.db.all<{
-      book_id: string; locator: string; percentage: number; chapter_title: string;
-      device: string; updated_at: number; sync_revision: number;
-    }>(
-      `SELECT book_id, locator, percentage, chapter_title, device, updated_at, sync_revision
+    const progressRows = includeProgress
+      ? this.db.all<{
+          book_id: string;
+          locator: string;
+          percentage: number;
+          chapter_title: string;
+          device: string;
+          updated_at: number;
+          sync_revision: number;
+        }>(
+          `SELECT book_id, locator, percentage, chapter_title, device, updated_at, sync_revision
        FROM reading_progress WHERE user_id = ? AND sync_revision > ? ${bookId ? 'AND book_id = ?' : ''}
        ORDER BY sync_revision ASC LIMIT ${SYNC_PAGE_SIZE + 1}`,
-      ...(bookId ? [userId, since, bookId] : [userId, since]),
-    ) : [];
+          ...(bookId ? [userId, since, bookId] : [userId, since]),
+        )
+      : [];
 
     const noteRows = this.db.all<{
-      id: string; book_id: string; type: string; locator: string; text: string;
-      comment: string; color: string; updated_at: number; deleted: number; sync_revision: number;
-      chapter_title: string; tags: string;
+      id: string;
+      book_id: string;
+      type: string;
+      locator: string;
+      text: string;
+      comment: string;
+      color: string;
+      updated_at: number;
+      deleted: number;
+      sync_revision: number;
+      chapter_title: string;
+      tags: string;
     }>(
       `SELECT id, book_id, type, locator, text, comment, color, updated_at, deleted, sync_revision, chapter_title, tags
        FROM notes WHERE user_id = ? AND sync_revision > ? ${bookId ? 'AND book_id = ?' : ''}
@@ -300,44 +398,55 @@ export class SyncService {
       ...(bookId ? [userId, since, bookId] : [userId, since]),
     );
 
-    const revisions = [...progressRows, ...noteRows].map(row => row.sync_revision).sort((left, right) => left - right);
+    const revisions = [...progressRows, ...noteRows]
+      .map((row) => row.sync_revision)
+      .sort((left, right) => left - right);
     const hasMore = revisions.length > SYNC_PAGE_SIZE;
     const serverTime = hasMore ? revisions[SYNC_PAGE_SIZE - 1]! : Math.max(since, watermark);
     return {
       serverTime,
       hasMore,
-      progress: progressRows.filter(row => row.sync_revision <= serverTime).map((row) => ({
-        bookId: row.book_id,
-        locator: row.locator,
-        percentage: row.percentage,
-        chapterTitle: row.chapter_title,
-        device: row.device,
-        updatedAt: row.updated_at,
-      })),
-      notes: noteRows.filter(row => row.sync_revision <= serverTime).map((row) => ({
-        id: row.id,
-        bookId: row.book_id,
-        type: row.type as NoteRecord['type'],
-        locator: row.locator,
-        text: row.text,
-        comment: row.comment,
-        color: row.color,
-        chapterTitle: row.chapter_title,
-        tags: decodeTags(row.tags),
-        updatedAt: row.updated_at,
-        deleted: row.deleted === 1,
-      })),
+      progress: progressRows
+        .filter((row) => row.sync_revision <= serverTime)
+        .map((row) => ({
+          bookId: row.book_id,
+          locator: row.locator,
+          percentage: row.percentage,
+          chapterTitle: row.chapter_title,
+          device: row.device,
+          updatedAt: row.updated_at,
+        })),
+      notes: noteRows
+        .filter((row) => row.sync_revision <= serverTime)
+        .map((row) => ({
+          id: row.id,
+          bookId: row.book_id,
+          type: row.type as NoteRecord['type'],
+          locator: row.locator,
+          text: row.text,
+          comment: row.comment,
+          color: row.color,
+          chapterTitle: row.chapter_title,
+          tags: decodeTags(row.tags),
+          updatedAt: row.updated_at,
+          deleted: row.deleted === 1,
+        })),
     };
   }
 
   progressFor(userId: string, bookId: string): ProgressRecord | null {
     const row = this.db.get<{
-      book_id: string; locator: string; percentage: number; chapter_title: string;
-      device: string; updated_at: number;
+      book_id: string;
+      locator: string;
+      percentage: number;
+      chapter_title: string;
+      device: string;
+      updated_at: number;
     }>(
       `SELECT book_id, locator, percentage, chapter_title, device, updated_at
        FROM reading_progress WHERE user_id = ? AND book_id = ?`,
-      userId, bookId,
+      userId,
+      bookId,
     );
     if (!row) return null;
     return {
@@ -381,7 +490,10 @@ export class SyncService {
      * keeps the predicate readable as "what the shelf would show".
      */
     const rows = this.db.all<{
-      book_id: string; percentage: number; chapter_title: string; updated_at: number;
+      book_id: string;
+      percentage: number;
+      chapter_title: string;
+      updated_at: number;
     }>(
       `SELECT p.book_id, p.percentage, p.chapter_title, p.updated_at
        FROM reading_progress p
@@ -391,7 +503,8 @@ export class SyncService {
               OR EXISTS (SELECT 1 FROM acquired_files a WHERE a.book_id = p.book_id)
               OR EXISTS (SELECT 1 FROM chapter_publications c WHERE c.book_id = p.book_id AND c.user_id = p.user_id))
        ORDER BY p.updated_at DESC LIMIT ?`,
-      userId, limit,
+      userId,
+      limit,
     );
     /*
      * Read through `shelf.getMany` rather than re-selecting the book columns here.
@@ -406,16 +519,21 @@ export class SyncService {
      * dropped rather than rendered, for the same reason the `EXISTS` is above:
      * offering a book the reader cannot open is the defect this endpoint had.
      */
-    const byId = this.shelf.getMany(userId, rows.map((row) => row.book_id));
+    const byId = this.shelf.getMany(
+      userId,
+      rows.map((row) => row.book_id),
+    );
     return rows.flatMap((row) => {
       const book = byId.get(row.book_id);
       if (!book) return [];
-      return [{
-        ...book,
-        percentage: row.percentage,
-        chapterTitle: row.chapter_title,
-        lastReadAt: row.updated_at,
-      }];
+      return [
+        {
+          ...book,
+          percentage: row.percentage,
+          chapterTitle: row.chapter_title,
+          lastReadAt: row.updated_at,
+        },
+      ];
     });
   }
 

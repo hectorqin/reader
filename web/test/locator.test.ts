@@ -106,12 +106,7 @@ describe('book percentage', () => {
     // Three short chapters and one enormous one. At the start of the big chapter
     // a naive index/count calculation would claim two thirds done.
     const short = { html: '<p>' + 'x'.repeat(400) + '</p>' };
-    const book = doc([
-      short,
-      short,
-      short,
-      { html: '<p>' + 'x'.repeat(40_000) + '</p>' },
-    ]);
+    const book = doc([short, short, short, { html: '<p>' + 'x'.repeat(40_000) + '</p>' }]);
     const atStartOfBig = bookPercentage(book, 3, 0);
     const naive = 3 / 4;
     expect(atStartOfBig).toBeLessThan(naive);

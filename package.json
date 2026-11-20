@@ -1,0 +1,20 @@
+{
+  "name": "reader-workspace",
+  "private": true,
+  "description": "Repository tooling only (formatting, git hooks). The server, web, and android packages install and build independently.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "prepare": "husky",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs,css,json,yml,yaml,html}": "prettier --write --ignore-unknown"
+  },
+  "devDependencies": {
+    "husky": "9.1.7",
+    "lint-staged": "17.6.1",
+    "prettier": "3.10.1"
+  }
+}

@@ -6,8 +6,8 @@ interface SettingsState {
   replace(settings: AppSettings): void;
   update(patch: Partial<AppSettings>): void;
 }
-export const useSettingsStore = create<SettingsState>(set => ({
+export const useSettingsStore = create<SettingsState>((set) => ({
   settings: { ...DEFAULT_APP_SETTINGS },
-  replace: settings => set({ settings }),
-  update: patch => set(state => ({ settings: { ...state.settings, ...patch } })),
+  replace: (settings) => set({ settings }),
+  update: (patch) => set((state) => ({ settings: { ...state.settings, ...patch } })),
 }));

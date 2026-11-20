@@ -2,7 +2,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { inferDefaultUrl, validServerUrl } from '../src/app.ts';
 
-afterEach(() => { vi.unstubAllGlobals(); delete window.ReaderAndroid; });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  delete window.ReaderAndroid;
+});
 
 it('never infers the Android local asset origin as a server', () => {
   vi.stubGlobal('location', new URL('https://appassets.androidplatform.net/assets/index.html'));

@@ -1,7 +1,17 @@
 /* 插件管理 tab of the sources hub (PluginManager). Rows reuse the 书源管理 styles in reader.css; the install form lives in a Sheet and uses sheet.css. */
 
-.plugin-manager .plugin-error { color: var(--color-danger); overflow-wrap: anywhere; }
-.plugin-manager .source-state.is-error { color: var(--color-danger); }
+.plugin-manager .plugin-error {
+  color: var(--color-danger);
+  overflow-wrap: anywhere;
+}
+.plugin-manager .source-state.is-error {
+  color: var(--color-danger);
+}
 
-.plugin-install-form small { color: var(--color-muted); font-size: var(--text-meta); }
-.plugin-install-form input[type='file'] { padding: 9px; }
+.plugin-install-form small {
+  color: var(--color-muted);
+  font-size: var(--text-meta);
+}
+.plugin-install-form input[type="file"] {
+  padding: 9px;
+}

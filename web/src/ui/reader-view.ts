@@ -200,9 +200,11 @@ const FOCUS_BLOCKS = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, figure, ta
  */
 export function focusLine(scrollTop: number, maxScroll: number, height: number): number {
   if (maxScroll <= 0 || height <= 1) return 0;
-  const rest = height * FOCUS_REST, below = height - 1 - rest;
+  const rest = height * FOCUS_REST,
+    below = height - 1 - rest;
   const offset = Math.max(0, Math.min(maxScroll, scrollTop));
-  const rampIn = Math.min(rest, maxScroll * FOCUS_REST), rampOut = Math.min(below, maxScroll * (1 - FOCUS_REST));
+  const rampIn = Math.min(rest, maxScroll * FOCUS_REST),
+    rampOut = Math.min(below, maxScroll * (1 - FOCUS_REST));
   return rest * Math.min(1, offset / rampIn) + below * Math.max(0, 1 - (maxScroll - offset) / rampOut);
 }
 
@@ -216,10 +218,12 @@ export function focusLine(scrollTop: number, maxScroll: number, height: number):
  * top is found the same way in every case.
  */
 export function focusScrollFor(top: number, maxScroll: number, height: number): number {
-  let low = 0, high = Math.max(0, Math.ceil(maxScroll));
+  let low = 0,
+    high = Math.max(0, Math.ceil(maxScroll));
   while (low < high) {
     const middle = (low + high) >> 1;
-    if (middle + focusLine(middle, maxScroll, height) > top) high = middle; else low = middle + 1;
+    if (middle + focusLine(middle, maxScroll, height) > top) high = middle;
+    else low = middle + 1;
   }
   return low;
 }
@@ -315,19 +319,33 @@ export class ReaderView {
     this.container.append(this.host);
     this.bindChapterLinks();
     this.host.flow.addEventListener('scroll', () => this.snapStrayScroll(), { passive: true });
-    this.host.addEventListener('scroll', () => { this.pageMaskScrolled(); this.scheduleFocus(); }, { passive: true });
+    this.host.addEventListener(
+      'scroll',
+      () => {
+        this.pageMaskScrolled();
+        this.scheduleFocus();
+      },
+      { passive: true },
+    );
     // `load` does not bubble, so it is caught on the way down. A picture that
     // arrives after the highlights were painted pushes the text below it.
-    this.host.flow.addEventListener('load', (event) => {
-      if (event.target instanceof HTMLImageElement) this.repaintMarks();
-    }, true);
+    this.host.flow.addEventListener(
+      'load',
+      (event) => {
+        if (event.target instanceof HTMLImageElement) this.repaintMarks();
+      },
+      true,
+    );
     let timer: ReturnType<typeof setTimeout> | undefined;
     const changed = () => {
       clearTimeout(timer);
       timer = setTimeout(() => {
         const anchor = this.selectionAnchor();
         const range = anchor ? anchorRange(this.host.flow, anchor) : null;
-        this.options.onSelection?.(anchor, range && typeof range.getBoundingClientRect === 'function' ? range.getBoundingClientRect() : null);
+        this.options.onSelection?.(
+          anchor,
+          range && typeof range.getBoundingClientRect === 'function' ? range.getBoundingClientRect() : null,
+        );
       }, 160);
     };
     this.host.ownerDocument.addEventListener('selectionchange', changed);
@@ -346,14 +364,19 @@ export class ReaderView {
       if (this.selectionAnchor() || (touch && this.doc.layout === 'fixed' && !this.doc.pdf)) event.preventDefault();
       changed();
     };
-    this.host.shadow.addEventListener('contextmenu',contextMenu);
+    this.host.shadow.addEventListener('contextmenu', contextMenu);
     this.detachSelection = () => {
-      clearTimeout(timer); this.host.ownerDocument.removeEventListener('selectionchange', changed);
-      this.host.shadow.removeEventListener('selectionchange', changed); this.host.shadow.removeEventListener('pointerup', changed);
-      this.host.ownerDocument.removeEventListener('touchend', changed, true); this.host.ownerDocument.removeEventListener('pointercancel', changed, true);
+      clearTimeout(timer);
+      this.host.ownerDocument.removeEventListener('selectionchange', changed);
+      this.host.shadow.removeEventListener('selectionchange', changed);
+      this.host.shadow.removeEventListener('pointerup', changed);
+      this.host.ownerDocument.removeEventListener('touchend', changed, true);
+      this.host.ownerDocument.removeEventListener('pointercancel', changed, true);
       this.host.ownerDocument.removeEventListener('scroll', changed, true);
-      window.visualViewport?.removeEventListener('resize', changed); window.visualViewport?.removeEventListener('scroll', changed);
-      this.host.shadow.removeEventListener('keyup', changed); this.host.shadow.removeEventListener('contextmenu',contextMenu);
+      window.visualViewport?.removeEventListener('resize', changed);
+      window.visualViewport?.removeEventListener('scroll', changed);
+      this.host.shadow.removeEventListener('keyup', changed);
+      this.host.shadow.removeEventListener('contextmenu', contextMenu);
     };
     this.applySettings();
   }
@@ -392,7 +415,10 @@ export class ReaderView {
       const bare = href.trim().startsWith('#');
       const ref = bare ? null : chapterRefFromLink(href, anchor.baseURI);
       const fragment = bare ? href.trim().slice(1) : ref ? linkFragment(href, anchor.baseURI) : '';
-      const consume = (): void => { event.preventDefault(); event.stopPropagation(); };
+      const consume = (): void => {
+        event.preventDefault();
+        event.stopPropagation();
+      };
       // A note reference is answered where the reader is (see `footnote.ts`). The
       // screen says whether it could show the note; if not, the link is a jump.
       if (fragment && (bare || ref) && isNoteReference(anchor) && this.options.onNoteLink?.({ ref, fragment })) {
@@ -521,9 +547,11 @@ export class ReaderView {
     const previous = this.settings;
     // Brightness is an overlay over the page: nothing moves, so there is nothing to
     // measure or restore — and a slider sends one of these per step of a drag.
-    const changed = next ? (Object.keys(next) as Array<keyof ViewSettings>).filter(key => next[key] !== previous[key]) : null;
+    const changed = next
+      ? (Object.keys(next) as Array<keyof ViewSettings>).filter((key) => next[key] !== previous[key])
+      : null;
     // 专注模式 is the same kind of thing: veils over a page that does not move.
-    const relayout = !changed || changed.some(key => key !== 'brightness' && key !== 'focus');
+    const relayout = !changed || changed.some((key) => key !== 'brightness' && key !== 'focus');
     // Capture the live position before typography changes its scroll extent — once
     // per frame. A drag delivers several steps before the restore below runs, and a
     // second measurement would read the half-reflowed page and lose the place.
@@ -535,7 +563,10 @@ export class ReaderView {
     // `inherit` is what keeps the author's line-height; only an explicit user
     // choice replaces it.
     this.container.style.setProperty('--reader-line-height', this.settings.lineHeight);
-    this.container.style.setProperty('--reader-txt-line-height', this.settings.lineHeight === 'inherit' ? '1.8' : this.settings.lineHeight);
+    this.container.style.setProperty(
+      '--reader-txt-line-height',
+      this.settings.lineHeight === 'inherit' ? '1.8' : this.settings.lineHeight,
+    );
     // Same reasoning for the font stack: the default is `inherit`, so a book
     // that ships its own stack keeps it. The reader's choice is offered first so
     // a book that ships *nothing* looks like the rest of their library.
@@ -566,9 +597,10 @@ export class ReaderView {
     if (next && previous.mode !== this.settings.mode) this.animatePage('none');
     if (next && previous.fit !== this.settings.fit && this.doc.pdf) {
       const section = this.doc.sections[this.sectionIndex];
-      if (section) void this.renderFixed(section).catch(() => {
-        this.host.flow.textContent = 'PDF 页面渲染失败，请重新打开';
-      });
+      if (section)
+        void this.renderFixed(section).catch(() => {
+          this.host.flow.textContent = 'PDF 页面渲染失败，请重新打开';
+        });
     }
   }
 
@@ -722,22 +754,34 @@ export class ReaderView {
   selectionAnchor(): TextAnchor | null {
     const shadow = this.host.shadow as ShadowRoot & { getSelection?: () => Selection | null };
     const sectionId = this.doc.sections[this.sectionIndex]?.id ?? '';
-    return selectedAnchor(this.host.flow, sectionId, shadow.getSelection?.() ?? null)
-      ?? selectedAnchor(this.host.flow, sectionId, this.host.ownerDocument.getSelection());
+    return (
+      selectedAnchor(this.host.flow, sectionId, shadow.getSelection?.() ?? null) ??
+      selectedAnchor(this.host.flow, sectionId, this.host.ownerDocument.getSelection())
+    );
   }
 
   revealFragment(fragment: string): boolean {
     let id = fragment;
-    try { id = decodeURIComponent(fragment); } catch { /* literal id */ }
-    const element = this.host.shadow.getElementById(id) ?? [...this.host.flow.querySelectorAll('[name]')].find(e => e.getAttribute('name') === id);
+    try {
+      id = decodeURIComponent(fragment);
+    } catch {
+      /* literal id */
+    }
+    const element =
+      this.host.shadow.getElementById(id) ??
+      [...this.host.flow.querySelectorAll('[name]')].find((e) => e.getAttribute('name') === id);
     if (!element) return false;
     // An empty anchor (`<a id="n3"></a>`) has no box to reveal; the block it opens does.
     if (!element.textContent?.trim() && element.parentElement && this.host.flow.contains(element.parentElement)) {
-      const range = document.createRange(); range.selectNode(element);
-      this.revealRange(range); return true;
+      const range = document.createRange();
+      range.selectNode(element);
+      this.revealRange(range);
+      return true;
     }
-    const range = document.createRange(); range.selectNodeContents(element);
-    this.revealRange(range); return true;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    this.revealRange(range);
+    return true;
   }
 
   /**
@@ -753,8 +797,13 @@ export class ReaderView {
     if (this.doc.layout === 'fixed') return null;
     const hit = path.find((node): node is Element => node instanceof Element && pictureSource(node) !== '');
     if (!hit || !this.host.flow.contains(hit) || !isPicture(hit)) return null;
-    const pictures = [...this.host.flow.querySelectorAll('img, image')].filter(element => element === hit || (pictureSource(element) !== '' && isPicture(element)));
-    return { images: pictures.map(element => ({ src: pictureSource(element), alt: element.getAttribute('alt') ?? '' })), index: pictures.indexOf(hit) };
+    const pictures = [...this.host.flow.querySelectorAll('img, image')].filter(
+      (element) => element === hit || (pictureSource(element) !== '' && isPicture(element)),
+    );
+    return {
+      images: pictures.map((element) => ({ src: pictureSource(element), alt: element.getAttribute('alt') ?? '' })),
+      index: pictures.indexOf(hit),
+    };
   }
 
   /**
@@ -811,7 +860,7 @@ export class ReaderView {
   }
 
   clearSelection(): void {
-    (this.host.shadow as ShadowRoot & {getSelection?: () => Selection | null}).getSelection?.()?.removeAllRanges();
+    (this.host.shadow as ShadowRoot & { getSelection?: () => Selection | null }).getSelection?.()?.removeAllRanges();
     this.host.ownerDocument.getSelection()?.removeAllRanges();
   }
 
@@ -834,14 +883,23 @@ export class ReaderView {
 
   /** Re-places the veils on the next frame; a scroll delivers many events per frame. */
   private scheduleFocus(): void {
-    if (!this.focusActive) { this.clearFocus(); return; }
+    if (!this.focusActive) {
+      this.clearFocus();
+      return;
+    }
     if (this.focusFrame !== null) return;
-    this.focusFrame = requestAnimationFrame(() => { this.focusFrame = null; this.syncFocus(); });
+    this.focusFrame = requestAnimationFrame(() => {
+      this.focusFrame = null;
+      this.syncFocus();
+    });
   }
 
   private clearFocus(): void {
-    if (this.focusFrame !== null) { cancelAnimationFrame(this.focusFrame); this.focusFrame = null; }
-    this.focusVeils?.forEach(veil => veil.remove());
+    if (this.focusFrame !== null) {
+      cancelAnimationFrame(this.focusFrame);
+      this.focusFrame = null;
+    }
+    this.focusVeils?.forEach((veil) => veil.remove());
     this.focusVeils = null;
     this.focusBlocks = [];
     this.focusIndex = -1;
@@ -857,9 +915,12 @@ export class ReaderView {
    */
   private paragraphs(): HTMLElement[] {
     if (this.focusBlocks[0]?.isConnected) return this.focusBlocks;
-    this.focusBlocks = [...this.host.flow.querySelectorAll<HTMLElement>(FOCUS_BLOCKS)].filter(element =>
-      !element.querySelector(FOCUS_BLOCKS) && !element.closest('[data-reader-mark]')
-      && (element.textContent?.trim() || element.querySelector('img, svg, video, canvas')));
+    this.focusBlocks = [...this.host.flow.querySelectorAll<HTMLElement>(FOCUS_BLOCKS)].filter(
+      (element) =>
+        !element.querySelector(FOCUS_BLOCKS) &&
+        !element.closest('[data-reader-mark]') &&
+        (element.textContent?.trim() || element.querySelector('img, svg, video, canvas')),
+    );
     return this.focusBlocks;
   }
 
@@ -871,25 +932,42 @@ export class ReaderView {
    * five thousand paragraphs costs the same two elements as a chapter of five.
    */
   private syncFocus(): void {
-    if (!this.focusActive) { this.clearFocus(); return; }
-    const host = this.host, box = host.getBoundingClientRect();
+    if (!this.focusActive) {
+      this.clearFocus();
+      return;
+    }
+    const host = this.host,
+      box = host.getBoundingClientRect();
     const maxScroll = host.scrollHeight - host.clientHeight;
     const blocks = this.paragraphs();
     // A chapter that fits the screen has nothing to follow, and veiling a page the
     // reader can see whole would only hide it.
-    if (!blocks.length || box.height <= 0 || maxScroll <= 1) { this.focusVeils?.forEach(veil => { veil.hidden = true; }); this.focusIndex = -1; return; }
+    if (!blocks.length || box.height <= 0 || maxScroll <= 1) {
+      this.focusVeils?.forEach((veil) => {
+        veil.hidden = true;
+      });
+      this.focusIndex = -1;
+      return;
+    }
     const y = box.top + focusLine(host.scrollTop, maxScroll, box.height);
     // The first paragraph that ends below the line. Paragraphs are in document
     // order and so, give or take a float, in vertical order: a binary search.
-    let low = 0, high = blocks.length - 1;
+    let low = 0,
+      high = blocks.length - 1;
     while (low < high) {
       const middle = (low + high) >> 1;
-      if (blocks[middle]!.getBoundingClientRect().bottom > y) high = middle; else low = middle + 1;
+      if (blocks[middle]!.getBoundingClientRect().bottom > y) high = middle;
+      else low = middle + 1;
     }
     this.focusIndex = low;
     const rect = blocks[low]!.getBoundingClientRect();
     if (!this.focusVeils) {
-      const veil = (): HTMLElement => { const element = document.createElement('div'); element.className = 'focus-veil'; element.setAttribute('aria-hidden', 'true'); return element; };
+      const veil = (): HTMLElement => {
+        const element = document.createElement('div');
+        element.className = 'focus-veil';
+        element.setAttribute('aria-hidden', 'true');
+        return element;
+      };
       this.focusVeils = [veil(), veil()];
       this.container.append(...this.focusVeils);
     }
@@ -915,7 +993,8 @@ export class ReaderView {
    */
   focusStep(delta: 1 | -1): boolean {
     if (!this.focusActive) return false;
-    const host = this.host, blocks = this.paragraphs();
+    const host = this.host,
+      blocks = this.paragraphs();
     const maxScroll = host.scrollHeight - host.clientHeight;
     if (!blocks.length || maxScroll <= 1) return false;
     if (this.focusIndex < 0) this.syncFocus();
@@ -939,14 +1018,22 @@ export class ReaderView {
   }
 
   private paintRange(range: Range, color: string, kind: string, id?: string): void {
-    if (kind === 'search') for (const node of this.host.flow.querySelectorAll('[data-reader-mark="search"]')) node.remove();
+    if (kind === 'search')
+      for (const node of this.host.flow.querySelectorAll('[data-reader-mark="search"]')) node.remove();
     const box = this.host.flow.getBoundingClientRect();
     const rects = typeof range.getClientRects === 'function' ? [...range.getClientRects()] : [];
     for (const rect of rects) {
-      const mark = document.createElement(id ? 'button' : 'span'); mark.dataset['readerMark'] = kind;
+      const mark = document.createElement(id ? 'button' : 'span');
+      mark.dataset['readerMark'] = kind;
       if (id) {
-        mark.dataset['noteId'] = id; mark.setAttribute('aria-label', '查看高亮或批注'); mark.setAttribute('type', 'button');
-        mark.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); this.options.onAnnotation?.(id, mark.getBoundingClientRect()); });
+        mark.dataset['noteId'] = id;
+        mark.setAttribute('aria-label', '查看高亮或批注');
+        mark.setAttribute('type', 'button');
+        mark.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.options.onAnnotation?.(id, mark.getBoundingClientRect());
+        });
       } else mark.setAttribute('aria-hidden', 'true');
       mark.style.cssText = `position:absolute;pointer-events:${id ? 'auto' : 'none'};cursor:${id ? 'pointer' : 'default'};border:0;padding:0;margin:0;min-width:0;min-height:0;background:${color};opacity:.32;left:${rect.left - box.left + this.host.flow.scrollLeft}px;top:${rect.top - box.top + this.host.flow.scrollTop}px;width:${rect.width}px;height:${rect.height}px;`;
       this.host.flow.append(mark);
@@ -956,7 +1043,8 @@ export class ReaderView {
   private revealRange(range: Range): void {
     const rect = rangeRect(range);
     if (rect) {
-      const scroller = this.scroller, box = scroller.getBoundingClientRect();
+      const scroller = this.scroller,
+        box = scroller.getBoundingClientRect();
       if (this.settings.mode === 'paged') this.scrollToColumnAt(scroller.scrollLeft + rect.left - box.left);
       else scroller.scrollTop += rect.top - box.top - box.height / 3;
     }
@@ -1084,7 +1172,8 @@ export class ReaderView {
 
   dispose(): void {
     this.doc.pdf?.cancel();
-    this.detachSelection?.(); this.detachSelection = null;
+    this.detachSelection?.();
+    this.detachSelection = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     clearTimeout(this.maskTimer);
@@ -1095,7 +1184,10 @@ export class ReaderView {
     this.detachChapterLinks?.();
     this.detachChapterLinks = null;
     this.clearFocus();
-    if (this.pagePictureUrl) { URL.revokeObjectURL(this.pagePictureUrl); this.pagePictureUrl = null; }
+    if (this.pagePictureUrl) {
+      URL.revokeObjectURL(this.pagePictureUrl);
+      this.pagePictureUrl = null;
+    }
     this.clearSpeechHighlight();
     this.releaseObjectUrl();
     this.resolver.dispose();
@@ -1198,7 +1290,7 @@ export class ReaderView {
           .filter((element) => !/^H[1-6]$/.test(element.tagName))
           .map((element) => element.textContent ?? '')
           .filter((block) => block.trim().length > 0);
-        text = blocks.length > 0 ? blocks.join('\n\n') : wrapper.textContent ?? '';
+        text = blocks.length > 0 ? blocks.join('\n\n') : (wrapper.textContent ?? '');
       }
     } else {
       // Not markup: the chapter's characters, as fetched, and nothing else. This
@@ -1630,10 +1722,11 @@ export class ReaderView {
       let cut = Number.POSITIVE_INFINITY;
       // Line-sized rects only: a range over a block also reports the boxes of the
       // elements inside it, and a paragraph box crossing the edge is not a cut line.
-      if (line > 0) for (const box of this.lineBoxes()) {
-        if (box.bottom - box.top > line * 1.5) continue;
-        if (box.top >= top && box.top < bottom - 0.5 && box.bottom > bottom + 0.5 && box.top < cut) cut = box.top;
-      }
+      if (line > 0)
+        for (const box of this.lineBoxes()) {
+          if (box.bottom - box.top > line * 1.5) continue;
+          if (box.top >= top && box.top < bottom - 0.5 && box.bottom > bottom + 0.5 && box.top < cut) cut = box.top;
+        }
       if (Number.isFinite(cut)) mask = Math.max(0, bottom - cut);
     }
     this.maskedAt = host.scrollTop;
@@ -1824,7 +1917,8 @@ export class ReaderView {
    * other way from the swipe-to-turn convention.
    */
   beginDrag(): boolean {
-    if (this.settings.mode !== 'paged' || this.doc.layout === 'fixed' || this.settings.direction === 'rtl') return false;
+    if (this.settings.mode !== 'paged' || this.doc.layout === 'fixed' || this.settings.direction === 'rtl')
+      return false;
     this.settleDrag();
     const columns = this.columnCount();
     this.drag = { base: this.columnIndex() * this.columnStride(columns), frame: null, finish: null };
@@ -1874,20 +1968,27 @@ export class ReaderView {
     const drag = this.drag!;
     const scroller = this.scroller;
     const from = scroller.scrollLeft;
-    const still = this.settings.pageAnimation === 'none'
-      || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const still =
+      this.settings.pageAnimation === 'none' ||
+      (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
     drag.finish = () => {
       if (drag.frame !== null) cancelAnimationFrame(drag.frame);
       scroller.scrollLeft = x;
       if (this.drag === drag) this.drag = null;
       done();
     };
-    if (still || Math.abs(x - from) < 1) { drag.finish(); return; }
+    if (still || Math.abs(x - from) < 1) {
+      drag.finish();
+      return;
+    }
     const duration = 200;
     const start = performance.now();
     const step = (now: number) => {
       const t = Math.min(1, (now - start) / duration);
-      if (t >= 1) { drag.finish?.(); return; }
+      if (t >= 1) {
+        drag.finish?.();
+        return;
+      }
       scroller.scrollLeft = from + (x - from) * (1 - (1 - t) ** 3);
       drag.frame = requestAnimationFrame(step);
     };
@@ -1899,7 +2000,10 @@ export class ReaderView {
     const drag = this.drag;
     if (!drag) return;
     if (drag.finish) drag.finish();
-    else { this.scroller.scrollLeft = drag.base; this.drag = null; }
+    else {
+      this.scroller.scrollLeft = drag.base;
+      this.drag = null;
+    }
   }
 
   private stepColumn(delta: number): boolean {
@@ -2212,14 +2316,22 @@ export class ReaderView {
             // Bounded: a book referencing a missing asset must not stall the
             // position restore forever.
             const timer = setTimeout(resolve, 3000);
-            img.addEventListener('load', () => {
-              clearTimeout(timer);
-              resolve();
-            }, { once: true });
-            img.addEventListener('error', () => {
-              clearTimeout(timer);
-              resolve();
-            }, { once: true });
+            img.addEventListener(
+              'load',
+              () => {
+                clearTimeout(timer);
+                resolve();
+              },
+              { once: true },
+            );
+            img.addEventListener(
+              'error',
+              () => {
+                clearTimeout(timer);
+                resolve();
+              },
+              { once: true },
+            );
           }),
       ),
     );
@@ -2242,7 +2354,6 @@ function rangeRect(range: Range): DOMRect | null {
     return null;
   }
 }
-
 
 /**
  * Whether a link in a chapter stays inside the book.
@@ -2273,7 +2384,8 @@ function pictureSource(element: Element): string {
  */
 function isPicture(element: Element): boolean {
   const rect = element.getBoundingClientRect();
-  const short = Math.min(rect.width, rect.height), long = Math.max(rect.width, rect.height);
+  const short = Math.min(rect.width, rect.height),
+    long = Math.max(rect.width, rect.height);
   return short >= 48 || (short >= 24 && long >= 120);
 }
 

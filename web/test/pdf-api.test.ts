@@ -7,14 +7,20 @@ async function setup() {
   const api = new ReaderApi(makePlatform(transport), {
     load: async () => ({
       user: { id: 'reader', username: 'reader', displayName: '', role: 'member', createdAt: 0 },
-      accessToken: 'access', refreshToken: 'refresh', accessTokenExpiresAt: 9e15, refreshTokenExpiresAt: 9e15,
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      accessTokenExpiresAt: 9e15,
+      refreshTokenExpiresAt: 9e15,
     }),
-    save: async () => undefined, clear: async () => undefined,
+    save: async () => undefined,
+    clear: async () => undefined,
   });
   await api.restore();
-  transport.respondWith(request => request.method === 'HEAD'
-    ? { status: 200, headers: { 'content-length': '1000000', 'accept-ranges': 'bytes' } }
-    : { status: 206, headers: { 'content-range': 'bytes 100-103/1000000' }, bytes: new Uint8Array([1, 2, 3, 4]) });
+  transport.respondWith((request) =>
+    request.method === 'HEAD'
+      ? { status: 200, headers: { 'content-length': '1000000', 'accept-ranges': 'bytes' } }
+      : { status: 206, headers: { 'content-range': 'bytes 100-103/1000000' }, bytes: new Uint8Array([1, 2, 3, 4]) },
+  );
   return { api, transport };
 }
 
@@ -28,7 +34,8 @@ describe('PDF range source', () => {
     const controller = new AbortController();
     expect(await source.readRange(100, 104, controller.signal)).toEqual(new Uint8Array([1, 2, 3, 4]));
     expect(transport.requests[1]).toMatchObject({
-      method: 'GET', headers: { range: 'bytes=100-103', authorization: 'Bearer access' },
+      method: 'GET',
+      headers: { range: 'bytes=100-103', authorization: 'Bearer access' },
     });
   });
 
@@ -36,17 +43,27 @@ describe('PDF range source', () => {
     const { api, transport } = await setup();
     const source = await api.pdfSource('book');
     api.currentSession()!.accessTokenExpiresAt = Date.now() + 1000;
-    transport.respondWith(request => request.url.endsWith('/refresh')
-      ? { status: 200, headers: {}, json: { ...api.currentSession(), accessToken: 'renewed', accessTokenExpiresAt: 9e15 } }
-      : { status: 206, headers: { 'content-range': 'bytes 100-103/1000000' }, bytes: new Uint8Array(4) });
+    transport.respondWith((request) =>
+      request.url.endsWith('/refresh')
+        ? {
+            status: 200,
+            headers: {},
+            json: { ...api.currentSession(), accessToken: 'renewed', accessTokenExpiresAt: 9e15 },
+          }
+        : { status: 206, headers: { 'content-range': 'bytes 100-103/1000000' }, bytes: new Uint8Array(4) },
+    );
     await source.readRange(100, 104, new AbortController().signal);
     expect(transport.requests.at(-1)?.headers.authorization).toBe('Bearer renewed');
   });
 
-  it.each([200, 206])('rejects incomplete or non-range responses (status=%s)', async status => {
+  it.each([200, 206])('rejects incomplete or non-range responses (status=%s)', async (status) => {
     const { api, transport } = await setup();
     const source = await api.pdfSource('book');
-    transport.respondWith(() => ({ status, headers: { 'content-range': 'bytes 100-103/1000000' }, bytes: new Uint8Array(3) }));
+    transport.respondWith(() => ({
+      status,
+      headers: { 'content-range': 'bytes 100-103/1000000' },
+      bytes: new Uint8Array(3),
+    }));
     await expect(source.readRange(100, 104, new AbortController().signal)).rejects.toThrow('无效的 PDF 字节范围');
   });
 

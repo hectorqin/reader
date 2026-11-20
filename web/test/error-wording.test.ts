@@ -8,16 +8,20 @@ describe('describeError', () => {
   });
 
   it('replaces transport and proxy diagnostics with what kind of failure it was', () => {
-    expect(describeError(new ApiError('not_found', 'no route for GET /api/v1/books?scope=library', '', 404))).toBe('没有找到请求的内容，它可能已被移走或删除');
-    expect(describeError(new ApiError('server', 'request failed with status 502', '', 502))).toBe('服务器出错了，请稍后重试');
+    expect(describeError(new ApiError('not_found', 'no route for GET /api/v1/books?scope=library', '', 404))).toBe(
+      '没有找到请求的内容，它可能已被移走或删除',
+    );
+    expect(describeError(new ApiError('server', 'request failed with status 502', '', 502))).toBe(
+      '服务器出错了，请稍后重试',
+    );
   });
 
-  it('never shows the browser\'s own text for a connectivity failure', () => {
+  it("never shows the browser's own text for a connectivity failure", () => {
     expect(describeError(new ApiError('offline', 'Failed to fetch'))).toBe('连不上服务器，请检查网络和服务地址后重试');
     expect(describeError(new ApiError('offline', 'request timed out', 'TIMEOUT'))).toBe('请求超时，请检查网络后重试');
   });
 
-  it('keeps the search stream\'s own explanation of an interrupted search', () => {
+  it("keeps the search stream's own explanation of an interrupted search", () => {
     const message = '搜索连接中断，已保留收到的结果，可继续搜索。';
     expect(describeError(new ApiError('offline', message, 'STREAM_INTERRUPTED'))).toBe(message);
   });

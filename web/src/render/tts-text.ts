@@ -193,7 +193,9 @@ function isSentenceDot(text: string, index: number): boolean {
   // "3.14" — a digit before a stop is a number, not a sentence.
   if (previous !== undefined && /\d/.test(previous)) return false;
   // "Dr." / "Mr." / "St." — a known abbreviation before a stop.
-  if (/\b(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|Prof|Rev|vs|etc|No|Fig|Ch|Vol|p|pp|al)$/.test(text.slice(Math.max(0, index - 8), index))) {
+  if (
+    /\b(?:Mr|Mrs|Ms|Dr|St|Jr|Sr|Prof|Rev|vs|etc|No|Fig|Ch|Vol|p|pp|al)$/.test(text.slice(Math.max(0, index - 8), index))
+  ) {
     return false;
   }
   return true;

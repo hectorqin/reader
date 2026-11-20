@@ -47,7 +47,9 @@ function hasSelection(): boolean {
 function markSwipe(direction: SwipeDirection): void {
   const root = document.documentElement;
   root.dataset['swipe'] = direction;
-  window.setTimeout(() => { if (root.dataset['swipe'] === direction) delete root.dataset['swipe']; }, 260);
+  window.setTimeout(() => {
+    if (root.dataset['swipe'] === direction) delete root.dataset['swipe'];
+  }, 260);
 }
 
 /**
@@ -57,56 +59,66 @@ function markSwipe(direction: SwipeDirection): void {
  */
 export function useSwipeTabs<T extends HTMLElement>(onSwipe: ((direction: SwipeDirection) => boolean) | null) {
   const handler = useRef(onSwipe);
-  useEffect(() => { handler.current = onSwipe; }, [onSwipe]);
+  useEffect(() => {
+    handler.current = onSwipe;
+  }, [onSwipe]);
   const detach = useRef<(() => void) | null>(null);
   // Only a page that swipes gives up horizontal panning (and pinch zoom with it).
   const enabled = onSwipe !== null;
 
-  return useCallback((element: T | null) => {
-    detach.current?.();
-    detach.current = null;
-    if (!element || !enabled) return;
-    element.classList.add('swipe-tabs');
-    let start: { x: number; y: number; time: number; id: number } | null = null;
-    let suppressClick = false;
+  return useCallback(
+    (element: T | null) => {
+      detach.current?.();
+      detach.current = null;
+      if (!element || !enabled) return;
+      element.classList.add('swipe-tabs');
+      let start: { x: number; y: number; time: number; id: number } | null = null;
+      let suppressClick = false;
 
-    const down = (event: PointerEvent) => {
-      start = null;
-      if (event.pointerType !== 'touch' || !event.isPrimary || !handler.current) return;
-      if (ownsHorizontal(event.composedPath(), element) || hasSelection()) return;
-      start = { x: event.clientX, y: event.clientY, time: Date.now(), id: event.pointerId };
-    };
-    const up = (event: PointerEvent) => {
-      const began = start;
-      start = null;
-      if (!began || began.id !== event.pointerId || !handler.current) return;
-      const dx = event.clientX - began.x, dy = event.clientY - began.y;
-      if (Math.abs(dx) < MIN_DISTANCE || Math.abs(dx) < Math.abs(dy) * MIN_RATIO) return;
-      if (Date.now() - began.time > MAX_DURATION || hasSelection()) return;
-      const direction: SwipeDirection = dx < 0 ? 'next' : 'previous';
-      // The finger lifted over a card or a link; the swipe was not a tap on it.
-      suppressClick = true;
-      window.setTimeout(() => { suppressClick = false; }, 400);
-      if (handler.current(direction)) markSwipe(direction);
-    };
-    const cancel = () => { start = null; };
-    const click = (event: MouseEvent) => {
-      if (!suppressClick) return;
-      suppressClick = false;
-      event.preventDefault();
-      event.stopPropagation();
-    };
+      const down = (event: PointerEvent) => {
+        start = null;
+        if (event.pointerType !== 'touch' || !event.isPrimary || !handler.current) return;
+        if (ownsHorizontal(event.composedPath(), element) || hasSelection()) return;
+        start = { x: event.clientX, y: event.clientY, time: Date.now(), id: event.pointerId };
+      };
+      const up = (event: PointerEvent) => {
+        const began = start;
+        start = null;
+        if (!began || began.id !== event.pointerId || !handler.current) return;
+        const dx = event.clientX - began.x,
+          dy = event.clientY - began.y;
+        if (Math.abs(dx) < MIN_DISTANCE || Math.abs(dx) < Math.abs(dy) * MIN_RATIO) return;
+        if (Date.now() - began.time > MAX_DURATION || hasSelection()) return;
+        const direction: SwipeDirection = dx < 0 ? 'next' : 'previous';
+        // The finger lifted over a card or a link; the swipe was not a tap on it.
+        suppressClick = true;
+        window.setTimeout(() => {
+          suppressClick = false;
+        }, 400);
+        if (handler.current(direction)) markSwipe(direction);
+      };
+      const cancel = () => {
+        start = null;
+      };
+      const click = (event: MouseEvent) => {
+        if (!suppressClick) return;
+        suppressClick = false;
+        event.preventDefault();
+        event.stopPropagation();
+      };
 
-    element.addEventListener('pointerdown', down);
-    element.addEventListener('pointerup', up);
-    element.addEventListener('pointercancel', cancel);
-    element.addEventListener('click', click, true);
-    detach.current = () => {
-      element.classList.remove('swipe-tabs');
-      element.removeEventListener('pointerdown', down);
-      element.removeEventListener('pointerup', up);
-      element.removeEventListener('pointercancel', cancel);
-      element.removeEventListener('click', click, true);
-    };
-  }, [enabled]);
+      element.addEventListener('pointerdown', down);
+      element.addEventListener('pointerup', up);
+      element.addEventListener('pointercancel', cancel);
+      element.addEventListener('click', click, true);
+      detach.current = () => {
+        element.classList.remove('swipe-tabs');
+        element.removeEventListener('pointerdown', down);
+        element.removeEventListener('pointerup', up);
+        element.removeEventListener('pointercancel', cancel);
+        element.removeEventListener('click', click, true);
+      };
+    },
+    [enabled],
+  );
 }

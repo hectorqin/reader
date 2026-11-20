@@ -1,11 +1,11 @@
 # 开发指南
 
-[项目首页](../README.md) · [文档中心](README.md) · [English](development.en.md)
+[项目首页](../README.zh-CN.md) · [文档中心](README.md) · [English](development.en.md)
 
 ## 环境
 
 - Node.js 22 及以上（`server/package.json` 的 `engines`），推荐 24，与当前容器和 CI 保持一致；服务端使用内置 `node:sqlite`，TypeScript 通过 `tsx` 直接运行。
-- npm、Git；服务端和 Web 各有独立 `package.json` 与锁文件，仓库根目录没有统一 npm 脚本。
+- npm、Git；服务端和 Web 各有独立 `package.json` 与锁文件，根目录 `package.json` 只放仓库级工具（Prettier 与 git 钩子）。
 - UI 评审需要 Chromium。
 - 构建 Android 另需 JDK 17+、Android SDK 35、Build Tools 35.0.1；Web 资源构建脚本需要 POSIX shell（Windows 可使用 Git Bash 或 WSL）。
 
@@ -14,9 +14,17 @@
 ## 安装依赖
 
 ```sh
+npm ci                  # 仓库根目录：Prettier 与 git 钩子（husky、lint-staged）
 npm ci --prefix server
 npm ci --prefix web
 ```
+
+根目录 `package.json` 只放仓库级工具。在根目录执行 `npm ci` 会安装两个 git 钩子：
+
+- **pre-commit**：用 Prettier 格式化暂存文件（`.prettierrc.json`：2 空格缩进、单引号、分号、行宽 120；CSS 保留双引号）。Markdown 不做重排。
+- **commit-msg**：要求 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/) 格式 `<type>(<scope>): <subject>`，type 为 `feat fix perf refactor style test docs build ci chore revert` 之一，标题不超过 100 字符；合并与回滚提交直接放行。
+
+全量格式化用 `npm run format`，与 CI 相同的检查用 `npm run format:check`。编辑器请启用 `.editorconfig`。
 
 界面评审使用 Chromium，在 Web 目录安装：
 
@@ -108,7 +116,7 @@ UI 评审在真实 Chromium 中通过 CDP 截图并测量；浏览器缺失时�
 
 ## 持续集成与发布
 
-- GitHub Actions `.github/workflows/ci.yml`：每个 PR 和每个分支的 push 都会运行。服务端与 Web 分别执行 install → typecheck → test → build；另有 UI 评审（复用 Web 产物，截图作为制品保留），以及 Android 的 `check-shell.sh`、Web 资源打包校验和 debug APK。
+- GitHub Actions `.github/workflows/ci.yml`：每个 PR 和每个分支的 push 都会运行。格式检查任务在根目录执行 `npm run format:check`；服务端与 Web 分别执行 install → typecheck → test → build；另有 UI 评审（复用 Web 产物，截图作为制品保留），以及 Android 的 `check-shell.sh`、Web 资源打包校验和 debug APK。
 - `.github/workflows/release.yml`：只在推送 `v*` 标签或手动运行时触发，先跑 CI，再在 amd64 与 arm64 原生 runner 上构建镜像并发布到 Docker Hub `hectorqin/reader-pro`。标签发布 `x.y.z`、`x.y`、`latest` 与 `sha-*`；手动运行发布分支名与 `sha-*`。需要仓库机密 `DOCKER_USERNAME`、`DOCKER_PASSWORD`。`main` 是长期开发分支，push 到 `main` 不会发布。
 
 ## 构建与运行
@@ -179,5 +187,6 @@ sh android/scripts/verify-web-assets.sh  # 在 build-web-assets.sh 之后，确�
 2. 将修改限制在相关模块，参考已有错误语义和测试方式。
 3. 为行为变更补充适当的回归验证；纯文档修改检查链接、命令和示例即可。
 4. 提交变更时说明改动、验证方式和已知限制。
+5. 提交信息使用 Conventional Commits（如 `fix(web): 刷新后保持书架页码`）；上述钩子会自动格式化代码并检查提交信息。
 
 API 详见 [API 文档](api.md)；影音边界见[模块架构](media-implementation.md)，验证入口见[影音验证](media-validation.md)。

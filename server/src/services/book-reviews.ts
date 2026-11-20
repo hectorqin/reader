@@ -11,13 +11,21 @@ import { badRequest, notFound } from '../lib/errors.ts';
  */
 export const REVIEW_MAX_LENGTH = 20_000;
 
-export interface BookReview { bookId: string; body: string; updatedAt: number }
+export interface BookReview {
+  bookId: string;
+  body: string;
+  updatedAt: number;
+}
 
 export class BookReviewService {
   constructor(private readonly db: Pick<Db, 'get' | 'run'>) {}
 
   get(userId: string, bookId: string): BookReview | null {
-    const row = this.db.get<{ body: string; updated_at: number }>('SELECT body, updated_at FROM book_reviews WHERE user_id = ? AND book_id = ?', userId, bookId);
+    const row = this.db.get<{ body: string; updated_at: number }>(
+      'SELECT body, updated_at FROM book_reviews WHERE user_id = ? AND book_id = ?',
+      userId,
+      bookId,
+    );
     return row ? { bookId, body: row.body, updatedAt: row.updated_at } : null;
   }
 
@@ -34,7 +42,10 @@ export class BookReviewService {
     this.db.run(
       `INSERT INTO book_reviews (user_id, book_id, body, updated_at) VALUES (?,?,?,?)
        ON CONFLICT(user_id, book_id) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at`,
-      userId, bookId, text, now,
+      userId,
+      bookId,
+      text,
+      now,
     );
     return { bookId, body: text, updatedAt: now };
   }

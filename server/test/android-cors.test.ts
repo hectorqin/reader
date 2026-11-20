@@ -9,12 +9,25 @@ test('untrusted forwarded protocol and host do not expand the same-origin allowl
   const config = { corsOrigins: ['https://allowed.test'] } as AppConfig;
   for (const trusted of [false, true]) {
     const app = Fastify({ trustProxy: trusted ? ['loopback'] : false });
-    app.get('/', request => ({ allowed: isOriginAllowed(config, request), origin: resolveCorsOrigin(config, request) }));
+    app.get('/', (request) => ({
+      allowed: isOriginAllowed(config, request),
+      origin: resolveCorsOrigin(config, request),
+    }));
     try {
-      const response = await app.inject({ url: '/', headers: { host: 'internal.test', origin: 'https://public.test', 'x-forwarded-proto': 'https', 'x-forwarded-host': 'public.test' } });
+      const response = await app.inject({
+        url: '/',
+        headers: {
+          host: 'internal.test',
+          origin: 'https://public.test',
+          'x-forwarded-proto': 'https',
+          'x-forwarded-host': 'public.test',
+        },
+      });
       assert.equal(response.json().allowed, trusted);
       assert.equal(response.json().origin, trusted ? 'https://public.test' : 'https://allowed.test');
-    } finally { await app.close(); }
+    } finally {
+      await app.close();
+    }
   }
 });
 

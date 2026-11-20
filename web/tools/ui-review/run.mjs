@@ -41,11 +41,35 @@ const SCALE = 2;
 
 const SCENES = [
   { name: '01-shelf', label: '书架', what: '第一屏：先看到书，再看到控件' },
-  { name: '02-reader', label: '阅读页', what: '顶部书名 / 日夜快捷按钮 / 正文 / 本章滑杆与四个底部入口', openBook: true },
-  { name: '03-reader-no-chrome', label: '阅读页 · 收起工具栏', what: '工具栏一起收起，正文保持原位置，底部只留书名、页码与进度', openBook: true, tapCenter: true },
+  {
+    name: '02-reader',
+    label: '阅读页',
+    what: '顶部书名 / 日夜快捷按钮 / 正文 / 本章滑杆与四个底部入口',
+    openBook: true,
+  },
+  {
+    name: '03-reader-no-chrome',
+    label: '阅读页 · 收起工具栏',
+    what: '工具栏一起收起，正文保持原位置，底部只留书名、页码与进度',
+    openBook: true,
+    tapCenter: true,
+  },
   { name: '04-panel-toc', label: '目录 · 半屏', what: '下半屏，上半屏正文仍可见', openBook: true, openPanel: '目录' },
-  { name: '05-panel-settings', label: '阅读设置 · 半屏', what: '一行式行：标签在左、控件在右', openBook: true, openPanel: '设置' },
-  { name: '06-reader-paged', label: '阅读页 · 翻页模式', what: '分栏后的一页，页数应与可翻次数一致', openBook: true, choose: ['设置', '翻页'], closePanel: true },
+  {
+    name: '05-panel-settings',
+    label: '阅读设置 · 半屏',
+    what: '一行式行：标签在左、控件在右',
+    openBook: true,
+    openPanel: '设置',
+  },
+  {
+    name: '06-reader-paged',
+    label: '阅读页 · 翻页模式',
+    what: '分栏后的一页，页数应与可翻次数一致',
+    openBook: true,
+    choose: ['设置', '翻页'],
+    closePanel: true,
+  },
   { name: '07-reader-light', label: '阅读页 · 浅色', what: '主题切换后的同一页', openBook: true, theme: '浅色' },
   { name: '08-reader-dark', label: '阅读页 · 深色', what: '暗色下的正文与工具栏', openBook: true, theme: '深色' },
   {
@@ -358,15 +382,13 @@ async function audit(cdp, origin, scenes, results) {
     !wide.missing && wide.width <= wide.columnWidth + 1 && wide.layoutWidth <= wide.columnWidth + 1,
     wide.missing
       ? '章节里没有第二张图'
-      : `出版方写的是 ${wide.attributeWidth}px，画出来 ${Math.round(wide.width)}px / 栏宽 ${Math.round(wide.columnWidth)}px`
-        + `（布局 ${wide.layoutWidth}x${wide.layoutHeight}，dpr=${wide.dpr}）`,
+      : `出版方写的是 ${wide.attributeWidth}px，画出来 ${Math.round(wide.width)}px / 栏宽 ${Math.round(wide.columnWidth)}px` +
+          `（布局 ${wide.layoutWidth}x${wide.layoutHeight}，dpr=${wide.dpr}）`,
   );
   check(
     'EPUB: 收窄插图没有改变它的比例',
     !wide.missing && Math.abs(wide.shownRatio - wide.naturalRatio) <= 0.02,
-    wide.missing
-      ? '章节里没有第二张图'
-      : `原图 ${wide.naturalRatio.toFixed(3)} / 画出来 ${wide.shownRatio.toFixed(3)}`,
+    wide.missing ? '章节里没有第二张图' : `原图 ${wide.naturalRatio.toFixed(3)} / 画出来 ${wide.shownRatio.toFixed(3)}`,
   );
   check(
     'EPUB: 宽插图没有让页面横向溢出',
@@ -455,20 +477,21 @@ async function audit(cdp, origin, scenes, results) {
    */
   check(
     '搜索框: 两边都从封面列内缩，且左右相等',
-    searchGlyph.left !== null && searchGlyph.right !== null && searchGlyph.left > 0
-      && Math.abs(searchGlyph.left - searchGlyph.right) <= 1,
+    searchGlyph.left !== null &&
+      searchGlyph.right !== null &&
+      searchGlyph.left > 0 &&
+      Math.abs(searchGlyph.left - searchGlyph.right) <= 1,
     searchGlyph.left === null
       ? '没有找到搜索框或封面'
       : `左 ${searchGlyph.left}px / 右 ${searchGlyph.right}px（字段 0 则为贴着封面）`,
   );
   check(
     '搜索框: 放大镜与输入框中线对齐',
-    !searchGlyph.missing && searchGlyph.inkHeight > 0
-      && Math.abs(searchGlyph.ink - searchGlyph.field) <= 2,
+    !searchGlyph.missing && searchGlyph.inkHeight > 0 && Math.abs(searchGlyph.ink - searchGlyph.field) <= 2,
     searchGlyph.missing
       ? '没有找到搜索框或放大镜'
-      : `放大镜中线 ${searchGlyph.ink.toFixed(1)} / 输入框中线 ${searchGlyph.field.toFixed(1)}`
-        + `（偏差 ${(searchGlyph.ink - searchGlyph.field).toFixed(1)}px，字形 ${searchGlyph.inkHeight}px，框高 ${searchGlyph.fieldHeight}px）`,
+      : `放大镜中线 ${searchGlyph.ink.toFixed(1)} / 输入框中线 ${searchGlyph.field.toFixed(1)}` +
+          `（偏差 ${(searchGlyph.ink - searchGlyph.field).toFixed(1)}px，字形 ${searchGlyph.inkHeight}px，框高 ${searchGlyph.fieldHeight}px）`,
   );
 
   /*
@@ -502,8 +525,10 @@ async function audit(cdp, origin, scenes, results) {
   check(
     '书架: 第一个排序是「最近阅读」且默认选中',
     // The status filters (全部 / 在读 / …) come first now; the sort chips start at 最近阅读.
-    (() => { const sorts = shelfSort.chips.slice(shelfSort.chips.findIndex((chip) => chip.label === '最近阅读'));
-      return sorts[0]?.label === '最近阅读' && sorts[0].pressed; })(),
+    (() => {
+      const sorts = shelfSort.chips.slice(shelfSort.chips.findIndex((chip) => chip.label === '最近阅读'));
+      return sorts[0]?.label === '最近阅读' && sorts[0].pressed;
+    })(),
     `chips=${shelfSort.chips.map((chip) => `${chip.label}${chip.pressed ? '*' : ''}`).join(' / ')}`,
   );
   check(
@@ -567,12 +592,16 @@ async function audit(cdp, origin, scenes, results) {
   })()`);
   check(
     '书架: 每张封面有一个「⋯」操作入口，按得着也看得见',
-    !shelfMenu.missing && shelfMenu.hit.w >= 28 && shelfMenu.hit.h >= 28
-      && shelfMenu.inside && shelfMenu.openCovers && shelfMenu.opacity >= 0.5,
+    !shelfMenu.missing &&
+      shelfMenu.hit.w >= 28 &&
+      shelfMenu.hit.h >= 28 &&
+      shelfMenu.inside &&
+      shelfMenu.openCovers &&
+      shelfMenu.opacity >= 0.5,
     shelfMenu.missing
       ? '没有找到 .book-more'
-      : `${shelfMenu.hit.w.toFixed(1)}×${shelfMenu.hit.h.toFixed(1)} 在卡片内=${shelfMenu.inside}`
-        + ` / 开书区覆盖整卡=${shelfMenu.openCovers} / 静止不透明度 ${shelfMenu.opacity}`,
+      : `${shelfMenu.hit.w.toFixed(1)}×${shelfMenu.hit.h.toFixed(1)} 在卡片内=${shelfMenu.inside}` +
+          ` / 开书区覆盖整卡=${shelfMenu.openCovers} / 静止不透明度 ${shelfMenu.opacity}`,
   );
 
   /*
@@ -659,13 +688,16 @@ async function audit(cdp, origin, scenes, results) {
   );
   check(
     '书库: 搜索框两边留白，不贴着封面',
-    browse.fieldInset !== null && browse.fieldInset > 0
-      && browse.fieldInsetRight !== null && Math.abs(browse.fieldInset - browse.fieldInsetRight) <= 1
-      && browse.cardInset !== null && browse.cardInset > browse.fieldInset,
+    browse.fieldInset !== null &&
+      browse.fieldInset > 0 &&
+      browse.fieldInsetRight !== null &&
+      Math.abs(browse.fieldInset - browse.fieldInsetRight) <= 1 &&
+      browse.cardInset !== null &&
+      browse.cardInset > browse.fieldInset,
     browse.fieldInset === null
       ? '没有找到搜索框或封面'
-      : `字段左 ${browse.fieldInset}px / 右 ${browse.fieldInsetRight}px，封面比字段再内缩 `
-        + `${(browse.cardInset ?? 0) - (browse.fieldInset ?? 0)}px`,
+      : `字段左 ${browse.fieldInset}px / 右 ${browse.fieldInsetRight}px，封面比字段再内缩 ` +
+          `${(browse.cardInset ?? 0) - (browse.fieldInset ?? 0)}px`,
   );
   check(
     '书库: 浏览页的网格铺满窗口，而不是被书架的宽度上限截住',
@@ -674,8 +706,9 @@ async function audit(cdp, origin, scenes, results) {
   );
   check(
     '书库: 浏览页提供文件管理入口，不放上传、新建或书架设置',
-    browse.header.includes('文件管理') && !browse.uploadInput
-      && !browse.header.some(label => /上传|新建文件夹|书架设置/.test(label)),
+    browse.header.includes('文件管理') &&
+      !browse.uploadInput &&
+      !browse.header.some((label) => /上传|新建文件夹|书架设置/.test(label)),
     `头部控件=${browse.header.join(' / ') || '（空）'}`,
   );
   /*
@@ -688,9 +721,7 @@ async function audit(cdp, origin, scenes, results) {
    * page that drew it on everything (because it stopped reading `shelfState`) both
    * look like a working page in a screenshot, and both are the defect.
    */
-  const offShelfCards = await cdp.evaluate(
-    'document.querySelectorAll(".library-browse-grid .book-shelve").length',
-  );
+  const offShelfCards = await cdp.evaluate('document.querySelectorAll(".library-browse-grid .book-shelve").length');
   check(
     '书库: 浏览页只给不在书架的书画「加入书架」，且不是全给',
     offShelfCards > 0 && offShelfCards < browse.cards,
@@ -718,13 +749,13 @@ async function audit(cdp, origin, scenes, results) {
   }))()`);
   check(
     '书库: 输入搜索词后 URL 与网格一起变，只剩匹配的书',
-    searched.cards > 0
-      && searched.cards < beforeSearch
-      && searched.titles.some((title) => title.includes('第1卷'))
+    searched.cards > 0 &&
+      searched.cards < beforeSearch &&
+      searched.titles.some((title) => title.includes('第1卷')) &&
       // The book that must be *gone* is named rather than counted: "fewer covers" is
       // also what a broken page looks like, and the fixture's later volumes are the
       // ones a filter has to remove.
-      && !searched.titles.some((title) => title.includes('第3卷')),
+      !searched.titles.some((title) => title.includes('第3卷')),
     `前 ${beforeSearch} 张 → 后 ${searched.cards} 张（${searched.titles.join(' / ')}），hash=${searched.hash}`,
   );
   check(
@@ -843,8 +874,8 @@ async function audit(cdp, origin, scenes, results) {
   })()`);
   check(
     '书架标题栏: 书架设置图标可见，且不超出按钮',
-    headGlyphs.some(glyph => glyph.name?.startsWith('书架设置'))
-      && headGlyphs.every((glyph) => glyph.inkWidth > 0 && glyph.inkHeight > 0 && glyph.inside),
+    headGlyphs.some((glyph) => glyph.name?.startsWith('书架设置')) &&
+      headGlyphs.every((glyph) => glyph.inkWidth > 0 && glyph.inkHeight > 0 && glyph.inside),
     headGlyphs
       .map((glyph) => `${glyph.name}: ${glyph.inkWidth}×${glyph.inkHeight} in ${glyph.box} box, inside=${glyph.inside}`)
       .join(' | '),
@@ -1045,7 +1076,10 @@ async function main() {
         // A page turn from the pager, not a URL: the point of the scene is that the
         // control is there and looks like a control.
         await cdp.click('.shelf-pager button[aria-label="下一页"]');
-        await cdp.waitFor(`new URLSearchParams(location.hash.split('?')[1] ?? '').get('page') === '${scene.openShelfAt}'`, 10_000);
+        await cdp.waitFor(
+          `new URLSearchParams(location.hash.split('?')[1] ?? '').get('page') === '${scene.openShelfAt}'`,
+          10_000,
+        );
         await cdp.sleep(400);
       }
       /*
@@ -1082,10 +1116,7 @@ async function main() {
         // it is a *shop*, and `已更新 N 本` describes a batch of rows rather than a tap on
         // one cover. The wait is for the *report*, which is what proves the write
         // happened and the folder was read back.
-        await cdp.waitFor(
-          `/加入书架 \\d+ 本/.test(document.querySelector('.notyf')?.textContent ?? '')`,
-          10_000,
-        );
+        await cdp.waitFor(`/加入书架 \\d+ 本/.test(document.querySelector('.notyf')?.textContent ?? '')`, 10_000);
         await cdp.sleep(500);
       }
 
@@ -1093,7 +1124,10 @@ async function main() {
         // A deep link into the book, which is also the one route the reader is
         // expected to be able to share. If it does not open, that is the finding.
         await cdp.waitFor('document.querySelector(".reader-screen") !== null', 20_000);
-        await cdp.waitFor('document.querySelector("book-content")?.shadowRoot?.querySelector(".book-flow") !== null', 20_000);
+        await cdp.waitFor(
+          'document.querySelector("book-content")?.shadowRoot?.querySelector(".book-flow") !== null',
+          20_000,
+        );
         await cdp.sleep(800);
       }
       const theme = scene.theme;
@@ -1149,10 +1183,16 @@ async function main() {
     // Measure on a reader at a frozen position, so the numbers below are about the
     // *layout* rather than about whatever chapter happened to be left open.
     await cdp.navigate(`${origin}/#/book/review-book`);
-    await cdp.waitFor('document.querySelector("book-content")?.shadowRoot?.querySelector(".book-flow") !== null', 15_000);
+    await cdp.waitFor(
+      'document.querySelector("book-content")?.shadowRoot?.querySelector(".book-flow") !== null',
+      15_000,
+    );
     await cdp.sleep(500);
     // The toolbar holds 目录; bring it back if the reader opened with it put away.
-    if (await cdp.evaluate(`document.querySelector('.reader-screen')?.dataset.chrome !== 'visible'`)) { await cdp.tapMiddle(); await cdp.sleep(300); }
+    if (await cdp.evaluate(`document.querySelector('.reader-screen')?.dataset.chrome !== 'visible'`)) {
+      await cdp.tapMiddle();
+      await cdp.sleep(300);
+    }
 
     const measured = [];
     // Opened with a real tap and *then* measured, after the sheet's animation has
@@ -1215,7 +1255,9 @@ async function main() {
       ].join('\n'),
     );
 
-    process.stdout.write('\n' + auditResult.results.map((r) => `${r.ok ? '✅' : '❌'} ${r.name} — ${r.detail}`).join('\n') + '\n');
+    process.stdout.write(
+      '\n' + auditResult.results.map((r) => `${r.ok ? '✅' : '❌'} ${r.name} — ${r.detail}`).join('\n') + '\n',
+    );
     if (failures.length > 0) {
       process.stderr.write(`\nUI 评审未通过：\n${failures.map((f) => `  - ${f}`).join('\n')}\n`);
       process.exitCode = 1;

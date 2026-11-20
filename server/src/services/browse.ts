@@ -172,7 +172,12 @@ export class BrowseService {
     return this.listSync(relPathInput, page, pageSize, userId);
   }
 
-  private async listSync(relPathInput: string, page: number, pageSize: number, userId?: string): Promise<BrowseListing> {
+  private async listSync(
+    relPathInput: string,
+    page: number,
+    pageSize: number,
+    userId?: string,
+  ): Promise<BrowseListing> {
     const relPath = relPathInput === '' ? '' : assertSafeRel(relPathInput);
     const abs = resolveInside(this.config.booksDir, relPath);
     const info = await stat(abs).catch(() => null);
@@ -237,7 +242,8 @@ export class BrowseService {
         const rows = this.db.all<{ book_id: string }>(
           `SELECT book_id FROM user_books
            WHERE user_id = ? AND hidden = 0 AND book_id IN (${bookIds.map(() => '?').join(',')})`,
-          userId, ...bookIds,
+          userId,
+          ...bookIds,
         );
         for (const row of rows) onShelf.add(row.book_id);
       }
@@ -341,7 +347,8 @@ export class BrowseService {
       // `target` inside `source` is the one arrangement a rename cannot express:
       // the destination is inside the thing being moved. Asked as "is the target
       // under the source", which is the opposite question from containment.
-      if (source !== '' && this.isInside(source, target)) throw badRequest('cannot move a directory into itself', 'MOVE_INTO_SELF');
+      if (source !== '' && this.isInside(source, target))
+        throw badRequest('cannot move a directory into itself', 'MOVE_INTO_SELF');
       const abs = resolveInside(this.config.booksDir, source);
       if (!(await stat(abs).catch(() => null))) throw notFound(`no such path: ${source}`, 'PATH_NOT_FOUND');
     }
@@ -554,7 +561,11 @@ export class BrowseService {
            JOIN source_acquisitions a ON a.book_id = f.book_id
            WHERE f.book_id = ? AND a.user_id = ?
          UNION SELECT book_id FROM chapter_publications WHERE book_id = ? AND user_id = ? LIMIT 1`,
-        input, input, userId, input, userId,
+        input,
+        input,
+        userId,
+        input,
+        userId,
       );
       if (!file) {
         result.failed.push({ path: input, reason: 'NO_LIVE_FILE' });
@@ -596,7 +607,12 @@ export class BrowseService {
    * documented value is a breaking change. They are normalised here, at the one
    * place that writes, so the rest of the method reasons about two cases.
    */
-  private setShelfState(bookId: string, userId: string, action: 'add' | 'remove' | 'hide' | 'unhide', now: number): void {
+  private setShelfState(
+    bookId: string,
+    userId: string,
+    action: 'add' | 'remove' | 'hide' | 'unhide',
+    now: number,
+  ): void {
     if (action === 'add' || action === 'unhide') {
       /*
        * `add` (and its synonym `hide`... see below) both *create* the row if it is
@@ -619,7 +635,9 @@ export class BrowseService {
         `INSERT INTO user_books (user_id, book_id, added_at, hidden) VALUES (?,?,?,0)
          ON CONFLICT(user_id, book_id) DO UPDATE SET hidden = 0,
            added_at = CASE WHEN user_books.hidden = 1 THEN excluded.added_at ELSE user_books.added_at END`,
-        userId, bookId, now,
+        userId,
+        bookId,
+        now,
       );
       return;
     }
@@ -637,7 +655,9 @@ export class BrowseService {
      */
     this.db.run(
       'INSERT OR IGNORE INTO user_books (user_id, book_id, added_at, hidden) VALUES (?,?,?,1)',
-      userId, bookId, now,
+      userId,
+      bookId,
+      now,
     );
   }
 
@@ -652,10 +672,7 @@ export class BrowseService {
     const parent = dirname(absPath);
     const parentOk = await this.writable(parent === absPath ? absPath : parent);
     if (parentOk) return;
-    throw forbidden(
-      'the library mount is read-only; remount it without `:ro` to manage files here',
-      'READ_ONLY_MOUNT',
-    );
+    throw forbidden('the library mount is read-only; remount it without `:ro` to manage files here', 'READ_ONLY_MOUNT');
   }
 
   /** Whether `child` is `parent` itself or lives underneath it. */
@@ -726,11 +743,11 @@ export class BrowseService {
        SELECT user_id, ?, body, updated_at FROM book_reviews WHERE book_id = ?
        ON CONFLICT(user_id, book_id) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at
        WHERE excluded.updated_at > book_reviews.updated_at`,
-      toBookId, fromBookId,
+      toBookId,
+      fromBookId,
     );
     this.db.run('DELETE FROM book_reviews WHERE book_id = ?', fromBookId);
   }
-
 }
 
 function extensionOf(name: string): string {

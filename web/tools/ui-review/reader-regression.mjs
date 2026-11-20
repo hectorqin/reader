@@ -6,9 +6,12 @@ import { createReviewServer, BOOK_ID, ILLUSTRATED_ID } from './server.mjs';
 
 const server = createReviewServer({ port: 5201 });
 const origin = await server.listen();
-const shots = process.env.UI_REVIEW_DIR ? resolve(process.env.UI_REVIEW_DIR) : join(resolve(import.meta.dirname, '../../..'), 'artifacts/ui-review/reader-mobile');
+const shots = process.env.UI_REVIEW_DIR
+  ? resolve(process.env.UI_REVIEW_DIR)
+  : join(resolve(import.meta.dirname, '../../..'), 'artifacts/ui-review/reader-mobile');
 const cdp = await CDP.launch({ viewport: { width: 390, height: 844 }, scale: 2 });
-const read = () => cdp.run(`
+const read = () =>
+  cdp.run(`
   const host = document.querySelector('book-content');
   const flow = host.shadowRoot.querySelector('.book-flow');
   const scroller = host.dataset.paginated === 'true' ? flow : host;
@@ -51,8 +54,13 @@ try {
     const opened = await read();
     assert.equal(opened.y, after.y, `${label} must preserve scroll position`);
     assert.equal(opened.height, after.height, `${label} must preserve surface height`);
-    const panel = await cdp.run(`const r=document.querySelector('.sheet').getBoundingClientRect();return {top:r.top,bottom:r.bottom};`);
-    assert.ok(panel.top > 250 && panel.bottom <= 845, `sheet must leave a preview and fit the screen: ${JSON.stringify(panel)}`);
+    const panel = await cdp.run(
+      `const r=document.querySelector('.sheet').getBoundingClientRect();return {top:r.top,bottom:r.bottom};`,
+    );
+    assert.ok(
+      panel.top > 250 && panel.bottom <= 845,
+      `sheet must leave a preview and fit the screen: ${JSON.stringify(panel)}`,
+    );
     await cdp.screenshot(join(shots, `panel-${label}.png`));
     await cdp.click('.sheet button[aria-label="关闭"]');
     await cdp.waitFor('document.querySelector(".sheet") === null');
@@ -60,14 +68,24 @@ try {
   }
   await cdp.clickText('.reader-actions button', '外观');
   const beforeReadouts = await read();
-  for (const [label, mode] of [['顶部左侧','book'],['顶部右侧','chapter'],['底部左侧','time'],['底部右侧','progress']]) {
-    await cdp.run(`const el=document.querySelector('select[aria-label="${label}"]');el.value='${mode}';el.dispatchEvent(new Event('change',{bubbles:true}));`);
+  for (const [label, mode] of [
+    ['顶部左侧', 'book'],
+    ['顶部右侧', 'chapter'],
+    ['底部左侧', 'time'],
+    ['底部右侧', 'progress'],
+  ]) {
+    await cdp.run(
+      `const el=document.querySelector('select[aria-label="${label}"]');el.value='${mode}';el.dispatchEvent(new Event('change',{bubbles:true}));`,
+    );
     await cdp.sleep(100);
     const next = await read();
-    for (const key of ['x','y','page','pages','top','height']) assert.equal(next[key], beforeReadouts[key], 'readout setting preserves '+key);
+    for (const key of ['x', 'y', 'page', 'pages', 'top', 'height'])
+      assert.equal(next[key], beforeReadouts[key], 'readout setting preserves ' + key);
   }
-  const modes = await cdp.evaluate('Array.from(document.querySelectorAll(".reading-indicator span"),el=>el.dataset.mode)');
-  assert.deepEqual(modes, ['book','chapter','time','progress']);
+  const modes = await cdp.evaluate(
+    'Array.from(document.querySelectorAll(".reading-indicator span"),el=>el.dataset.mode)',
+  );
+  assert.deepEqual(modes, ['book', 'chapter', 'time', 'progress']);
   await cdp.screenshot(join(shots, 'readout-settings.png'));
   await cdp.click('.sheet button[aria-label="关闭"]');
   await cdp.tapMiddle();
@@ -76,12 +94,24 @@ try {
   await cdp.waitFor('document.querySelector(".shelf-screen") !== null');
   await cdp.navigate(`${origin}/#/book/${BOOK_ID}`);
   await cdp.waitFor('Number(document.querySelector(".progress-scrubber")?.max) > 1');
-  assert.deepEqual(await cdp.evaluate('Array.from(document.querySelectorAll(".reading-indicator span"),el=>el.dataset.mode)'), modes, 'readout settings survive reopening');
-  if (await cdp.evaluate('document.querySelector(".reader-screen")?.dataset.chrome === "hidden"')) await cdp.tapMiddle();
+  assert.deepEqual(
+    await cdp.evaluate('Array.from(document.querySelectorAll(".reading-indicator span"),el=>el.dataset.mode)'),
+    modes,
+    'readout settings survive reopening',
+  );
+  if (await cdp.evaluate('document.querySelector(".reader-screen")?.dataset.chrome === "hidden"'))
+    await cdp.tapMiddle();
   await cdp.clickText('.reader-actions button', '外观');
   await cdp.waitFor('document.querySelector(\'select[aria-label="顶部左侧"]\') !== null');
-  for (const [label, mode] of [['顶部左侧','chapter'],['顶部右侧','none'],['底部左侧','progress'],['底部右侧','time']]) {
-    await cdp.run(`const el=document.querySelector('select[aria-label="${label}"]');el.value='${mode}';el.dispatchEvent(new Event('change',{bubbles:true}));`);
+  for (const [label, mode] of [
+    ['顶部左侧', 'chapter'],
+    ['顶部右侧', 'none'],
+    ['底部左侧', 'progress'],
+    ['底部右侧', 'time'],
+  ]) {
+    await cdp.run(
+      `const el=document.querySelector('select[aria-label="${label}"]');el.value='${mode}';el.dispatchEvent(new Event('change',{bubbles:true}));`,
+    );
     await cdp.sleep(100);
   }
   await cdp.clickText('.sheet button', '黑白灰');
@@ -91,34 +121,38 @@ try {
   await cdp.tapMiddle();
   await cdp.sleep(250);
   await cdp.screenshot(join(shots, 'immersive-green.png'));
-  for (let i=0; i<6; i++) {
+  for (let i = 0; i < 6; i++) {
     const prior = await read();
     await cdp.tapMiddle();
     await cdp.sleep(150);
     const next = await read();
-    for (const key of ['x','y','page','pages','top','height']) assert.equal(next[key],prior[key],`repeated toggle: ${key}`);
+    for (const key of ['x', 'y', 'page', 'pages', 'top', 'height'])
+      assert.equal(next[key], prior[key], `repeated toggle: ${key}`);
   }
   await cdp.tapMiddle();
   await cdp.clickText('.reader-actions button', '设置');
   await cdp.clickText('.sheet button', '翻页');
   await cdp.click('.sheet button[aria-label="关闭"]');
   await cdp.sleep(300);
-  await cdp.run(`const el=document.querySelector('.progress-scrubber');el.value='2';el.dispatchEvent(new Event('input',{bubbles:true}));`);
+  await cdp.run(
+    `const el=document.querySelector('.progress-scrubber');el.value='2';el.dispatchEvent(new Event('input',{bubbles:true}));`,
+  );
   await cdp.sleep(250);
   const paged = await read();
   assert.equal(paged.page, '2', 'chapter slider reaches page two');
-  for(let i=0;i<4;i++) {
+  for (let i = 0; i < 4; i++) {
     await cdp.tapMiddle();
     await cdp.sleep(200);
-    const next=await read();
-    for(const key of ['x','y','page','pages','top','height']) assert.equal(next[key],paged[key],`paged toggle: ${key}`);
+    const next = await read();
+    for (const key of ['x', 'y', 'page', 'pages', 'top', 'height'])
+      assert.equal(next[key], paged[key], `paged toggle: ${key}`);
   }
   await cdp.tapThird(0.85);
   await cdp.sleep(300);
-  assert.equal(Number((await read()).page),3,'tap advances one page');
+  assert.equal(Number((await read()).page), 3, 'tap advances one page');
   await cdp.tapThird(0.15);
   await cdp.sleep(300);
-  assert.equal((await read()).page,'2','reverse tap returns to same page');
+  assert.equal((await read()).page, '2', 'reverse tap returns to same page');
   await cdp.screenshot(join(shots, 'paged.png'));
   // A page-turn tap puts the toolbar away; the middle third brings it back.
   assert.equal((await read()).chrome, 'hidden', 'tap page turn hides the toolbar');
@@ -126,15 +160,16 @@ try {
   await cdp.sleep(200);
   await cdp.clickText('.footer button', '下一章');
   await cdp.sleep(350);
-  assert.equal((await read()).page,'1','next chapter starts at page one');
+  assert.equal((await read()).page, '1', 'next chapter starts at page one');
   await cdp.navigate(`${origin}/#/book/${ILLUSTRATED_ID}`);
   await cdp.waitFor('document.querySelector("book-content")?.shadowRoot?.querySelector("img")?.naturalWidth > 0');
   await cdp.sleep(300);
-  const epub=await read();
+  const epub = await read();
   await cdp.tapMiddle();
   await cdp.sleep(250);
-  const epubHidden=await read();
-  for(const key of ['x','y','page','pages','top','height']) assert.equal(epubHidden[key],epub[key],`EPUB toggle: ${key}`);
+  const epubHidden = await read();
+  for (const key of ['x', 'y', 'page', 'pages', 'top', 'height'])
+    assert.equal(epubHidden[key], epub[key], `EPUB toggle: ${key}`);
   await cdp.screenshot(join(shots, 'epub.png'));
   await cdp.navigate(`${origin}/#/book/review-comic`);
   await cdp.waitFor('document.querySelector("book-content")?.shadowRoot?.querySelector("img")?.naturalWidth > 0');
@@ -147,7 +182,7 @@ try {
   // A comic's slider moves through the whole book (5199f3d): page 2 of the fixture's 3.
   assert.equal(comic.page, '2', 'comic slider follows the page turn');
   assert.equal(comic.pages, '3', 'comic slider spans the whole book');
-  for (let i=0; i<4; i++) {
+  for (let i = 0; i < 4; i++) {
     await cdp.tapMiddle();
     await cdp.sleep(200);
     assert.equal(await cdp.evaluate('document.querySelector(".reader-heading span").textContent'), chapter);
@@ -157,18 +192,25 @@ try {
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 568, deviceScaleFactor: 2, mobile: true });
   await cdp.sleep(250);
   // The panels are reached from the toolbar, which the page turns above may have put away.
-  if ((await read()).chrome !== 'visible') { await cdp.tapMiddle(); await cdp.sleep(250); }
-  for(const label of ['外观','设置']) {
+  if ((await read()).chrome !== 'visible') {
+    await cdp.tapMiddle();
+    await cdp.sleep(250);
+  }
+  for (const label of ['外观', '设置']) {
     await cdp.clickText('.reader-actions button', label);
     await cdp.run(`await Promise.all(document.querySelector('.sheet').getAnimations().map(a=>a.finished));`);
-    const overflow=await cdp.run(`const p=document.querySelector('.sheet');return p.scrollWidth-p.clientWidth;`);
+    const overflow = await cdp.run(`const p=document.querySelector('.sheet');return p.scrollWidth-p.clientWidth;`);
     assert.ok(overflow <= 1, `${label} fits a narrow phone`);
     await cdp.screenshot(join(shots, `narrow-${label}.png`));
     await cdp.click('.sheet button[aria-label="关闭"]');
   }
   await cdp.navigate(`${origin}/#/book/review-pdf`);
-  await cdp.waitFor('document.querySelector("book-content")?.shadowRoot?.querySelector("iframe")?.src.startsWith("blob:")');
-  const pdf = await cdp.run(`const frame=document.querySelector('book-content').shadowRoot.querySelector('iframe');return (await fetch(frame.src).then(r=>r.text())).slice(0,8);`);
+  await cdp.waitFor(
+    'document.querySelector("book-content")?.shadowRoot?.querySelector("iframe")?.src.startsWith("blob:")',
+  );
+  const pdf = await cdp.run(
+    `const frame=document.querySelector('book-content').shadowRoot.querySelector('iframe');return (await fetch(frame.src).then(r=>r.text())).slice(0,8);`,
+  );
   assert.equal(pdf, '%PDF-1.4', 'browser viewer receives the actual PDF bytes');
   // The browser's PDF extension starts asynchronously after the frame commits.
   await cdp.sleep(1500);

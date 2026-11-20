@@ -45,7 +45,11 @@ export async function loadComicDirectory(
   pages: string[],
   resolve: (path: string) => Promise<Uint8Array>,
 ): Promise<BookDoc> {
-  return buildComicDoc(sortByName(pages, (name) => name), resolve, 'comic-dir');
+  return buildComicDoc(
+    sortByName(pages, (name) => name),
+    resolve,
+    'comic-dir',
+  );
 }
 
 export async function buildComicDoc(

@@ -19,14 +19,21 @@ parentPort!.on('message', ({ id, query }: { id: number; query: CatalogQuery }) =
     // Rows, effective metadata, total and access evidence share one WAL snapshot.
     reply = db.transaction(() => {
       const actor = query.args[0];
-      const libraryIds = libraries.list(actor).map(library => library.id).sort();
+      const libraryIds = libraries
+        .list(actor)
+        .map((library) => library.id)
+        .sort();
       const result = executeCatalogQuery(catalog, folders, state, query);
       return { id, result, access: { actor, libraryIds } };
     });
   } catch (error) {
-    reply = { id, error: error instanceof AppError
-      ? { statusCode: error.statusCode, code: error.code, message: error.message }
-      : { statusCode: 503, code: 'MEDIA_QUERY_FAILED', message: '影音目录查询暂不可用' } };
+    reply = {
+      id,
+      error:
+        error instanceof AppError
+          ? { statusCode: error.statusCode, code: error.code, message: error.message }
+          : { statusCode: 503, code: 'MEDIA_QUERY_FAILED', message: '影音目录查询暂不可用' },
+    };
   }
   parentPort!.postMessage(reply);
 });

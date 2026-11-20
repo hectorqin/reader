@@ -58,17 +58,28 @@ function harness(options: { selection?: boolean; width?: number } = {}): Harness
   document.body.append(stage);
   // jsdom has no layout, so the zone arithmetic reads a stubbed width.
   Object.defineProperty(stage, 'clientWidth', { get: () => width, configurable: true });
-  stage.getBoundingClientRect = () => ({ left: 0, top: 0, width, height: 600, right: width, bottom: 600, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+  stage.getBoundingClientRect = () =>
+    ({ left: 0, top: 0, width, height: 600, right: width, bottom: 600, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
 
-  const saw = { zones: [] as string[], cells: [] as Array<[number, number]>, swipes: [] as string[], drags: 0, longPresses: 0 };
+  const saw = {
+    zones: [] as string[],
+    cells: [] as Array<[number, number]>,
+    swipes: [] as string[],
+    drags: 0,
+    longPresses: 0,
+  };
   const handlers: GestureHandlers = {
     onTapZone: (column, row) => {
       saw.zones.push(['previous', 'toggle-chrome', 'next'][column]!);
       saw.cells.push([column, row]);
     },
     onSwipe: (direction) => saw.swipes.push(direction),
-    onDragDelta: () => { saw.drags += 1; },
-    onLongPress: () => { saw.longPresses += 1; },
+    onDragDelta: () => {
+      saw.drags += 1;
+    },
+    onLongPress: () => {
+      saw.longPresses += 1;
+    },
     hasSelection: () => options.selection === true,
   };
   attachGestures(stage, handlers);
@@ -109,7 +120,11 @@ describe('tap zones', () => {
     press(h.stage, [40, 100]);
     press(h.stage, [150, 300]);
     press(h.stage, [260, 500]);
-    expect(h.saw.cells).toEqual([[0, 0], [1, 1], [2, 2]]);
+    expect(h.saw.cells).toEqual([
+      [0, 0],
+      [1, 1],
+      [2, 2],
+    ]);
   });
 
   it('reads the zones from layout geometry, so a scaled page still taps where the finger is', () => {
@@ -129,7 +144,17 @@ describe('tap zones', () => {
     // `offsetWidth` is what the zones divide; the rect is where the element *is*.
     Object.defineProperty(h.stage, 'offsetWidth', { get: () => 300, configurable: true });
     h.stage.getBoundingClientRect = () =>
-      ({ left: 0, top: 0, width: 600, height: 1200, right: 600, bottom: 1200, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+      ({
+        left: 0,
+        top: 0,
+        width: 600,
+        height: 1200,
+        right: 600,
+        bottom: 1200,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
     // The tap coordinates are in *visual* units and the zones are in layout units.
     // A third of the 300px layout box is 100px of *layout* and 200px of screen, so
     // 150 is inside the first third, 300 (the visible centre) is the middle, and 450
@@ -267,7 +292,9 @@ describe('selection and long press', () => {
     const button = document.createElement('button');
     h.stage.append(button);
     let clicks = 0;
-    button.addEventListener('click', () => { clicks += 1; });
+    button.addEventListener('click', () => {
+      clicks += 1;
+    });
     press(button, [260, 300]);
     button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     expect(clicks).toBe(1);
@@ -287,7 +314,9 @@ describe('a drag the screen follows', () => {
   it('passes the pointer type with every move', () => {
     const types: string[] = [];
     const h = harness();
-    h.handlers.onDragDelta = (_x, _y, type) => { types.push(type); };
+    h.handlers.onDragDelta = (_x, _y, type) => {
+      types.push(type);
+    };
     press(h.stage, [200, 300], [80, 300]);
     expect(types).toEqual(['touch']);
   });
@@ -295,7 +324,10 @@ describe('a drag the screen follows', () => {
   it('lets a consumed release stand instead of also counting as a swipe', () => {
     const released: number[] = [];
     const h = harness();
-    h.handlers.onRelease = (deltaX) => { released.push(deltaX); return true; };
+    h.handlers.onRelease = (deltaX) => {
+      released.push(deltaX);
+      return true;
+    };
     press(h.stage, [200, 300], [80, 300]);
     expect(released).toEqual([-120]);
     expect(h.saw.swipes).toEqual([]);
@@ -314,7 +346,10 @@ describe('a drag the screen follows', () => {
   it('springs a drag back when the browser cancels the pointer', () => {
     const released: Array<[number, number]> = [];
     const h = harness();
-    h.handlers.onRelease = (deltaX, _y, duration) => { released.push([deltaX, duration]); return true; };
+    h.handlers.onRelease = (deltaX, _y, duration) => {
+      released.push([deltaX, duration]);
+      return true;
+    };
     h.stage.dispatchEvent(pointer('pointerdown', { clientX: 200, clientY: 300 }));
     h.stage.dispatchEvent(pointer('pointermove', { clientX: 120, clientY: 300 }));
     h.stage.dispatchEvent(pointer('pointercancel', { clientX: 120, clientY: 300 }));

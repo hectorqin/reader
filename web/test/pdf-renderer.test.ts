@@ -2,7 +2,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PdfSource } from '../src/formats/types.ts';
 
-const engine = vi.hoisted(() => ({ getDocument: vi.fn(), getPage: vi.fn(), destroy: vi.fn(), render: vi.fn(), textRender: vi.fn() }));
+const engine = vi.hoisted(() => ({
+  getDocument: vi.fn(),
+  getPage: vi.fn(),
+  destroy: vi.fn(),
+  render: vi.fn(),
+  textRender: vi.fn(),
+}));
 vi.mock('pdfjs-dist', () => ({
   GlobalWorkerOptions: {},
   getDocument: engine.getDocument,
@@ -20,15 +26,24 @@ import { openPdf } from '../src/formats/pdf-renderer.ts';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  globalThis.ResizeObserver = class { observe() {} disconnect() {} unobserve() {} };
+  globalThis.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  };
   engine.destroy.mockResolvedValue(undefined);
   engine.textRender.mockResolvedValue(undefined);
   engine.render.mockImplementation(() => ({ promise: Promise.resolve(), cancel: vi.fn() }));
   engine.getPage.mockImplementation(async () => ({
     getViewport: ({ scale }: { scale: number }) => ({ width: 600 * scale, height: 800 * scale }),
-    render: engine.render, streamTextContent: () => ({}), cleanup: vi.fn(),
+    render: engine.render,
+    streamTextContent: () => ({}),
+    cleanup: vi.fn(),
   }));
-  engine.getDocument.mockReturnValue({ promise: Promise.resolve({ numPages: 3, getPage: engine.getPage }), destroy: engine.destroy });
+  engine.getDocument.mockReturnValue({
+    promise: Promise.resolve({ numPages: 3, getPage: engine.getPage }),
+    destroy: engine.destroy,
+  });
 });
 
 describe('PDF.js rendering', () => {
@@ -86,7 +101,12 @@ describe('PDF.js rendering', () => {
   it('does not overwrite the current page when an old getPage completes late', async () => {
     const { renderer } = await openPdf(new Uint8Array([1]));
     let finish!: (page: unknown) => void;
-    engine.getPage.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    engine.getPage.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
     const oldContainer = document.createElement('div');
     const pending = renderer.render(1, oldContainer, 'contain');
     const current = document.createElement('div');
@@ -100,7 +120,12 @@ describe('PDF.js rendering', () => {
 
   it('surfaces range errors and destroys the loading worker', async () => {
     engine.getDocument.mockReturnValue({ promise: new Promise(() => undefined), destroy: engine.destroy });
-    const source: PdfSource = { length: 1000000, readRange: async () => { throw new Error('range failed'); } };
+    const source: PdfSource = {
+      length: 1000000,
+      readRange: async () => {
+        throw new Error('range failed');
+      },
+    };
     const opening = openPdf(source);
     engine.getDocument.mock.calls[0]![0].range.requestDataRange(0, 65536);
     await expect(opening).rejects.toThrow('range failed');

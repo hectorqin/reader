@@ -1,6 +1,6 @@
 # 入门指南
 
-[项目首页](../README.md) · [文档中心](README.md) · [English](getting-started.en.md)
+[项目首页](../README.zh-CN.md) · [文档中心](README.md) · [English](getting-started.en.md)
 
 本文带你完成 Docker 部署、注册账号和读取第一本书。直接从源码运行请看[开发指南](development.zh-CN.md)。
 
@@ -59,7 +59,7 @@ docker compose logs --tail=100 reader
 2. 等待初次扫描，在书架或书库中打开一本书。
 3. 为家人或其他成员创建账号。首个账号创建后默认关闭公开注册。
 
-如需开放后续注册，由管理员在「我的 → 注册与邀请」中改为开放注册或仅邀请码注册。Compose 中的 `ALLOW_REGISTRATION: "true"` 只在首次启动初始化注册策略时生效，之后以页面设置为准。
+如需开放后续注册，由管理员在「我的 → 注册与邀请」中改为开放注册或仅邀请码注册。仓库的 Compose 文件不设注册相关环境变量；旧部署里的 `ALLOW_REGISTRATION=true` 只在首次启动初始化注册策略时生效，之后以页面设置为准。
 
 健康检查地址为 `/api/v1/health`。若启动失败、目录为空或无法写入，请看[故障排查](configuration.zh-CN.md#故障排查)。
 
@@ -114,7 +114,7 @@ Windows 直接运行服务时填本机绝对路径，例如 `D:\Media\Music`；D
 
 也可选择 OpenList，填写服务地址、远端目录及可选令牌/目录密码，无需把远端目录挂载到 Reader 容器。详见 [OpenList 接入](media-openlist.md)。
 
-本地扫描可读取 NFO 和标签；在线匹配需按[部署配置](configuration.zh-CN.md)设置 TMDB 或 MusicBrainz。播放不转码，更多操作见[影音手册](media-user-guide.zh-CN.md)。
+本地扫描可读取 NFO 和标签；在线匹配需在「我的 → 服务配置」的 TMDB 或 MusicBrainz 分类中填写凭据（见[业务配置](business-settings.zh-CN.md)）。播放不转码，更多操作见[影音手册](media-user-guide.zh-CN.md)。
 
 ## 6. 更新与备份
 

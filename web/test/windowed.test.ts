@@ -42,16 +42,14 @@ function windowOf(from: number, count: number, total: number): BookContent {
   return {
     kind: 'reflowable',
     total,
-    groups: [
-      { id: `spine:${from}`, seq: from / count, title: `${from}..`, count, offset: from },
-    ],
+    groups: [{ id: `spine:${from}`, seq: from / count, title: `${from}..`, count, offset: from }],
     items: Array.from({ length: count }, (_, i) => item(from + i)),
     group: from / count,
   };
 }
 
 describe('staged documents', () => {
-  it('carries the manifest\'s plain-text declaration onto the section', async () => {
+  it("carries the manifest's plain-text declaration onto the section", async () => {
     // The declaration has to reach the *section*, because that is what the reader
     // asks when it decides whether to typeset. It cannot be re-derived from the body:
     // the server sends a TXT chapter as bare characters with no wrapper, so a body
@@ -66,7 +64,11 @@ describe('staged documents', () => {
         groups: [{ id: 'g', seq: 0, title: '', count: 2, offset: 0 }],
         items: [textItem(0), item(1)],
       },
-      loader: { async read() { return { html: '第一章\n\n正文。' }; } },
+      loader: {
+        async read() {
+          return { html: '第一章\n\n正文。' };
+        },
+      },
     });
 
     expect(doc.sections[0]?.plainText).toBe(true);
@@ -89,17 +91,24 @@ describe('staged documents', () => {
         items: [textItem(0), textItem(1)],
         group: 0,
       },
-      loader: { async read() { return { html: '第一章\n\n正文。' }; } },
+      loader: {
+        async read() {
+          return { html: '第一章\n\n正文。' };
+        },
+      },
     });
     expect(doc.sections[0]?.plainText).toBe(true);
 
-    doc.setWindow({
-      kind: 'reflowable',
-      total: 4,
-      groups: [{ id: 'g', seq: 1, title: '', count: 2, offset: 2 }],
-      items: [textItem(2), textItem(3)],
-      group: 1,
-    }, 2);
+    doc.setWindow(
+      {
+        kind: 'reflowable',
+        total: 4,
+        groups: [{ id: 'g', seq: 1, title: '', count: 2, offset: 2 }],
+        items: [textItem(2), textItem(3)],
+        group: 1,
+      },
+      2,
+    );
 
     expect(doc.sections[0]?.plainText).toBe(true);
   });
@@ -125,7 +134,11 @@ describe('staged documents', () => {
         groups: [{ id: 'g', seq: 0, title: '', count: 2, offset: 0 }],
         items: [textItem(0), item(1)],
       },
-      loader: { async read() { return { html: '第一章\n正文。' }; } },
+      loader: {
+        async read() {
+          return { html: '第一章\n正文。' };
+        },
+      },
     });
 
     expect(doc.sections[0]?.plainText).toBe(true);
@@ -151,17 +164,24 @@ describe('staged documents', () => {
         items: [textItem(0), textItem(1)],
         group: 0,
       },
-      loader: { async read() { return { html: '第一章\n正文。' }; } },
+      loader: {
+        async read() {
+          return { html: '第一章\n正文。' };
+        },
+      },
     });
     expect(doc.sections[0]?.bodyIsMarkup).toBe(false);
 
-    doc.setWindow({
-      kind: 'reflowable',
-      total: 4,
-      groups: [{ id: 'g', seq: 1, title: '', count: 2, offset: 2 }],
-      items: [item(2), textItem(3)],
-      group: 1,
-    }, 2);
+    doc.setWindow(
+      {
+        kind: 'reflowable',
+        total: 4,
+        groups: [{ id: 'g', seq: 1, title: '', count: 2, offset: 2 }],
+        items: [item(2), textItem(3)],
+        group: 1,
+      },
+      2,
+    );
 
     expect(doc.sections[0]?.bodyIsMarkup).toBe(true);
     expect(doc.sections[1]?.bodyIsMarkup).toBe(false);
@@ -234,7 +254,11 @@ describe('staged documents', () => {
         depth: 0,
       })),
       content: windowOf(0, 40, 1200),
-      loader: { async read() { return { html: '' }; } },
+      loader: {
+        async read() {
+          return { html: '' };
+        },
+      },
     });
     expect(doc.sections).toHaveLength(40);
     expect(doc.toc).toHaveLength(1200);
@@ -252,7 +276,11 @@ describe('staged documents', () => {
       kind: 'reflowable',
       toc: [],
       content: windowOf(0, 40, 1200),
-      loader: { async read() { return { html: '' }; } },
+      loader: {
+        async read() {
+          return { html: '' };
+        },
+      },
     });
     expect(adoptWindow(plain, windowOf(880, 40, 1200), 900)).toBe(20);
     expect(plain.windowOffset()).toBe(880);
@@ -308,7 +336,11 @@ describe('staged documents', () => {
       kind: 'reflowable',
       toc: [],
       content: windowOf(0, 40, 1200),
-      loader: { async read() { return { html: '' }; } },
+      loader: {
+        async read() {
+          return { html: '' };
+        },
+      },
     });
     expect(doc.windowOffset()).toBe(0);
 

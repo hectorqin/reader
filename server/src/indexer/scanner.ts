@@ -413,9 +413,7 @@ export class Scanner {
       // An archive is judged with `insideDirectoryBook`, because this pass only
       // runs over folders that could become a directory book: `第01卷.cbz` beside
       // `第02卷/` is a volume, not a book on a shelf.
-      const holdsBookFile = entries.some(
-        (entry) => !entry.isDirectory && isBookFileExtension(entry.name, true),
-      );
+      const holdsBookFile = entries.some((entry) => !entry.isDirectory && isBookFileExtension(entry.name, true));
       if (holdsBookFile) continue;
 
       for (const handler of handlers) {
@@ -483,9 +481,7 @@ export class Scanner {
     } catch {
       return false;
     }
-    return entries.some(
-      (entry) => entry.isFile() && !entry.name.startsWith('.') && isBookFileExtension(entry.name),
-    );
+    return entries.some((entry) => entry.isFile() && !entry.name.startsWith('.') && isBookFileExtension(entry.name));
   }
 
   /**
@@ -555,7 +551,12 @@ export class Scanner {
    *   2. content hash  -> authoritative, confirms the bytes really changed
    */
   private async indexFile(entry: FileEntry, previous: StoredFile | undefined): Promise<void> {
-    if (previous && previous.size === entry.size && previous.mtime_ms === entry.mtimeMs && !this.needsReparse(previous)) {
+    if (
+      previous &&
+      previous.size === entry.size &&
+      previous.mtime_ms === entry.mtimeMs &&
+      !this.needsReparse(previous)
+    ) {
       this.progress.unchanged += 1;
       return;
     }
@@ -583,8 +584,13 @@ export class Scanner {
       // Stage 2 before the parse: identical bytes under a touched mtime cost a
       // read of the file, not a re-parse and a cover extraction.
       if (previous && previous.book_content_hash === file.contentHash && !this.needsReparse(previous)) {
-        this.db.run('UPDATE book_files SET size = ?, mtime_ms = ?, missing = 0, parse_version = ? WHERE id = ?',
-          entry.size, entry.mtimeMs, PARSE_VERSION, previous.id);
+        this.db.run(
+          'UPDATE book_files SET size = ?, mtime_ms = ?, missing = 0, parse_version = ? WHERE id = ?',
+          entry.size,
+          entry.mtimeMs,
+          PARSE_VERSION,
+          previous.id,
+        );
         this.progress.unchanged += 1;
         return;
       }
@@ -601,8 +607,13 @@ export class Scanner {
 
     // Stage 2: identical bytes with a touched mtime is not a real change.
     if (previous && previous.book_content_hash === parsed.contentHash && !this.needsReparse(previous)) {
-      this.db.run('UPDATE book_files SET size = ?, mtime_ms = ?, missing = 0, parse_version = ? WHERE id = ?',
-        entry.size, entry.mtimeMs, PARSE_VERSION, previous.id);
+      this.db.run(
+        'UPDATE book_files SET size = ?, mtime_ms = ?, missing = 0, parse_version = ? WHERE id = ?',
+        entry.size,
+        entry.mtimeMs,
+        PARSE_VERSION,
+        previous.id,
+      );
       this.progress.unchanged += 1;
       return;
     }
@@ -633,8 +644,13 @@ export class Scanner {
       previous.book_content_hash === parsed.contentHash &&
       !this.needsReparse(previous)
     ) {
-      this.db.run('UPDATE book_files SET size = ?, mtime_ms = ?, missing = 0, parse_version = ? WHERE id = ?',
-        parsed.size, Date.now(), PARSE_VERSION, previous.id);
+      this.db.run(
+        'UPDATE book_files SET size = ?, mtime_ms = ?, missing = 0, parse_version = ? WHERE id = ?',
+        parsed.size,
+        Date.now(),
+        PARSE_VERSION,
+        previous.id,
+      );
       this.progress.unchanged += 1;
       return;
     }
@@ -658,8 +674,8 @@ export class Scanner {
     // A source that carries an identifier of its own (epub) keeps the
     // content-anchored rule, because there the identifier is authoritative.
     const storedIdentifier = previous
-      ? this.db.get<{ identifier: string | null }>('SELECT identifier FROM books WHERE id = ?', previous.book_id)
-          ?.identifier ?? null
+      ? (this.db.get<{ identifier: string | null }>('SELECT identifier FROM books WHERE id = ?', previous.book_id)
+          ?.identifier ?? null)
       : undefined;
     const bookId = resolveBookId({
       identifier: parsed.metadata.identifier,
@@ -686,7 +702,8 @@ export class Scanner {
         this.db.run(
           `INSERT OR IGNORE INTO user_books (user_id, book_id, added_at)
            SELECT id, ?, ? FROM users`,
-          bookId, now,
+          bookId,
+          now,
         );
       }
     } else {
@@ -700,7 +717,12 @@ export class Scanner {
     if (previous) {
       this.db.run(
         'UPDATE book_files SET book_id = ?, size = ?, mtime_ms = ?, missing = 0, last_seen = ?, parse_version = ? WHERE id = ?',
-        bookId, stat.size, stat.mtimeMs, now, PARSE_VERSION, previous.id,
+        bookId,
+        stat.size,
+        stat.mtimeMs,
+        now,
+        PARSE_VERSION,
+        previous.id,
       );
     } else {
       this.db.run(
@@ -709,7 +731,14 @@ export class Scanner {
          ON CONFLICT(rel_path) DO UPDATE SET book_id = excluded.book_id, size = excluded.size,
            mtime_ms = excluded.mtime_ms, missing = 0, last_seen = excluded.last_seen,
            parse_version = excluded.parse_version`,
-        fileId, bookId, relPath, stat.size, stat.mtimeMs, now, now, PARSE_VERSION,
+        fileId,
+        bookId,
+        relPath,
+        stat.size,
+        stat.mtimeMs,
+        now,
+        now,
+        PARSE_VERSION,
       );
     }
   }
@@ -752,10 +781,22 @@ export class Scanner {
         series = ?, series_index = ?, tags = ?, pubdate = ?, page_count = ?, file_size = ?, meta_json = ?,
         cover_path = COALESCE(?, cover_path), source = ?, updated_at = ? WHERE id = ?`,
       collapseWhitespace(m.title) || fallbackTitle(parsed),
-      m.author, m.publisher, m.language, m.isbn, m.description,
-      m.series, m.seriesIndex, JSON.stringify(m.tags), m.pubdate,
-      parsed.pageCount, parsed.size, JSON.stringify({ ...m.raw, kind: parsed.kind }),
-      coverPath ?? null, m.source, now, bookId,
+      m.author,
+      m.publisher,
+      m.language,
+      m.isbn,
+      m.description,
+      m.series,
+      m.seriesIndex,
+      JSON.stringify(m.tags),
+      m.pubdate,
+      parsed.pageCount,
+      parsed.size,
+      JSON.stringify({ ...m.raw, kind: parsed.kind }),
+      coverPath ?? null,
+      m.source,
+      now,
+      bookId,
     );
   }
 

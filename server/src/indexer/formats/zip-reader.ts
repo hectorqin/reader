@@ -82,10 +82,7 @@ export class ZipArchive {
     try {
       handle = await open(absPath, 'r');
     } catch (err) {
-      throw new ZipError(
-        `cannot open archive: ${err instanceof Error ? err.message : String(err)}`,
-        'OPEN_FAILED',
-      );
+      throw new ZipError(`cannot open archive: ${err instanceof Error ? err.message : String(err)}`, 'OPEN_FAILED');
     }
 
     try {

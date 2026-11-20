@@ -36,7 +36,7 @@ export function ResourcePanel({
   showTrigger = true,
 }: ResourcePanelProps) {
   const [panel, setPanel] = useState<ResourcePanelKind | null>(null);
-  const files = [...new Map(assets.map(asset => [asset.id, asset])).values()];
+  const files = [...new Map(assets.map((asset) => [asset.id, asset])).values()];
   const manage = !!(editionOptions?.onUpdated || editionOptions?.onAssigned || editionOptions?.onRename);
 
   useEffect(() => {
@@ -62,25 +62,57 @@ export function ResourcePanel({
       onClose={close}
     >
       <div className="media-resource-dialog">
-        {panel === 'files'
-          ? files.length > 0 ? files.map(asset => <ResourceInfo key={asset.id} api={api} assetId={asset.id} title={asset.title} expanded />) : <p className="media-resource-empty">暂无资源。</p>
-          : panel === 'source'
-            ? sourceInfo
-            : <>{versionPicker}{manage && editionOptions && <EditionTools {...editionOptions} managementOnly />}</>}
+        {panel === 'files' ? (
+          files.length > 0 ? (
+            files.map((asset) => (
+              <ResourceInfo key={asset.id} api={api} assetId={asset.id} title={asset.title} expanded />
+            ))
+          ) : (
+            <p className="media-resource-empty">暂无资源。</p>
+          )
+        ) : panel === 'source' ? (
+          sourceInfo
+        ) : (
+          <>
+            {versionPicker}
+            {manage && editionOptions && <EditionTools {...editionOptions} managementOnly />}
+          </>
+        )}
       </div>
     </Sheet>
   );
 
   if (!showTrigger) return modal;
-  return <>{modal}<section className="media-resource-panel media-resource-trigger">
-    <header>
-      <h2>资源信息</h2>
-      <ActionMenu className="media-icon-button" label="资源信息操作" items={[
-        files.length > 0 && { label: '资源信息', icon: <Icon name="file-text" size={16} />, onSelect: () => open('files') },
-        (manage || !!versionPicker) && { label: manage ? '版本管理' : '播放版本', icon: <Icon name="versions" size={16} />, onSelect: () => open('versions') },
-        !!sourceInfo && { label: '来源', icon: <Icon name="file-text" size={16} />, onSelect: () => open('source') },
-      ]} />
-    </header>
-    <p>{summary}</p>
-  </section></>;
+  return (
+    <>
+      {modal}
+      <section className="media-resource-panel media-resource-trigger">
+        <header>
+          <h2>资源信息</h2>
+          <ActionMenu
+            className="media-icon-button"
+            label="资源信息操作"
+            items={[
+              files.length > 0 && {
+                label: '资源信息',
+                icon: <Icon name="file-text" size={16} />,
+                onSelect: () => open('files'),
+              },
+              (manage || !!versionPicker) && {
+                label: manage ? '版本管理' : '播放版本',
+                icon: <Icon name="versions" size={16} />,
+                onSelect: () => open('versions'),
+              },
+              !!sourceInfo && {
+                label: '来源',
+                icon: <Icon name="file-text" size={16} />,
+                onSelect: () => open('source'),
+              },
+            ]}
+          />
+        </header>
+        <p>{summary}</p>
+      </section>
+    </>
+  );
 }

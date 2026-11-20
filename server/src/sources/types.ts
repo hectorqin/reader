@@ -229,7 +229,10 @@ export interface SourceProvider {
   readonly descriptor: SourceDescriptor;
   /** Dynamic select fields; keys and option values are opaque to the host. */
   searchFilters?(ctx: SourceContext): Promise<ExtensionField[]>;
-  alternatives?(ctx: SourceContext, request: SearchRequest & { publicationRef: string; authors?: readonly string[] }): Promise<CatalogPage>;
+  alternatives?(
+    ctx: SourceContext,
+    request: SearchRequest & { publicationRef: string; authors?: readonly string[] },
+  ): Promise<CatalogPage>;
   validateConfig?(config: unknown): void | Promise<void>;
   browse?(ctx: SourceContext, request: BrowseRequest): Promise<CatalogPage>;
   search?(ctx: SourceContext, request: SearchRequest): Promise<CatalogPage>;

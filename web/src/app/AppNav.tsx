@@ -30,60 +30,116 @@ export function navMode(pathname: string): NavMode {
   return 'push';
 }
 
-interface Destination { to: string; label: string; icon: IconName; current(path: string): boolean }
+interface Destination {
+  to: string;
+  label: string;
+  icon: IconName;
+  current(path: string): boolean;
+}
 const destinations: Destination[] = [
-  { to: '/', label: '首页', icon: 'home', current: path => path === '/' },
-  { to: '/shelf', label: '书架', icon: 'book', current: path => /^\/(shelf|library|sources)(\/|$)/.test(path) },
-  { to: '/media/video', label: '影音', icon: 'video', current: path => path.startsWith('/media') },
-  { to: '/me', label: '我的', icon: 'account', current: path => path === '/me' || path.startsWith('/me/') },
+  { to: '/', label: '首页', icon: 'home', current: (path) => path === '/' },
+  { to: '/shelf', label: '书架', icon: 'book', current: (path) => /^\/(shelf|library|sources)(\/|$)/.test(path) },
+  { to: '/media/video', label: '影音', icon: 'video', current: (path) => path.startsWith('/media') },
+  { to: '/me', label: '我的', icon: 'account', current: (path) => path === '/me' || path.startsWith('/me/') },
 ];
 
 /** The one navigation: a tab bar on a phone, a sidebar from 701px up. */
 export function AppNav({ mode }: { mode: Exclude<NavMode, 'hidden'> }) {
   const { pathname } = useLocation();
   const runtime = useRuntime();
-  const media=useMediaEnabled();
-  const user = useAuthStore(state => state.verifiedUser ?? state.session?.user ?? null);
+  const media = useMediaEnabled();
+  const user = useAuthStore((state) => state.verifiedUser ?? state.session?.user ?? null);
   const channel = /^\/media\/(video|music|audiobook)/.exec(pathname)?.[1];
   const name = user?.displayName || user?.username || '';
-  const sync = useSyncStore(state => state.status.state);
+  const sync = useSyncStore((state) => state.status.state);
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
-  const search = (event: FormEvent) => { event.preventDefault(); const q = query.trim(); if (q) navigate(`/search?q=${encodeURIComponent(q)}`); };
+  const search = (event: FormEvent) => {
+    event.preventDefault();
+    const q = query.trim();
+    if (q) navigate(`/search?q=${encodeURIComponent(q)}`);
+  };
   const connection = connectionLabel(sync);
-  return <nav className="app-nav" aria-label="主导航" data-mode={mode}>
-    <Link className="app-nav-brand" to="/" aria-label="reader. 首页">reader.</Link>
-    {/* Desktop only: one search across books and media (the page is /search). */}
-    <form className="app-nav-search" role="search" onSubmit={search} hidden={pathname === '/search'}>
-      <Icon name="search" size={16} />
-      <input type="search" aria-label={media?'搜索书籍和影音':'搜索书籍'} placeholder={media?'搜索书籍和影音':'搜索书籍'} value={query} maxLength={200} onInput={event => setQuery(event.currentTarget.value)} />
-    </form>
-    <ul className="app-nav-list">
-      {destinations.filter(item=>media||item.to!=='/media/video').map(({ to, label, icon, current }) => {
-        const active = current(pathname);
-        return <li key={to}>
-          <Link className="app-nav-item" to={to} aria-current={active ? 'page' : undefined}>
-            <span className="app-nav-icon" aria-hidden="true"><Icon name={icon} size={24} strong={active} /></span>
-            <span className="app-nav-label">{label}</span>
-          </Link>
-          {to === '/media/video' && <ul className="app-nav-sub" aria-label="影音频道">
-            {mediaChannels.map(item => <li key={item.id}>
-              <Link className="app-nav-subitem" data-channel={item.id} to={channelPath(item.id)} aria-current={channel === item.id ? 'page' : undefined}>
-                <i aria-hidden="true" />{item.label}
-              </Link>
-            </li>)}
-          </ul>}
-        </li>;
-      })}
-    </ul>
-    {user && <Link className="app-nav-user" to={connection.state === 'online' ? '/me' : '/me/account'} aria-label={`我的账号：${name}，${connection.label}`}>
-      <span className="app-nav-avatar" aria-hidden="true">{Array.from(name)[0]}</span>
-      <span className="app-nav-user-text"><strong>{name}</strong><small title={host(runtime.api.baseUrl)}><i className="app-nav-status" data-state={connection.state} aria-hidden="true" />{connection.label}</small></span>
-    </Link>}
-  </nav>;
+  return (
+    <nav className="app-nav" aria-label="主导航" data-mode={mode}>
+      <Link className="app-nav-brand" to="/" aria-label="reader. 首页">
+        reader.
+      </Link>
+      {/* Desktop only: one search across books and media (the page is /search). */}
+      <form className="app-nav-search" role="search" onSubmit={search} hidden={pathname === '/search'}>
+        <Icon name="search" size={16} />
+        <input
+          type="search"
+          aria-label={media ? '搜索书籍和影音' : '搜索书籍'}
+          placeholder={media ? '搜索书籍和影音' : '搜索书籍'}
+          value={query}
+          maxLength={200}
+          onInput={(event) => setQuery(event.currentTarget.value)}
+        />
+      </form>
+      <ul className="app-nav-list">
+        {destinations
+          .filter((item) => media || item.to !== '/media/video')
+          .map(({ to, label, icon, current }) => {
+            const active = current(pathname);
+            return (
+              <li key={to}>
+                <Link className="app-nav-item" to={to} aria-current={active ? 'page' : undefined}>
+                  <span className="app-nav-icon" aria-hidden="true">
+                    <Icon name={icon} size={24} strong={active} />
+                  </span>
+                  <span className="app-nav-label">{label}</span>
+                </Link>
+                {to === '/media/video' && (
+                  <ul className="app-nav-sub" aria-label="影音频道">
+                    {mediaChannels.map((item) => (
+                      <li key={item.id}>
+                        <Link
+                          className="app-nav-subitem"
+                          data-channel={item.id}
+                          to={channelPath(item.id)}
+                          aria-current={channel === item.id ? 'page' : undefined}
+                        >
+                          <i aria-hidden="true" />
+                          {item.label}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+      </ul>
+      {user && (
+        <Link
+          className="app-nav-user"
+          to={connection.state === 'online' ? '/me' : '/me/account'}
+          aria-label={`我的账号：${name}，${connection.label}`}
+        >
+          <span className="app-nav-avatar" aria-hidden="true">
+            {Array.from(name)[0]}
+          </span>
+          <span className="app-nav-user-text">
+            <strong>{name}</strong>
+            <small title={host(runtime.api.baseUrl)}>
+              <i className="app-nav-status" data-state={connection.state} aria-hidden="true" />
+              {connection.label}
+            </small>
+          </span>
+        </Link>
+      )}
+    </nav>
+  );
 }
 
-function host(baseUrl: string): string { try { return new URL(baseUrl).host; } catch { return baseUrl; } }
+function host(baseUrl: string): string {
+  try {
+    return new URL(baseUrl).host;
+  } catch {
+    return baseUrl;
+  }
+}
 
 /** The sync engine's view of the server, in the sidebar's words. */
 export function connectionLabel(state: SyncStatus['state']): { state: 'online' | 'offline' | 'error'; label: string } {

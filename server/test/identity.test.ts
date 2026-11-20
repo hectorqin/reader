@@ -13,7 +13,10 @@ const hash = (seed: string): string => seed.padEnd(64, '0');
 
 describe('computeBookId', () => {
   test('the same identifier and content give the same id', () => {
-    assert.equal(computeBookId('urn:isbn:9787536692930', hash('a')), computeBookId('urn:isbn:9787536692930', hash('a')));
+    assert.equal(
+      computeBookId('urn:isbn:9787536692930', hash('a')),
+      computeBookId('urn:isbn:9787536692930', hash('a')),
+    );
   });
 
   test('a different identifier separates otherwise identical content', () => {

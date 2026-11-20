@@ -20,43 +20,50 @@ const output = process.env.UI_REVIEW_DIR
   ? resolve(process.env.UI_REVIEW_DIR)
   : join(repo, 'artifacts', 'ui-review', 'react-app');
 const widths = [390, 1120];
-const heightFor = width => width === 1120 ? 900 : 844;
+const heightFor = (width) => (width === 1120 ? 900 : 844);
 
-const waitForServerLine = (child, label) => new Promise((resolvePromise, reject) => {
-  let buffer = '';
-  let stderr = '';
-  const timer = setTimeout(() => reject(new Error(`${label} did not start within 30s\n${stderr}`)), 30_000);
-  child.stdout.on('data', chunk => {
-    buffer += String(chunk);
-    for (const line of buffer.split(/\r?\n/)) {
-      try {
-        const value = JSON.parse(line);
-        if (value.baseUrl) {
-          clearTimeout(timer);
-          resolvePromise(value);
-          return;
+const waitForServerLine = (child, label) =>
+  new Promise((resolvePromise, reject) => {
+    let buffer = '';
+    let stderr = '';
+    const timer = setTimeout(() => reject(new Error(`${label} did not start within 30s\n${stderr}`)), 30_000);
+    child.stdout.on('data', (chunk) => {
+      buffer += String(chunk);
+      for (const line of buffer.split(/\r?\n/)) {
+        try {
+          const value = JSON.parse(line);
+          if (value.baseUrl) {
+            clearTimeout(timer);
+            resolvePromise(value);
+            return;
+          }
+        } catch {
+          // The fixture can print non-JSON diagnostics before its ready line.
         }
-      } catch {
-        // The fixture can print non-JSON diagnostics before its ready line.
       }
-    }
-    buffer = buffer.slice(-16_000);
+      buffer = buffer.slice(-16_000);
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk);
+    });
+    child.once('exit', (code, signal) => {
+      clearTimeout(timer);
+      reject(new Error(`${label} exited before ready (${code ?? signal})\n${stderr}`));
+    });
   });
-  child.stderr.on('data', chunk => { stderr += String(chunk); });
-  child.once('exit', (code, signal) => {
-    clearTimeout(timer);
-    reject(new Error(`${label} exited before ready (${code ?? signal})\n${stderr}`));
-  });
-});
 
 async function startMediaFixture() {
   const loader = join(repo, 'server', 'node_modules', 'tsx', 'dist', 'loader.mjs');
-  const child = spawn(process.execPath, ['--import', pathToFileURL(loader).href, join(repo, 'server', 'tools', 'media-review-fixture.ts')], {
-    cwd: repo,
-    env: { ...process.env, MEDIA_REVIEW_TIMEOUT_MS: '600000', MEDIA_REVIEW_MEMBER: '1' },
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true,
-  });
+  const child = spawn(
+    process.execPath,
+    ['--import', pathToFileURL(loader).href, join(repo, 'server', 'tools', 'media-review-fixture.ts')],
+    {
+      cwd: repo,
+      env: { ...process.env, MEDIA_REVIEW_TIMEOUT_MS: '600000', MEDIA_REVIEW_MEMBER: '1' },
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    },
+  );
   const ready = await waitForServerLine(child, 'media-review-fixture');
   return { child, ...ready };
 }
@@ -71,7 +78,11 @@ async function login(page, origin, target = '/#/shelf') {
   const username = page.locator('input[autocomplete="username"]');
   await Promise.race([
     username.waitFor({ state: 'visible' }).catch(() => undefined),
-    page.locator('.shelf-screen, .home-page, .app-nav, .media-screen').first().waitFor({ state: 'attached' }).catch(() => undefined),
+    page
+      .locator('.shelf-screen, .home-page, .app-nav, .media-screen')
+      .first()
+      .waitFor({ state: 'attached' })
+      .catch(() => undefined),
   ]);
   if (await username.isVisible().catch(() => false)) {
     await username.fill('reviewer');
@@ -82,41 +93,87 @@ async function login(page, origin, target = '/#/shelf') {
 }
 
 async function installReaderApiStubs(page) {
-  await page.route('**/api/v1/library/facets**', async route => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authors: [], series: [], formats: [] }) });
+  await page.route('**/api/v1/library/facets**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ authors: [], series: [], formats: [] }),
+    });
   });
-  await page.route('**/api/v1/books/*/reading-overrides**', async route => {
+  await page.route('**/api/v1/books/*/reading-overrides**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
   });
-  await page.route('**/api/v1/admin/settings**', async route => {
+  await page.route('**/api/v1/admin/settings**', async (route) => {
     const url = new URL(route.request().url());
     if (route.request().method() !== 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) });
       return;
     }
     if (url.pathname.endsWith('/admin/settings')) {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groups: [{ group: 'tts', label: '朗读', revision: 1, values: {}, secrets: {}, fields: [] }] }) });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          groups: [{ group: 'tts', label: '朗读', revision: 1, values: {}, secrets: {}, fields: [] }],
+        }),
+      });
       return;
     }
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ group: 'tts', label: '朗读', revision: 1, values: {}, secrets: {}, fields: [] }) });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ group: 'tts', label: '朗读', revision: 1, values: {}, secrets: {}, fields: [] }),
+    });
   });
-  await page.route('**/api/v1/sources**', async route => {
+  await page.route('**/api/v1/sources**', async (route) => {
     const path = new URL(route.request().url()).pathname;
     // The built-in local library: 书库 is this source in 发现.
-    let body = { sources: [{ id: 'local', pluginId: 'reader.local', sourceType: 'local', name: '本地书库', enabled: true, isDefault: true,
-      descriptor: { id: 'local', label: '本地书库', version: '1.0.0', builtin: true, capabilities: ['browse', 'search', 'detail'] } }] };
-    if (path.endsWith('/browse')) body = { title: '本地书库', navigation: ['科幻', '历史', '武侠'].map(title => ({ title, ref: title, kind: 'catalog' })),
-      items: Array.from({ length: 9 }, (_, index) => ({ ref: `local-${index}`, title: `书库里的书 ${index + 1}`, authors: ['作者'], description: '一段简介，用来看列表里两行截断的样子。', options: [{ id: 'read', label: '加入书架', available: true }], ...(index % 3 ? {} : { metadata: { publicationId: 'review-book' } }) })) };
+    let body = {
+      sources: [
+        {
+          id: 'local',
+          pluginId: 'reader.local',
+          sourceType: 'local',
+          name: '本地书库',
+          enabled: true,
+          isDefault: true,
+          descriptor: {
+            id: 'local',
+            label: '本地书库',
+            version: '1.0.0',
+            builtin: true,
+            capabilities: ['browse', 'search', 'detail'],
+          },
+        },
+      ],
+    };
+    if (path.endsWith('/browse'))
+      body = {
+        title: '本地书库',
+        navigation: ['科幻', '历史', '武侠'].map((title) => ({ title, ref: title, kind: 'catalog' })),
+        items: Array.from({ length: 9 }, (_, index) => ({
+          ref: `local-${index}`,
+          title: `书库里的书 ${index + 1}`,
+          authors: ['作者'],
+          description: '一段简介，用来看列表里两行截断的样子。',
+          options: [{ id: 'read', label: '加入书架', available: true }],
+          ...(index % 3 ? {} : { metadata: { publicationId: 'review-book' } }),
+        })),
+      };
     if (path.endsWith('/types')) body = { types: [] };
     if (path.includes('/subscriptions')) body = { subscriptions: [] };
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
   });
   // Uploading is allowed, so 发现 shows the local library's whole bar.
-  await page.route('**/api/v1/library/upload', async route => {
+  await page.route('**/api/v1/library/upload', async (route) => {
     if (route.request().method() !== 'GET') return route.fallback();
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ writable: true, allowed: true }) });
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ writable: true, allowed: true }),
+    });
   });
-  await page.route('**/api/v1/plugins**', async route => {
+  await page.route('**/api/v1/plugins**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ plugins: [] }) });
   });
 }
@@ -125,10 +182,18 @@ async function installReaderApiStubs(page) {
 async function backBox(page) {
   await page.setViewportSize({ width: 390, height: heightFor(390) });
   return page.evaluate(() => {
-    const back = [...document.querySelectorAll('a, button')].find(el => /^返回/.test(el.getAttribute('aria-label') ?? '') && el.getClientRects().length > 0);
+    const back = [...document.querySelectorAll('a, button')].find(
+      (el) => /^返回/.test(el.getAttribute('aria-label') ?? '') && el.getClientRects().length > 0,
+    );
     if (!back) return null;
-    const box = back.getBoundingClientRect(), glyph = back.querySelector('svg')?.getBoundingClientRect();
-    return { left: Math.round(box.left), width: Math.round(box.width), height: Math.round(box.height), glyph: Math.round(glyph?.width ?? 0) };
+    const box = back.getBoundingClientRect(),
+      glyph = back.querySelector('svg')?.getBoundingClientRect();
+    return {
+      left: Math.round(box.left),
+      width: Math.round(box.width),
+      height: Math.round(box.height),
+      glyph: Math.round(glyph?.width ?? 0),
+    };
   });
 }
 
@@ -145,16 +210,23 @@ async function capture(page, name, checks, errors) {
         pageOverflow: root.scrollWidth > window.innerWidth + 1,
         screenOverflow: !!screen && screen.scrollWidth > screen.clientWidth + 1,
         pageErrors: 0,
-        wide: [...document.querySelectorAll('.media-screen *')].filter(el => el.getBoundingClientRect().right > (screen?.getBoundingClientRect().right ?? innerWidth) + 1).slice(0, 8).map(el => el.tagName + '.' + el.className + ' ' + Math.round(el.getBoundingClientRect().right)),
+        wide: [...document.querySelectorAll('.media-screen *')]
+          .filter((el) => el.getBoundingClientRect().right > (screen?.getBoundingClientRect().right ?? innerWidth) + 1)
+          .slice(0, 8)
+          .map((el) => el.tagName + '.' + el.className + ' ' + Math.round(el.getBoundingClientRect().right)),
       };
     });
     assert.equal(metrics.pageOverflow, false, `${name} ${width}px: document horizontal overflow`);
-    assert.equal(metrics.screenOverflow, false, `${name} ${width}px: screen horizontal overflow ${JSON.stringify(metrics.wide)}`);
+    assert.equal(
+      metrics.screenOverflow,
+      false,
+      `${name} ${width}px: screen horizontal overflow ${JSON.stringify(metrics.wide)}`,
+    );
     const file = `${name}-${width}.png`;
     await page.screenshot({ path: join(output, file), fullPage: true });
     checks.push({ name, width, file, ...metrics });
   }
-  assert.equal(errors.length, 0, `${name}: pageerror ${errors.map(item => item.message).join('; ')}`);
+  assert.equal(errors.length, 0, `${name}: pageerror ${errors.map((item) => item.message).join('; ')}`);
 }
 
 async function waitHeading(page, name) {
@@ -164,7 +236,9 @@ async function waitHeading(page, name) {
     try {
       await page.getByText(name, { exact: true }).first().waitFor({ state: 'visible' });
     } catch {
-      throw new Error(`${name} heading missing at ${page.url()} body=${(await page.locator('body').innerText()).slice(0, 2000)}\n${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `${name} heading missing at ${page.url()} body=${(await page.locator('body').innerText()).slice(0, 2000)}\n${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 }
@@ -176,11 +250,21 @@ async function waitMediaHeading(page, name) {
 async function assertLoadedAndAdvancingVideo(page) {
   const video = page.locator('video').first();
   await video.waitFor({ state: 'attached' });
-  await page.waitForFunction(() => {
-    const element = document.querySelector('video');
-    return !!element && element.readyState >= 2 && !element.error && Number.isFinite(element.duration) && element.duration > 0;
-  }, undefined, { timeout: 15_000 });
-  const before = await video.evaluate(element => ({
+  await page.waitForFunction(
+    () => {
+      const element = document.querySelector('video');
+      return (
+        !!element &&
+        element.readyState >= 2 &&
+        !element.error &&
+        Number.isFinite(element.duration) &&
+        element.duration > 0
+      );
+    },
+    undefined,
+    { timeout: 15_000 },
+  );
+  const before = await video.evaluate((element) => ({
     readyState: element.readyState,
     error: element.error ? { code: element.error.code, message: element.error.message } : null,
     duration: element.duration,
@@ -191,22 +275,37 @@ async function assertLoadedAndAdvancingVideo(page) {
   assert.equal(before.error, null, `video media error: ${JSON.stringify(before.error)}`);
   assert.ok(before.duration > 0, `video duration is not positive: ${JSON.stringify(before)}`);
   assert.equal(before.ended, false, `video ended before advancing: ${JSON.stringify(before)}`);
-  await page.waitForFunction(previous => {
-    const element = document.querySelector('video');
-    return !!element && !element.error && !element.ended && element.currentTime > previous + 0.05;
-  }, before.currentTime, { timeout: 5_000 });
-  const after = await video.evaluate(element => ({ currentTime: element.currentTime, ended: element.ended, error: element.error?.code ?? null }));
+  await page.waitForFunction(
+    (previous) => {
+      const element = document.querySelector('video');
+      return !!element && !element.error && !element.ended && element.currentTime > previous + 0.05;
+    },
+    before.currentTime,
+    { timeout: 5_000 },
+  );
+  const after = await video.evaluate((element) => ({
+    currentTime: element.currentTime,
+    ended: element.ended,
+    error: element.error?.code ?? null,
+  }));
   assert.equal(after.error, null, `video errored while advancing: ${JSON.stringify(after)}`);
   assert.equal(after.ended, false, `video ended during advancement: ${JSON.stringify(after)}`);
-  assert.ok(after.currentTime > before.currentTime + 0.05, `video time did not advance: ${JSON.stringify({ before, after })}`);
+  assert.ok(
+    after.currentTime > before.currentTime + 0.05,
+    `video time did not advance: ${JSON.stringify({ before, after })}`,
+  );
   return { before, after };
 }
 
 async function runReaderReview(browser, origin, checks, errors) {
-  const context = await browser.newContext({ viewport: { width: 390, height: heightFor(390) }, isMobile: true, hasTouch: true });
+  const context = await browser.newContext({
+    viewport: { width: 390, height: heightFor(390) },
+    isMobile: true,
+    hasTouch: true,
+  });
   const page = await context.newPage();
   page.setDefaultTimeout(15_000);
-  page.on('pageerror', error => errors.push({ page: 'reader', message: error.message }));
+  page.on('pageerror', (error) => errors.push({ page: 'reader', message: error.message }));
   await installReaderApiStubs(page);
   await page.goto(`${origin}/#/shelf`);
   await page.locator('input[autocomplete="username"]').waitFor({ state: 'visible' });
@@ -220,7 +319,10 @@ async function runReaderReview(browser, origin, checks, errors) {
   // filter field, status and sort rows) may not take more than a third of the screen.
   await page.setViewportSize({ width: 390, height: heightFor(390) });
   await page.locator('.book-grid .book-card').first().waitFor();
-  const firstCoverTop = await page.locator('.book-grid .book-card').first().evaluate(el => Math.round(el.getBoundingClientRect().top));
+  const firstCoverTop = await page
+    .locator('.book-grid .book-card')
+    .first()
+    .evaluate((el) => Math.round(el.getBoundingClientRect().top));
   assert.ok(firstCoverTop <= Math.round(heightFor(390) / 3), `shelf 390px: first cover starts at ${firstCoverTop}px`);
   // A phone sheet drags by its grip (ui.md §3.7): up to expand, down to its usual
   // height, further down to close. Real touches through CDP, so the browser's own
@@ -232,24 +334,44 @@ async function runReaderReview(browser, origin, checks, errors) {
   const touch = await context.newCDPSession(page);
   const swipe = async (fromY, toY) => {
     const grip = await sheet.locator('.sheet-grip').boundingBox();
-    const x = Math.round(grip.x + grip.width / 2), start = Math.round(grip.y + grip.height / 2) + fromY;
+    const x = Math.round(grip.x + grip.width / 2),
+      start = Math.round(grip.y + grip.height / 2) + fromY;
     await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: start }] });
     for (let step = 1; step <= 12; step++) {
-      await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: Math.round(start + (toY * step) / 12) }] });
+      await touch.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y: Math.round(start + (toY * step) / 12) }],
+      });
       await page.waitForTimeout(16);
     }
     await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
     await page.waitForTimeout(450);
   };
-  const restHeight = await sheet.evaluate(el => el.getBoundingClientRect().height);
+  const restHeight = await sheet.evaluate((el) => el.getBoundingClientRect().height);
   await swipe(0, -400);
-  const expanded = await sheet.evaluate(el => ({ on: el.hasAttribute('data-expanded'), height: el.getBoundingClientRect().height, bottom: el.getBoundingClientRect().bottom }));
-  assert.ok(expanded.on && expanded.height > restHeight + 40 && expanded.height >= heightFor(390) * 0.9, `sheet drag up: ${JSON.stringify({ restHeight, ...expanded })}`);
-  assert.ok(Math.abs(expanded.bottom - heightFor(390)) <= 1, `expanded sheet stays on the bottom edge: ${expanded.bottom}`);
+  const expanded = await sheet.evaluate((el) => ({
+    on: el.hasAttribute('data-expanded'),
+    height: el.getBoundingClientRect().height,
+    bottom: el.getBoundingClientRect().bottom,
+  }));
+  assert.ok(
+    expanded.on && expanded.height > restHeight + 40 && expanded.height >= heightFor(390) * 0.9,
+    `sheet drag up: ${JSON.stringify({ restHeight, ...expanded })}`,
+  );
+  assert.ok(
+    Math.abs(expanded.bottom - heightFor(390)) <= 1,
+    `expanded sheet stays on the bottom edge: ${expanded.bottom}`,
+  );
   await page.screenshot({ path: join(output, 'sheet-expanded-390.png') });
   await swipe(0, 300);
-  const back = await sheet.evaluate(el => ({ on: el.hasAttribute('data-expanded'), height: el.getBoundingClientRect().height }));
-  assert.ok(!back.on && Math.abs(back.height - restHeight) <= 2, `sheet drag down from expanded: ${JSON.stringify({ restHeight, ...back })}`);
+  const back = await sheet.evaluate((el) => ({
+    on: el.hasAttribute('data-expanded'),
+    height: el.getBoundingClientRect().height,
+  }));
+  assert.ok(
+    !back.on && Math.abs(back.height - restHeight) <= 2,
+    `sheet drag down from expanded: ${JSON.stringify({ restHeight, ...back })}`,
+  );
   await swipe(0, 450);
   assert.equal(await page.locator('dialog.sheet[open]').count(), 0, 'a sheet pulled down closes');
   // The same screen in the dark half of the theme (follow-system is the default).
@@ -263,8 +385,13 @@ async function runReaderReview(browser, origin, checks, errors) {
   await capture(page, 'library', checks, errors);
   await page.locator('.explore-layout').getByRole('button', { name: '网格' }).click();
   await page.locator('.explore-grid .explore-card').first().waitFor();
-  const cardWidths = await page.locator('.explore-grid .explore-card').evaluateAll(cards => cards.map(card => Math.round(card.getBoundingClientRect().width)));
-  assert.ok(Math.max(...cardWidths) - Math.min(...cardWidths) <= 1 && cardWidths[0] >= 80, `explore grid cards ${JSON.stringify(cardWidths)}`);
+  const cardWidths = await page
+    .locator('.explore-grid .explore-card')
+    .evaluateAll((cards) => cards.map((card) => Math.round(card.getBoundingClientRect().width)));
+  assert.ok(
+    Math.max(...cardWidths) - Math.min(...cardWidths) <= 1 && cardWidths[0] >= 80,
+    `explore grid cards ${JSON.stringify(cardWidths)}`,
+  );
   await capture(page, 'library-grid', checks, errors);
   await page.locator('.explore-layout').getByRole('button', { name: '列表' }).click();
   const backBoxes = [];
@@ -297,10 +424,15 @@ async function runReaderReview(browser, origin, checks, errors) {
   await capture(page, 'search', checks, errors);
   backBoxes.push(['search', await backBox(page)]);
   // Every pushed page draws the same back button in the same place (ui.md §10).
-  for (const [name, box] of backBoxes) assert.deepEqual(box, backBoxes[0][1], `back button of ${name} ${JSON.stringify(box)} differs from ${backBoxes[0][0]} ${JSON.stringify(backBoxes[0][1])}`);
+  for (const [name, box] of backBoxes)
+    assert.deepEqual(
+      box,
+      backBoxes[0][1],
+      `back button of ${name} ${JSON.stringify(box)} differs from ${backBoxes[0][0]} ${JSON.stringify(backBoxes[0][1])}`,
+    );
   // The reader is a lazily loaded chunk (app/router/lazy-pages.tsx): opening a book
   // must fetch it and render the chapter, not stop at the Suspense fallback.
-  const readerChunk = page.waitForResponse(response => /\/assets\/ReaderPage-[\w-]+\.js$/.test(response.url()));
+  const readerChunk = page.waitForResponse((response) => /\/assets\/ReaderPage-[\w-]+\.js$/.test(response.url()));
   await page.goto(`${origin}/#/book/review-book`);
   assert.equal((await readerChunk).status(), 200);
   await page.locator('book-content').getByText('第 1 段', { exact: false }).first().waitFor();
@@ -320,7 +452,11 @@ async function loginAs(page, origin, username) {
   // The login form renders after the bundle boots; check once one of the two exists.
   await Promise.race([
     user.waitFor({ state: 'visible' }).catch(() => undefined),
-    page.locator('.media-screen, .app-nav').first().waitFor({ state: 'attached' }).catch(() => undefined),
+    page
+      .locator('.media-screen, .app-nav')
+      .first()
+      .waitFor({ state: 'attached' })
+      .catch(() => undefined),
   ]);
   if (await user.isVisible().catch(() => false)) {
     await user.fill(username);
@@ -332,56 +468,116 @@ async function loginAs(page, origin, username) {
 
 async function runMediaReview(browser, fixture, checks, errors) {
   const origin = fixture.baseUrl;
-  const context = await browser.newContext({ viewport: { width: 390, height: heightFor(390) }, isMobile: true, hasTouch: true });
+  const context = await browser.newContext({
+    viewport: { width: 390, height: heightFor(390) },
+    isMobile: true,
+    hasTouch: true,
+  });
   const page = await context.newPage();
   page.setDefaultTimeout(15_000);
-  page.on('pageerror', error => errors.push({ page: 'media', message: error.message }));
+  page.on('pageerror', (error) => errors.push({ page: 'media', message: error.message }));
   const apiFailures = [];
-  page.on('response', response => {
+  page.on('response', (response) => {
     if (response.status() >= 400 && response.url().includes('/api/')) {
       apiFailures.push({ status: response.status(), method: response.request().method(), url: response.url() });
       console.warn(`media API ${response.status()} ${response.request().method()} ${response.url()}`);
     }
   });
-  page.on('requestfailed', request => console.warn(`media request failed ${request.url()} ${request.failure()?.errorText ?? ''}`));
-  await page.route('**/api/v1/sync**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ serverTime: Date.now(), progress: [], notes: [] }) }));
-  await page.route('**/api/v1/admin/users**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ users: [
-    { id: 'reviewer', username: 'reviewer', displayName: '评测', role: 'admin' },
-    { id: fixture.reviewMemberId, username: 'review-member', displayName: '林间', role: 'member' },
-  ] }) }));
+  page.on('requestfailed', (request) =>
+    console.warn(`media request failed ${request.url()} ${request.failure()?.errorText ?? ''}`),
+  );
+  await page.route('**/api/v1/sync**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ serverTime: Date.now(), progress: [], notes: [] }),
+    }),
+  );
+  await page.route('**/api/v1/admin/users**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        users: [
+          { id: 'reviewer', username: 'reviewer', displayName: '评测', role: 'admin' },
+          { id: fixture.reviewMemberId, username: 'review-member', displayName: '林间', role: 'member' },
+        ],
+      }),
+    }),
+  );
   // 媒体库管理 shows the scan switches, read from the business settings the fixture does not serve.
   // The fixture serves media only; 扫描与刮削 asks which AI features are switched on.
-  await page.route('**/api/v1/ai/capabilities', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ summary: false, scan: true }) }));
+  await page.route('**/api/v1/ai/capabilities', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ summary: false, scan: true }),
+    }),
+  );
   // 时长统计 has no recorded time in the fixture; serve a month of plausible numbers.
-  await page.route(/\/api\/v1\/(media\/)?stats\//, route => {
+  await page.route(/\/api\/v1\/(media\/)?stats\//, (route) => {
     const url = new URL(route.request().url());
     const media = url.pathname.includes('/media/');
-    const json = body => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-    if (url.pathname.endsWith('/users')) return json({ users: media
-      ? [{ userId: 'reviewer', channel: 'video', seconds: 15300 }, { userId: fixture.reviewMemberId, channel: 'music', seconds: 4200 }]
-      : [{ userId: 'reviewer', username: 'reviewer', displayName: '评测', seconds: 40200 }, { userId: fixture.reviewMemberId, username: 'review-member', displayName: '林间', seconds: 7260 }] });
-    const group = url.searchParams.get('group'), from = new Date(Number(url.searchParams.get('from')));
-    const pad = n => String(n).padStart(2, '0');
-    const keys = group === 'day' ? Array.from({ length: 20 }, (_, i) => `${from.getFullYear()}-${pad(from.getMonth() + 1)}-${pad(i + 1)}`)
-      : group === 'month' ? Array.from({ length: 10 }, (_, i) => `${from.getFullYear()}-${pad(i + 1)}`)
-        : Array.from({ length: 3 }, (_, i) => String(from.getFullYear() + 3 + i));
+    const json = (body) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+    if (url.pathname.endsWith('/users'))
+      return json({
+        users: media
+          ? [
+              { userId: 'reviewer', channel: 'video', seconds: 15300 },
+              { userId: fixture.reviewMemberId, channel: 'music', seconds: 4200 },
+            ]
+          : [
+              { userId: 'reviewer', username: 'reviewer', displayName: '评测', seconds: 40200 },
+              { userId: fixture.reviewMemberId, username: 'review-member', displayName: '林间', seconds: 7260 },
+            ],
+      });
+    const group = url.searchParams.get('group'),
+      from = new Date(Number(url.searchParams.get('from')));
+    const pad = (n) => String(n).padStart(2, '0');
+    const keys =
+      group === 'day'
+        ? Array.from({ length: 20 }, (_, i) => `${from.getFullYear()}-${pad(from.getMonth() + 1)}-${pad(i + 1)}`)
+        : group === 'month'
+          ? Array.from({ length: 10 }, (_, i) => `${from.getFullYear()}-${pad(i + 1)}`)
+          : Array.from({ length: 3 }, (_, i) => String(from.getFullYear() + 3 + i));
     const scale = group === 'day' ? 1 : group === 'month' ? 20 : 200;
-    if (media) return json({
-      series: keys.flatMap((key, i) => [
-        i % 3 === 0 && { key, channel: 'video', seconds: (2400 + i * 300) * scale },
-        i % 4 === 1 && { key, channel: 'audiobook', seconds: 1800 * scale },
-        i % 2 === 0 && { key, channel: 'music', seconds: 900 * scale },
-      ].filter(Boolean)),
-      works: [{ id: 'review-film', channel: 'video', kind: 'movie', title: '人工保留标题', seconds: 15300, lastAt: Date.now() },
-        { id: 'review-audiobook', channel: 'audiobook', kind: 'audiobook', title: '一本很长很长很长的有声书名字用于测试截断', seconds: 9000, lastAt: Date.now() }],
-    });
+    if (media)
+      return json({
+        series: keys.flatMap((key, i) =>
+          [
+            i % 3 === 0 && { key, channel: 'video', seconds: (2400 + i * 300) * scale },
+            i % 4 === 1 && { key, channel: 'audiobook', seconds: 1800 * scale },
+            i % 2 === 0 && { key, channel: 'music', seconds: 900 * scale },
+          ].filter(Boolean),
+        ),
+        works: [
+          {
+            id: 'review-film',
+            channel: 'video',
+            kind: 'movie',
+            title: '人工保留标题',
+            seconds: 15300,
+            lastAt: Date.now(),
+          },
+          {
+            id: 'review-audiobook',
+            channel: 'audiobook',
+            kind: 'audiobook',
+            title: '一本很长很长很长的有声书名字用于测试截断',
+            seconds: 9000,
+            lastAt: Date.now(),
+          },
+        ],
+      });
     return json({
       series: keys.map((key, i) => ({ key, seconds: (1200 + ((i * 937) % 3600)) * scale })),
       works: [{ id: 'b1', title: '剑来', author: '烽火戏诸侯', coverUrl: null, seconds: 40200, lastAt: Date.now() }],
       total: 0,
     });
   });
-  await page.route('**/api/v1/admin/settings**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groups: [] }) }));
+  await page.route('**/api/v1/admin/settings**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groups: [] }) }),
+  );
   // Start the authenticated session on the real review library route. This
   // avoids an initial browse request without a library query before the first
   // screenshot route is loaded.
@@ -402,8 +598,18 @@ async function runMediaReview(browser, fixture, checks, errors) {
     ['account', '/#/me/account', '账号与连接', '.media-account-panel'],
     ['admin-services', '/#/me/admin/services', '服务配置', '.business-settings'],
     ['stats', '/#/me/stats', '时长统计', '.stats-bars .stats-segment'],
-    ['stats-month', '/#/me/stats?g=month&sel=' + new Date().getFullYear() + '-03', '时长统计', '.stats-bar[aria-pressed="true"]'],
-    ['media-permissions', '/#/media/video/settings/libraries/review-lib/permissions', '访问权限', '.media-permissions-page'],
+    [
+      'stats-month',
+      '/#/me/stats?g=month&sel=' + new Date().getFullYear() + '-03',
+      '时长统计',
+      '.stats-bar[aria-pressed="true"]',
+    ],
+    [
+      'media-permissions',
+      '/#/media/video/settings/libraries/review-lib/permissions',
+      '访问权限',
+      '.media-permissions-page',
+    ],
   ];
   for (const [name, path, heading, target] of pages) {
     await page.goto(`${origin}${path}`);
@@ -411,7 +617,9 @@ async function runMediaReview(browser, fixture, checks, errors) {
     try {
       await page.locator(target).first().waitFor({ state: 'attached' });
     } catch (error) {
-      throw new Error(`${name} did not render ${target}; URL=${page.url()} body=${(await page.locator('body').innerText()).slice(0, 1200)}\n${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `${name} did not render ${target}; URL=${page.url()} body=${(await page.locator('body').innerText()).slice(0, 1200)}\n${error instanceof Error ? error.message : String(error)}`,
+      );
     }
     await capture(page, name, checks, errors);
   }
@@ -420,14 +628,24 @@ async function runMediaReview(browser, fixture, checks, errors) {
   // theme change reports through the floating notice rather than a line in the page (§3.6).
   await page.goto(`${origin}/#/me/settings?section=shelf`);
   await waitMediaHeading(page, '偏好设置');
-  const switches = await page.locator('.settings-section .switch').evaluateAll(nodes => nodes.map(node => {
-    const box = node.getBoundingClientRect();
-    const style = getComputedStyle(node);
-    return { width: box.width, height: box.height, background: style.backgroundColor, radius: parseFloat(style.borderTopLeftRadius) };
-  }));
+  const switches = await page.locator('.settings-section .switch').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const box = node.getBoundingClientRect();
+      const style = getComputedStyle(node);
+      return {
+        width: box.width,
+        height: box.height,
+        background: style.backgroundColor,
+        radius: parseFloat(style.borderTopLeftRadius),
+      };
+    }),
+  );
   assert.equal(switches.length, 2, 'shelf preferences should show 显示作者 and 显示阅读进度');
   for (const box of switches) {
-    assert.ok(box.width >= 40 && box.height >= 24 && box.height < 32 && box.radius >= box.height / 2, `settings switch is not the toolkit pill: ${JSON.stringify(box)}`);
+    assert.ok(
+      box.width >= 40 && box.height >= 24 && box.height < 32 && box.radius >= box.height / 2,
+      `settings switch is not the toolkit pill: ${JSON.stringify(box)}`,
+    );
     assert.notEqual(box.background, 'rgba(0, 0, 0, 0)', 'settings switch has no track colour');
   }
   await page.goto(`${origin}/#/me/settings`);
@@ -465,23 +683,34 @@ async function runMediaReview(browser, fixture, checks, errors) {
   assert.equal(await queueRows.count(), 3, 'fixture queue should contain three mixed-channel entries');
   assert.match(await page.locator('.media-saved-queue-toolbar').innerText(), /3 项/);
   const queueTitles = async () => page.locator('.media-saved-queue-title strong').allTextContents();
-  const waitQueueTitles = expected => page.waitForFunction(expectedTitles => {
-    const actual = [...document.querySelectorAll('.media-saved-queue-title strong')].map(element => element.textContent ?? '');
-    return JSON.stringify(actual) === JSON.stringify(expectedTitles);
-  }, expected, { timeout: 15_000 });
+  const waitQueueTitles = (expected) =>
+    page.waitForFunction(
+      (expectedTitles) => {
+        const actual = [...document.querySelectorAll('.media-saved-queue-title strong')].map(
+          (element) => element.textContent ?? '',
+        );
+        return JSON.stringify(actual) === JSON.stringify(expectedTitles);
+      },
+      expected,
+      { timeout: 15_000 },
+    );
   assert.deepEqual(await queueTitles(), ['人工保留标题', '曲目001', '曲目002']);
 
   await page.getByRole('button', { name: '编辑队列' }).click();
-  const moveDown = page.waitForResponse(r => r.request().method() === 'POST' && r.url().includes('/queue/') && r.url().endsWith('/move'));
+  const moveDown = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().includes('/queue/') && r.url().endsWith('/move'),
+  );
   await page.getByRole('button', { name: '下移 曲目001' }).click();
   assert.equal((await moveDown).status(), 200, 'queue move down failed');
   await waitQueueTitles(['人工保留标题', '曲目002', '曲目001']);
-  const moveUp = page.waitForResponse(r => r.request().method() === 'POST' && r.url().includes('/queue/') && r.url().endsWith('/move'));
+  const moveUp = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().includes('/queue/') && r.url().endsWith('/move'),
+  );
   await page.getByRole('button', { name: '上移 曲目001' }).click();
   assert.equal((await moveUp).status(), 200, 'queue move up failed');
   await waitQueueTitles(['人工保留标题', '曲目001', '曲目002']);
 
-  const remove = page.waitForResponse(r => r.request().method() === 'DELETE' && r.url().includes('/queue/'));
+  const remove = page.waitForResponse((r) => r.request().method() === 'DELETE' && r.url().includes('/queue/'));
   await page.getByRole('button', { name: '移除 曲目002' }).click();
   assert.equal((await remove).status(), 200, 'queue remove failed');
   await page.getByRole('button', { name: '完成编辑队列' }).click();
@@ -489,12 +718,28 @@ async function runMediaReview(browser, fixture, checks, errors) {
 
   await page.getByRole('button', { name: '清空当前频道队列' }).click();
   await page.getByRole('button', { name: '确认清空' }).waitFor({ state: 'visible' });
-  assert.match(await page.locator('dialog[open]').last().innerText().catch(() => ''), /清空队列|确认清空/);
-  const clear = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/api/v1/media/queue/clear'));
+  assert.match(
+    await page
+      .locator('dialog[open]')
+      .last()
+      .innerText()
+      .catch(() => ''),
+    /清空队列|确认清空/,
+  );
+  const clear = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/api/v1/media/queue/clear'),
+  );
   await page.getByRole('button', { name: '确认清空' }).click();
   assert.equal((await clear).status(), 200, 'queue clear failed');
-  await page.locator('.media-queue-page .media-personal-empty').getByText('暂无记录。', { exact: true }).waitFor({ state: 'visible' });
-  assert.equal(await page.locator('.media-saved-queue-toolbar').count(), 0, 'empty queue should hide saved-queue tools');
+  await page
+    .locator('.media-queue-page .media-personal-empty')
+    .getByText('暂无记录。', { exact: true })
+    .waitFor({ state: 'visible' });
+  assert.equal(
+    await page.locator('.media-saved-queue-toolbar').count(),
+    0,
+    'empty queue should hide saved-queue tools',
+  );
   await capture(page, 'media-queue-empty', checks, errors);
 
   // Submit a real search form and assert the query result, rather than only
@@ -521,40 +766,52 @@ async function runMediaReview(browser, fixture, checks, errors) {
   await page.locator('.media-favorite-row').first().click();
   // Fixture favorites past the first page have no file on disk, so the detail can be
   // the missing-edition state rather than the full detail page.
-  await page.locator('.media-detail-page, .media-missing-edition').first().waitFor({ state: 'attached' }).catch(async error => {
-    throw new Error(`favorite detail did not open at ${page.url()}: ${(await page.locator('body').innerText()).slice(0, 1500)}\n${error.message}`);
-  });
+  await page
+    .locator('.media-detail-page, .media-missing-edition')
+    .first()
+    .waitFor({ state: 'attached' })
+    .catch(async (error) => {
+      throw new Error(
+        `favorite detail did not open at ${page.url()}: ${(await page.locator('body').innerText()).slice(0, 1500)}\n${error.message}`,
+      );
+    });
   await capture(page, 'media-favorites-detail', checks, errors);
 
   // Detail favorite is a real PUT and is then reverted to keep the disposable
   // fixture deterministic for any subsequent assertions.
   await page.goto(`${origin}/#/media/video/items/review-film`);
   await waitMediaHeading(page, '人工保留标题');
-  let write = page.waitForResponse(r => r.request().method() === 'PUT' && r.url().includes('/favorite'));
+  let write = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/favorite'));
   await page.getByRole('button', { name: '收藏', exact: true }).click();
   assert.equal((await write).status(), 200);
   await page.getByRole('button', { name: '取消收藏', exact: true }).waitFor({ state: 'visible' });
-  write = page.waitForResponse(r => r.request().method() === 'PUT' && r.url().includes('/favorite'));
+  write = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().includes('/favorite'));
   await page.getByRole('button', { name: '取消收藏', exact: true }).click();
   assert.equal((await write).status(), 200);
 
   // Detail -> POST /playback -> routed player (the fixture has an available
   // disposable part, so this is the actual playback path).
-  const playback = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/api/v1/media/playback'));
+  const playback = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/api/v1/media/playback'),
+  );
   await page.getByRole('button', { name: '播放电影', exact: true }).click();
   assert.equal((await playback).status(), 201);
   await page.waitForURL(/#\/media\/video\/player/);
   await page.locator('.media-playback-page').waitFor({ state: 'attached' });
   const videoPlayback = await assertLoadedAndAdvancingVideo(page);
-  assert.ok(videoPlayback.after.currentTime > videoPlayback.before.currentTime, 'video playback session did not advance');
+  assert.ok(
+    videoPlayback.after.currentTime > videoPlayback.before.currentTime,
+    'video playback session did not advance',
+  );
   await capture(page, 'media-player', checks, errors);
 
   // The player is a runtime-owned session. Navigate away and return through the
   // mini-player control; a fresh POST /playback would indicate the session was
   // lost during the route transition.
   const playbackPostsBeforeRoute = [];
-  const countPlaybackPosts = response => {
-    if (response.request().method() === 'POST' && response.url().endsWith('/api/v1/media/playback')) playbackPostsBeforeRoute.push(response.url());
+  const countPlaybackPosts = (response) => {
+    if (response.request().method() === 'POST' && response.url().endsWith('/api/v1/media/playback'))
+      playbackPostsBeforeRoute.push(response.url());
   };
   page.on('response', countPlaybackPosts);
   // Playback routes hide the channel nav. Return through the player heading,
@@ -573,11 +830,19 @@ async function runMediaReview(browser, fixture, checks, errors) {
     await page.setViewportSize({ width, height: heightFor(width) });
     await page.goto(`${origin}/#/media/video`);
     await waitMediaHeading(page, '影视');
-    assert.equal(await page.locator('.media-tabs [aria-current="page"]').innerText(), '首页', `default tab is not active at ${width}px`);
+    assert.equal(
+      await page.locator('.media-tabs [aria-current="page"]').innerText(),
+      '首页',
+      `default tab is not active at ${width}px`,
+    );
     await page.locator('.media-tabs a').filter({ hasText: '电影' }).click();
     await page.waitForURL(/#\/media\/video\/movies/);
     await page.locator('.media-tabs [aria-current="page"]').filter({ hasText: '电影' }).waitFor({ state: 'visible' });
-    assert.equal(await page.locator('.media-tabs [aria-current="page"]').innerText(), '电影', `Movies tab did not activate at ${width}px`);
+    assert.equal(
+      await page.locator('.media-tabs [aria-current="page"]').innerText(),
+      '电影',
+      `Movies tab did not activate at ${width}px`,
+    );
   }
 
   // At desktop width use the real heading controls: search and 更多 -> 设置.
@@ -617,7 +882,7 @@ async function runMediaReview(browser, fixture, checks, errors) {
   await waitMediaHeading(page, '访问权限');
   await page.locator('select[aria-label="访问范围"]').selectOption('restricted');
   await page.locator('.media-user-option').filter({ hasText: '林间' }).locator('input[type="checkbox"]').check();
-  const accessPut = page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith('/access'));
+  const accessPut = page.waitForResponse((r) => r.request().method() === 'PUT' && r.url().endsWith('/access'));
   await page.getByRole('button', { name: '保存权限', exact: true }).click();
   const accessResponse = await accessPut;
   assert.equal(accessResponse.status(), 204, `permission save failed: ${await accessResponse.text()}`);
@@ -625,14 +890,17 @@ async function runMediaReview(browser, fixture, checks, errors) {
   await page.goto(`${origin}/#/media/video/settings/libraries/review-lib/permissions`);
   await page.locator('select[aria-label="访问范围"]').waitFor({ state: 'attached' });
   assert.equal(await page.locator('select[aria-label="访问范围"]').inputValue(), 'restricted');
-  assert.equal(await page.locator('.media-user-option').filter({ hasText: '林间' }).locator('input[type="checkbox"]').isChecked(), true);
+  assert.equal(
+    await page.locator('.media-user-option').filter({ hasText: '林间' }).locator('input[type="checkbox"]').isChecked(),
+    true,
+  );
   await capture(page, 'media-permissions-saved', checks, errors);
 
   // Existing library PATCH.
   await page.goto(`${origin}/#/media/video/settings/libraries/review-lib/edit`);
   await waitMediaHeading(page, '编辑媒体库');
   await page.locator('input[name="name"]').fill('候选审阅测试库（已编辑）');
-  const libraryPatch = page.waitForResponse(r => r.request().method() === 'PATCH' && r.url().endsWith('/review-lib'));
+  const libraryPatch = page.waitForResponse((r) => r.request().method() === 'PATCH' && r.url().endsWith('/review-lib'));
   await page.getByRole('button', { name: '保存修改', exact: true }).click();
   const libraryPatchResponse = await libraryPatch;
   assert.equal(libraryPatchResponse.status(), 200);
@@ -645,7 +913,9 @@ async function runMediaReview(browser, fixture, checks, errors) {
   await page.locator('input[name="name"]').fill('UI审阅新建库');
   await page.locator('input[name="root"]').fill(fixture.reviewRoot);
   await page.locator('select[name="access"]').selectOption('all');
-  const createPost = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/api/v1/media/libraries'));
+  const createPost = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().endsWith('/api/v1/media/libraries'),
+  );
   await page.getByRole('button', { name: '创建并扫描', exact: true }).click();
   assert.equal((await createPost).status(), 201);
   // Creating starts the scan and then opens that library's tasks. The "已创建" line is
@@ -653,19 +923,33 @@ async function runMediaReview(browser, fixture, checks, errors) {
   // the scan answered first the page had already moved on and the wait timed out.
   // The place the flow ends is what is checked.
   const createdId = (await (await createPost).json()).id;
-  await page.waitForURL(url => url.hash.startsWith('#/media/video/settings/tasks?library=' + encodeURIComponent(createdId)));
+  await page.waitForURL((url) =>
+    url.hash.startsWith('#/media/video/settings/tasks?library=' + encodeURIComponent(createdId)),
+  );
 
   // Member session: browse allowed content; administrator settings denied.
-  const memberContext = await browser.newContext({ viewport: { width: 390, height: heightFor(390) }, isMobile: true, hasTouch: true });
+  const memberContext = await browser.newContext({
+    viewport: { width: 390, height: heightFor(390) },
+    isMobile: true,
+    hasTouch: true,
+  });
   const memberPage = await memberContext.newPage();
   memberPage.setDefaultTimeout(15_000);
-  await memberPage.route('**/api/v1/sync**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ serverTime: Date.now(), progress: [], notes: [] }) }));
+  await memberPage.route('**/api/v1/sync**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ serverTime: Date.now(), progress: [], notes: [] }),
+    }),
+  );
   await loginAs(memberPage, origin, 'review-member');
   await memberPage.goto(`${origin}/#/media/video`);
   try {
     await memberPage.getByText('review-film', { exact: true }).waitFor({ state: 'visible' });
   } catch (error) {
-    throw new Error(`member cannot browse granted library: ${(await memberPage.locator('body').innerText()).slice(0, 1800)}\n${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `member cannot browse granted library: ${(await memberPage.locator('body').innerText()).slice(0, 1800)}\n${error instanceof Error ? error.message : String(error)}`,
+    );
   }
   await memberPage.goto(`${origin}/#/media/video/settings/libraries`);
   await memberPage.getByText('需要管理员权限。', { exact: true }).waitFor({ state: 'visible' });
@@ -692,7 +976,10 @@ try {
   readerServer = createReviewServer({ port: 0 });
   const readerOrigin = await readerServer.listen();
   mediaServer = await startMediaFixture();
-  browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
+  browser = await chromium.launch({
+    headless: true,
+    ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}),
+  });
   await runReaderReview(browser, readerOrigin, checks, errors);
   await runMediaReview(browser, mediaServer, checks, errors);
   assert.deepEqual(errors, [], `browser page errors: ${JSON.stringify(errors)}`);
@@ -700,7 +987,13 @@ try {
   await writeFile(join(output, 'verification.json'), JSON.stringify(report, null, 2));
   console.log(JSON.stringify({ passed: true, screenshots: checks.length, output }));
 } catch (error) {
-  const report = { passed: false, screenshots: checks.length, checks, pageErrors: errors, error: error instanceof Error ? error.stack : String(error) };
+  const report = {
+    passed: false,
+    screenshots: checks.length,
+    checks,
+    pageErrors: errors,
+    error: error instanceof Error ? error.stack : String(error),
+  };
   await writeFile(join(output, 'verification.json'), JSON.stringify(report, null, 2)).catch(() => undefined);
   console.error(error);
   process.exitCode = 1;
@@ -709,6 +1002,6 @@ try {
   await readerServer?.close().catch(() => undefined);
   if (mediaServer?.child && mediaServer.child.exitCode === null) {
     mediaServer.child.stdin.end();
-    await new Promise(resolvePromise => mediaServer.child.once('exit', resolvePromise));
+    await new Promise((resolvePromise) => mediaServer.child.once('exit', resolvePromise));
   }
 }

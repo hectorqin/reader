@@ -25,7 +25,10 @@ const { withAssetToken, makeAssetSigner } = await import('../src/net/asset-url.t
 test('asset signing uses resource tickets and reads rotations lazily', () => {
   let resource = 'resource-first';
   const signer = makeAssetSigner({ baseUrl: '', accessToken: 'private-access', resourceToken: () => resource })!;
-  assert.equal(signer('/api/v1/books/book/assets?ref=image#cover'), '/api/v1/books/book/assets?ref=image&resource_token=resource-first#cover');
+  assert.equal(
+    signer('/api/v1/books/book/assets?ref=image#cover'),
+    '/api/v1/books/book/assets?ref=image&resource_token=resource-first#cover',
+  );
   resource = 'resource-next';
   assert.match(signer('/api/v1/books/book/assets?ref=image')!, /resource_token=resource-next/);
   assert.equal(signer('https://foreign.test/api/v1/books/book/assets?ref=image'), null);
@@ -33,8 +36,12 @@ test('asset signing uses resource tickets and reads rotations lazily', () => {
 });
 
 test('chapter markup prefers resource tickets for attributes and CSS', () => {
-  const api = { baseUrl: '', currentSession: { accessToken: 'private-access', resourceToken: 'readonly-ticket' } } as unknown as ApiClient;
-  const html = '<html xmlns="http://www.w3.org/1999/xhtml"><head><style>p{background:url(/api/v1/books/book/assets?ref=background)}</style></head><body><img src="/api/v1/books/book/assets?ref=image"/></body></html>';
+  const api = {
+    baseUrl: '',
+    currentSession: { accessToken: 'private-access', resourceToken: 'readonly-ticket' },
+  } as unknown as ApiClient;
+  const html =
+    '<html xmlns="http://www.w3.org/1999/xhtml"><head><style>p{background:url(/api/v1/books/book/assets?ref=background)}</style></head><body><img src="/api/v1/books/book/assets?ref=image"/></body></html>';
   const signed = withAssetToken(html, api);
   assert.equal((signed.match(/resource_token=readonly-ticket/g) ?? []).length, 2);
   assert.ok(!signed.includes('private-access'));
@@ -102,7 +109,8 @@ describe('asset URL rewriting', () => {
   test('a cross-origin deployment rewrites absolute URLs too', () => {
     // The Android shell loads assets from `file://` and talks to a real server
     // origin, so every URL is absolute.
-    const html = '<html xmlns="http://www.w3.org/1999/xhtml"><body><img src="http://nas:8080/api/v1/books/b1/assets?ref=a.png"/></body></html>';
+    const html =
+      '<html xmlns="http://www.w3.org/1999/xhtml"><body><img src="http://nas:8080/api/v1/books/b1/assets?ref=a.png"/></body></html>';
     const out = withAssetToken(html, client('tok', 'http://nas:8080'));
     assert.match(out, /access_token=tok/);
   });
@@ -115,7 +123,8 @@ describe('asset URL rewriting', () => {
   });
 
   test('CSS url() references are rewritten', () => {
-    const html = '<html xmlns="http://www.w3.org/1999/xhtml"><head><style>body{background:url("/api/v1/books/b1/assets?ref=bg.png")}</style></head><body/></html>';
+    const html =
+      '<html xmlns="http://www.w3.org/1999/xhtml"><head><style>body{background:url("/api/v1/books/b1/assets?ref=bg.png")}</style></head><body/></html>';
     const out = withAssetToken(html, client('tok'));
     assert.match(out, /access_token=tok/);
   });

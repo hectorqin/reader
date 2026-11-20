@@ -33,21 +33,38 @@ describe('picture geometry', () => {
 
 describe('ImageViewer', () => {
   let host: HTMLElement, root: Root;
-  const images = [{ src: 'blob:a', alt: '一' }, { src: 'blob:b', alt: '二' }, { src: 'blob:c', alt: '三' }];
-  beforeEach(() => { host = document.createElement('div'); document.body.append(host); root = createRoot(host); });
-  afterEach(() => { act(() => root.unmount()); host.remove(); });
+  const images = [
+    { src: 'blob:a', alt: '一' },
+    { src: 'blob:b', alt: '二' },
+    { src: 'blob:c', alt: '三' },
+  ];
+  beforeEach(() => {
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
   const shown = () => host.querySelector('img')!.getAttribute('src');
-  const key = (value: string) => act(() => { host.querySelector('dialog')!.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true })); });
+  const key = (value: string) =>
+    act(() => {
+      host.querySelector('dialog')!.dispatchEvent(new KeyboardEvent('keydown', { key: value, bubbles: true }));
+    });
   const button = (label: string) => host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
 
   it('opens on the picture that was tapped and steps through the chapter, stopping at its ends', () => {
     act(() => root.render(<ImageViewer images={images} start={1} onClose={() => undefined} />));
     expect(shown()).toBe('blob:b');
     expect(host.querySelector('.image-viewer-count')?.textContent).toBe('2 / 3');
-    key('ArrowRight'); expect(shown()).toBe('blob:c');
+    key('ArrowRight');
+    expect(shown()).toBe('blob:c');
     expect(button('下一张').disabled).toBe(true);
-    key('ArrowRight'); expect(shown()).toBe('blob:c');
-    act(() => button('上一张').click()); act(() => button('上一张').click());
+    key('ArrowRight');
+    expect(shown()).toBe('blob:c');
+    act(() => button('上一张').click());
+    act(() => button('上一张').click());
     expect(shown()).toBe('blob:a');
     expect(button('上一张').disabled).toBe(true);
   });
@@ -71,13 +88,17 @@ describe('ImageViewer', () => {
   });
 
   it('closes from ✕ and from Escape, without the key reaching the reader behind it', () => {
-    const onClose = vi.fn(), behind = vi.fn();
+    const onClose = vi.fn(),
+      behind = vi.fn();
     document.addEventListener('keydown', behind);
     act(() => root.render(<ImageViewer images={images} start={0} onClose={onClose} />));
     act(() => button('关闭').click());
     // Escape on a modal dialog arrives as the platform's `cancel`; the key itself stays here.
-    key('Escape'); key('ArrowRight');
-    act(() => { host.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true })); });
+    key('Escape');
+    key('ArrowRight');
+    act(() => {
+      host.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true }));
+    });
     document.removeEventListener('keydown', behind);
     expect(onClose).toHaveBeenCalledTimes(2);
     expect(behind).not.toHaveBeenCalled();
@@ -92,20 +113,37 @@ describe('a tap offered to its target first', () => {
     void stage;
   };
   const handlers = (onTapTarget: (path: EventTarget[]) => boolean, onTapZone: () => void) => ({
-    onTapZone, onSwipe: () => undefined, onDragDelta: () => undefined, onLongPress: () => undefined, hasSelection: () => false, onTapTarget,
+    onTapZone,
+    onSwipe: () => undefined,
+    onDragDelta: () => undefined,
+    onLongPress: () => undefined,
+    hasSelection: () => false,
+    onTapTarget,
   });
 
   it('is not also a page turn when the target takes it, and is one when it does not', () => {
-    const stage = document.createElement('div'), picture = document.createElement('img'), text = document.createElement('p');
-    Object.defineProperty(stage, 'offsetWidth', { value: 300 }); Object.defineProperty(stage, 'offsetHeight', { value: 600 });
-    stage.append(picture, text); document.body.append(stage);
-    const zone = vi.fn(), seen: EventTarget[] = [];
-    const detach = attachGestures(stage, handlers((path) => { seen.push(path[0]!); return path[0] === picture; }, zone));
+    const stage = document.createElement('div'),
+      picture = document.createElement('img'),
+      text = document.createElement('p');
+    Object.defineProperty(stage, 'offsetWidth', { value: 300 });
+    Object.defineProperty(stage, 'offsetHeight', { value: 600 });
+    stage.append(picture, text);
+    document.body.append(stage);
+    const zone = vi.fn(),
+      seen: EventTarget[] = [];
+    const detach = attachGestures(
+      stage,
+      handlers((path) => {
+        seen.push(path[0]!);
+        return path[0] === picture;
+      }, zone),
+    );
     tap(stage, picture);
     expect(zone).not.toHaveBeenCalled();
     tap(stage, text);
     expect(zone).toHaveBeenCalledTimes(1);
     expect(seen).toEqual([picture, text]);
-    detach(); stage.remove();
+    detach();
+    stage.remove();
   });
 });

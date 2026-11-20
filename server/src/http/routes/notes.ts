@@ -1,7 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../context.ts';
 import { authenticate, currentUser } from '../auth.ts';
-import { NotesLibraryService, type NotesExportQuery, type NotesFilter, type NotesListQuery } from '../../services/notes-library.ts';
+import {
+  NotesLibraryService,
+  type NotesExportQuery,
+  type NotesFilter,
+  type NotesListQuery,
+} from '../../services/notes-library.ts';
 import { BookReviewService } from '../../services/book-reviews.ts';
 
 /**

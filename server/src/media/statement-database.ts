@@ -24,7 +24,13 @@ export class MediaStatementDatabase implements MediaDatabase {
     return this.statement(sql).all(...params) as T[];
   }
 
-  run(sql: string, ...params: SqlValue[]): void { this.statement(sql).run(...params); }
-  transaction<T>(fn: () => T): T { return this.db.transaction(fn); }
-  clear(): void { this.statements.clear(); }
+  run(sql: string, ...params: SqlValue[]): void {
+    this.statement(sql).run(...params);
+  }
+  transaction<T>(fn: () => T): T {
+    return this.db.transaction(fn);
+  }
+  clear(): void {
+    this.statements.clear();
+  }
 }

@@ -10,6 +10,6 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   session: null,
   verifiedUser: null,
-  setSession: session => set({ session, verifiedUser: null }),
-  verify: verifiedUser => set({ verifiedUser }),
+  setSession: (session) => set({ session, verifiedUser: null }),
+  verify: (verifiedUser) => set({ verifiedUser }),
 }));

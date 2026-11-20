@@ -27,11 +27,7 @@ import type { AppContext } from '../src/http/context.ts';
 import { naturalCompare, naturalSortBy } from '../src/indexer/formats/natural-sort.ts';
 import { decodeTextBuffer, splitChapters, windowByLines } from '../src/indexer/formats/text.ts';
 import { ZipArchive, ZipError } from '../src/indexer/formats/zip-reader.ts';
-import {
-  fileHandlerForExtension,
-  supportedExtensions,
-  capabilities,
-} from '../src/indexer/formats/index.ts';
+import { fileHandlerForExtension, supportedExtensions, capabilities } from '../src/indexer/formats/index.ts';
 import { looksLikeComicDirectory } from '../src/indexer/formats/comic-directory.ts';
 import { BOOK_RESOURCE_MARKER, rewriteRelativeReferences } from '../src/indexer/formats/epub.ts';
 import '../src/indexer/formats/index.ts';
@@ -122,11 +118,20 @@ const PNG = Buffer.from(
 
 /** Real GB18030 bytes for the handful of characters the fixtures use. */
 const GB18030_BYTES: Record<string, [number, number]> = {
-  第: [0xb5, 0xda], 一: [0xd2, 0xbb], 章: [0xd5, 0xc2],
-  编: [0xb1, 0xe0], 码: [0xc2, 0xeb], 正: [0xd5, 0xfd],
-  文: [0xce, 0xc4], 二: [0xb6, 0xfe], 再: [0xd4, 0xd9],
-  见: [0xbc, 0xfb], 测: [0xb2, 0xe2], 试: [0xca, 0xd4],
-  内: [0xc4, 0xda], 容: [0xc8, 0xdd],
+  第: [0xb5, 0xda],
+  一: [0xd2, 0xbb],
+  章: [0xd5, 0xc2],
+  编: [0xb1, 0xe0],
+  码: [0xc2, 0xeb],
+  正: [0xd5, 0xfd],
+  文: [0xce, 0xc4],
+  二: [0xb6, 0xfe],
+  再: [0xd4, 0xd9],
+  见: [0xbc, 0xfb],
+  测: [0xb2, 0xe2],
+  试: [0xca, 0xd4],
+  内: [0xc4, 0xda],
+  容: [0xc8, 0xdd],
 };
 
 function encodeGb18030(text: string): Buffer {
@@ -165,10 +170,14 @@ function makeEpub(opts: { id: string; title: string; chapters?: number }): Buffe
         (_, i) => `<itemref idref="c${i}"/>`,
       ).join('')}</spine></package>`,
     ],
-    ...Array.from({ length: chapters }, (_, i) => [
-      `OEBPS/c${i}.xhtml`,
-      `<html><body><h1>第 ${i + 1} 章</h1><img src="images/pic.png"/></body></html>`,
-    ] as [string, string]),
+    ...Array.from(
+      { length: chapters },
+      (_, i) =>
+        [`OEBPS/c${i}.xhtml`, `<html><body><h1>第 ${i + 1} 章</h1><img src="images/pic.png"/></body></html>`] as [
+          string,
+          string,
+        ],
+    ),
     ['OEBPS/images/pic.png', PNG],
   ]);
 }
@@ -296,7 +305,10 @@ describe('natural ordering', () => {
 
   test('naturalSortBy returns a new array', () => {
     const input = ['b2', 'b1'];
-    assert.deepEqual(naturalSortBy(input, (x) => x), ['b1', 'b2']);
+    assert.deepEqual(
+      naturalSortBy(input, (x) => x),
+      ['b1', 'b2'],
+    );
     assert.deepEqual(input, ['b2', 'b1']);
   });
 });
@@ -316,7 +328,13 @@ describe('zip reader', () => {
 
   test('multiple entries keep their own contents', async () => {
     const file = join(dir, 'b.zip');
-    await writeFile(file, makeZip([['a.txt', 'AAA'], ['b.txt', 'BBB']]));
+    await writeFile(
+      file,
+      makeZip([
+        ['a.txt', 'AAA'],
+        ['b.txt', 'BBB'],
+      ]),
+    );
     const archive = await ZipArchive.open(file);
     assert.equal(archive.files().length, 2);
     assert.equal((await archive.read('b.txt')).toString(), 'BBB');
@@ -335,14 +353,20 @@ describe('zip reader', () => {
   test('a non-zip file fails cleanly', async () => {
     const file = join(dir, 'not.zip');
     await writeFile(file, 'definitely not an archive at all');
-    await assert.rejects(() => ZipArchive.open(file), (err: unknown) => err instanceof ZipError);
+    await assert.rejects(
+      () => ZipArchive.open(file),
+      (err: unknown) => err instanceof ZipError,
+    );
   });
 
   test('oversized entries are refused instead of exhausting memory', async () => {
     const file = join(dir, 'big.zip');
     await writeFile(file, makeZip([['big.bin', Buffer.alloc(4096)]]));
     const archive = await ZipArchive.open(file);
-    await assert.rejects(() => archive.read('big.bin', 16), (err: unknown) => (err as ZipError).code === 'ENTRY_TOO_LARGE');
+    await assert.rejects(
+      () => archive.read('big.bin', 16),
+      (err: unknown) => (err as ZipError).code === 'ENTRY_TOO_LARGE',
+    );
   });
 
   test('ZIP64 is reported rather than misread', async () => {
@@ -353,7 +377,10 @@ describe('zip reader', () => {
     buf.writeUInt32LE(0xffffffff, eocd + 16);
     const file = join(dir, 'z64.zip');
     await writeFile(file, buf);
-    await assert.rejects(() => ZipArchive.open(file), (err: unknown) => (err as ZipError).code === 'ZIP64_UNSUPPORTED');
+    await assert.rejects(
+      () => ZipArchive.open(file),
+      (err: unknown) => (err as ZipError).code === 'ZIP64_UNSUPPORTED',
+    );
   });
 
   test('UTF-8 flagged names survive the round trip', async () => {
@@ -420,16 +447,29 @@ describe('text decoding', () => {
 
 describe('library scanning across formats', () => {
   before(async () => {
-    await writeFile(join(booksDir, '三体 - 刘慈欣.epub'), makeEpub({ id: 'urn:isbn:9787536692930', title: '三体', chapters: 3 }));
-    await writeFile(join(booksDir, '小说 - 张三.txt'), ['第一章 起风', '风来了。', '第二章 落雨', '雨来了。'].join('\n'), 'utf8');
+    await writeFile(
+      join(booksDir, '三体 - 刘慈欣.epub'),
+      makeEpub({ id: 'urn:isbn:9787536692930', title: '三体', chapters: 3 }),
+    );
+    await writeFile(
+      join(booksDir, '小说 - 张三.txt'),
+      ['第一章 起风', '风来了。', '第二章 落雨', '雨来了。'].join('\n'),
+      'utf8',
+    );
     await writeFile(join(booksDir, '编码书.txt'), encodeGb18030('第一章 编码\n正文内容\n第二章 再见\n更多内容'));
-    await writeFile(join(booksDir, '手册 - 某人.pdf'), Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n', 'latin1'));
-    await writeFile(join(booksDir, '海贼王 Vol.1.cbz'), makeZip([
-      ['001.jpg', PNG],
-      ['002.jpg', PNG],
-      ['010.jpg', PNG],
-      ['info.txt', 'not a page'],
-    ]));
+    await writeFile(
+      join(booksDir, '手册 - 某人.pdf'),
+      Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n', 'latin1'),
+    );
+    await writeFile(
+      join(booksDir, '海贼王 Vol.1.cbz'),
+      makeZip([
+        ['001.jpg', PNG],
+        ['002.jpg', PNG],
+        ['010.jpg', PNG],
+        ['info.txt', 'not a page'],
+      ]),
+    );
     await mkdir(join(booksDir, '进击的巨人', '第01卷'), { recursive: true });
     await mkdir(join(booksDir, '进击的巨人', '第02卷'), { recursive: true });
     for (let i = 1; i <= 3; i += 1) {
@@ -456,10 +496,11 @@ describe('library scanning across formats', () => {
   });
 
   test('a comic directory is one book, not one book per volume', async () => {
-    const rows = ctx.db.all<{ rel_path: string }>(
-      "SELECT rel_path FROM book_files WHERE rel_path LIKE '进击的巨人%'",
+    const rows = ctx.db.all<{ rel_path: string }>("SELECT rel_path FROM book_files WHERE rel_path LIKE '进击的巨人%'");
+    assert.deepEqual(
+      rows.map((r) => r.rel_path),
+      ['进击的巨人'],
     );
-    assert.deepEqual(rows.map((r) => r.rel_path), ['进击的巨人']);
   });
 
   test('a corrupt .cbz stays visible with the reason recorded', async () => {
@@ -510,7 +551,13 @@ describe('library scanning across formats', () => {
       const book = await findBook('海贼王合集');
       const res = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/items`, headers: auth() });
       const body = res.json() as { total: number; groups: Array<{ title: string; count: number }> };
-      assert.deepEqual(body.groups.map((g) => [g.title, g.count]), [['第01卷', 3], ['第02卷', 2]]);
+      assert.deepEqual(
+        body.groups.map((g) => [g.title, g.count]),
+        [
+          ['第01卷', 3],
+          ['第02卷', 2],
+        ],
+      );
       assert.equal(body.total, 5);
     } finally {
       await rm(series, { recursive: true, force: true });
@@ -531,7 +578,10 @@ describe('library scanning across formats', () => {
       const book = await findBook('混合布局漫画');
       const res = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/items`, headers: auth() });
       const body = res.json() as { total: number; groups: Array<{ title: string; count: number }> };
-      assert.deepEqual(body.groups.map((g) => g.count), [2, 1, 1]);
+      assert.deepEqual(
+        body.groups.map((g) => g.count),
+        [2, 1, 1],
+      );
       assert.equal(body.total, 4);
     } finally {
       await rm(series, { recursive: true, force: true });
@@ -813,7 +863,10 @@ describe('reading endpoints per format', () => {
     // the last line it does not have room for; it may not glue lines together.
     // Long enough to exceed the streaming window (256KB) by several times over, so
     // the cap is exercised rather than merely present.
-    const lines = Array.from({ length: 12000 }, (_, i) => `第 ${i} 行的内容，写长一点好让这一章越过一个流式窗口的边界。`);
+    const lines = Array.from(
+      { length: 12000 },
+      (_, i) => `第 ${i} 行的内容，写长一点好让这一章越过一个流式窗口的边界。`,
+    );
     const target = join(booksDir, '窗口.txt');
     await writeFile(target, `第一章 窗口\n${lines.join('\n')}\n`, 'utf8');
     await ctx.scanner.scan();
@@ -830,7 +883,11 @@ describe('reading endpoints per format', () => {
     assert.ok(returned.length > 1, 'the window must contain several lines');
     assert.ok(returned.length < lines.length + 1, 'the window must still be capped');
     for (const [index, line] of returned.entries()) {
-      assert.equal(line, index === 0 ? '第一章 窗口' : lines[index - 1], `line ${index} must be a whole line of the chapter`);
+      assert.equal(
+        line,
+        index === 0 ? '第一章 窗口' : lines[index - 1],
+        `line ${index} must be a whole line of the chapter`,
+      );
     }
 
     await rm(target);
@@ -913,7 +970,10 @@ describe('reading endpoints per format', () => {
     const body = res.json() as { kind: string; total: number; items: Array<{ title: string }> };
     assert.equal(body.kind, 'paged');
     assert.equal(body.total, 3, 'info.txt must not be listed as a page');
-    assert.deepEqual(body.items.map((i) => i.title), ['001.jpg', '002.jpg', '010.jpg']);
+    assert.deepEqual(
+      body.items.map((i) => i.title),
+      ['001.jpg', '002.jpg', '010.jpg'],
+    );
   });
 
   test('cbz page bytes are served by index', async () => {
@@ -986,7 +1046,7 @@ describe('reading endpoints per format', () => {
     assert.equal((res.json() as { error: { code: string } }).error.code, 'DIRECTORY_BOOK');
   });
 
-test('a long book is loaded one window at a time', async () => {
+  test('a long book is loaded one window at a time', async () => {
     // The point of windowing: a 1200-chapter omnibus must not cost one manifest
     // with 1200 entries, and a client must be able to find chapter 900 without
     // walking the first 899.
@@ -1002,7 +1062,10 @@ test('a long book is loaded one window at a time', async () => {
     assert.ok(full.groups.length > 1, 'a 250-chapter book must be split into windows');
     // Every group has to state where it starts: a client holding only this group
     // has no other way to place it in the book.
-    assert.deepEqual(full.groups.map((g) => g.offset), full.groups.map((g) => g.seq * full.groups[0]!.count));
+    assert.deepEqual(
+      full.groups.map((g) => g.offset),
+      full.groups.map((g) => g.seq * full.groups[0]!.count),
+    );
 
     const window = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/items?group=2`, headers: auth() });
     const page = window.json() as { items: Array<{ seq: number }>; group: number; groups: unknown[] };
@@ -1090,7 +1153,16 @@ test('a long book is loaded one window at a time', async () => {
     // A `stored` (uncompressed) cbz is the case a client can genuinely resume,
     // and it is common for image archives.
     const target = join(booksDir, '未压缩.cbz');
-    await writeFile(target, makeZip([['1.jpg', JPEG], ['2.jpg', JPEG]], { deflate: false }));
+    await writeFile(
+      target,
+      makeZip(
+        [
+          ['1.jpg', JPEG],
+          ['2.jpg', JPEG],
+        ],
+        { deflate: false },
+      ),
+    );
     await ctx.scanner.scan();
     const book = await findBook('未压缩');
 
@@ -1111,19 +1183,16 @@ test('a long book is loaded one window at a time', async () => {
     await ctx.scanner.scan();
   });
 
-test('an epub reports its spine length during the scan', async () => {
+  test('an epub reports its spine length during the scan', async () => {
     // This was silently null for every book: the parse stage opens the archive
     // from memory (the scanner already has the bytes) but the package reader
     // insisted on a file path. The symptom was a missing progress denominator,
     // which is invisible until a reader notices the percentage bar stays empty.
-    const row = ctx.db.get<{ page_count: number | null }>(
-      'SELECT b.page_count FROM books b WHERE b.title = ?',
-      '三体',
-    );
+    const row = ctx.db.get<{ page_count: number | null }>('SELECT b.page_count FROM books b WHERE b.title = ?', '三体');
     assert.equal(row!.page_count, 3);
   });
 
-test('a parser fix reaches books whose bytes never changed', async () => {
+  test('a parser fix reaches books whose bytes never changed', async () => {
     // Change detection is content-based, so a parser fix touches nothing it can
     // detect. Without the parse version, a book indexed by a broken parser keeps
     // its bad result forever and re-running the scan skips exactly that book.
@@ -1133,7 +1202,10 @@ test('a parser fix reaches books whose bytes never changed', async () => {
     // Simulate a library written by an older, broken build.
     ctx.db.run('UPDATE books SET page_count = NULL WHERE id = ?', book.id);
     ctx.db.run('UPDATE book_files SET parse_version = 0 WHERE id = ?', file!.id);
-    assert.equal(ctx.db.get<{ page_count: number | null }>('SELECT page_count FROM books WHERE id = ?', book.id)!.page_count, null);
+    assert.equal(
+      ctx.db.get<{ page_count: number | null }>('SELECT page_count FROM books WHERE id = ?', book.id)!.page_count,
+      null,
+    );
 
     const result = await ctx.scanner.scan();
     assert.ok(result.updated >= 1, 'the book must be reparsed once');
@@ -1164,12 +1236,17 @@ test('a parser fix reaches books whose bytes never changed', async () => {
     const { DatabaseSync } = await import('node:sqlite');
     const raw = new DatabaseSync(join(dir, 'reader.db'));
     raw.exec('ALTER TABLE book_files DROP COLUMN parse_version');
-    raw.exec("INSERT INTO users (id, username, display_name, password_hash, role, disabled, created_at, updated_at) VALUES ('u1','a','','x','admin',0,0,0)");
+    raw.exec(
+      "INSERT INTO users (id, username, display_name, password_hash, role, disabled, created_at, updated_at) VALUES ('u1','a','','x','admin',0,0,0)",
+    );
     raw.close();
 
     const second = openDatabase(config);
     const columns = second.all<{ name: string }>("SELECT name FROM pragma_table_info('book_files')");
-    assert.ok(columns.some((column) => column.name === 'parse_version'), 'the column must be restored');
+    assert.ok(
+      columns.some((column) => column.name === 'parse_version'),
+      'the column must be restored',
+    );
     assert.equal(second.get<{ n: number }>('SELECT COUNT(*) AS n FROM users')!.n, 1, 'existing rows must survive');
     second.close();
   });
@@ -1286,7 +1363,10 @@ describe('query-string tokens', () => {
     // Only per-book asset reads accept it. A shelf listing carries the whole
     // library and has no reason to be fetchable from a URL someone could paste.
     const admin = await ctx.users.login('owner', 'password123', 'test');
-    const res = await app.inject({ method: 'GET', url: `/api/v1/books?access_token=${encodeURIComponent(admin.accessToken)}` });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books?access_token=${encodeURIComponent(admin.accessToken)}`,
+    });
     assert.equal(res.statusCode, 401);
   });
 
@@ -1408,10 +1488,7 @@ describe('windowed reading', () => {
     assert.equal(res.statusCode, 200, res.body);
     const html = res.rawPayload.toString('utf8');
     assert.match(html, /\/api\/v1\/books\/[^"']+\/assets\?[^"']*ref=/, 'relative resources must be absolute');
-    assert.ok(
-      html.includes(`${BOOK_RESOURCE_MARKER}=1&amp;`),
-      'a rewritten resource must be marked as the book\'s own',
-    );
+    assert.ok(html.includes(`${BOOK_RESOURCE_MARKER}=1&amp;`), "a rewritten resource must be marked as the book's own");
     assert.equal(res.headers['content-length'], String(res.rawPayload.byteLength));
 
     await rm(join(booksDir, '窗读4.epub'));
@@ -1426,7 +1503,7 @@ describe('windowed reading', () => {
     const target = join(booksDir, '后缀.cbz');
     // Large enough that the body is streamed rather than buffered, and stored so
     // the payload advertises Range support in the first place.
-    const pages = Array.from({ length: 6 }, (_, i) => [`p${i}.jpg`, JPEG,] as [string, Buffer]);
+    const pages = Array.from({ length: 6 }, (_, i) => [`p${i}.jpg`, JPEG] as [string, Buffer]);
     await writeFile(target, makeZip([...pages, ['pad.bin', Buffer.alloc(2048, 7)]], { deflate: false }));
     await ctx.scanner.scan();
     const book = await findBook('后缀');
@@ -1459,8 +1536,19 @@ describe('scanning without buffering whole files', () => {
     const dir = await mkdtemp(join(tmpdir(), 'reader-parsefile-'));
     try {
       const cases = [
-        { handler: epubHandler, name: '流式 - 作者.epub', bytes: makeEpub({ id: 'urn:uuid:stream-1', title: '流式', chapters: 3 }) },
-        { handler: comicArchiveHandler, name: '流式漫画.cbz', bytes: makeZip([['001.jpg', PNG], ['002.jpg', PNG]]) },
+        {
+          handler: epubHandler,
+          name: '流式 - 作者.epub',
+          bytes: makeEpub({ id: 'urn:uuid:stream-1', title: '流式', chapters: 3 }),
+        },
+        {
+          handler: comicArchiveHandler,
+          name: '流式漫画.cbz',
+          bytes: makeZip([
+            ['001.jpg', PNG],
+            ['002.jpg', PNG],
+          ]),
+        },
         { handler: comicArchiveHandler, name: '坏档.cbz', bytes: Buffer.from('not a zip') },
         { handler: pdfHandler, name: '流式.pdf', bytes: Buffer.from('%PDF-1.4\n%%EOF\n', 'latin1') },
       ];
@@ -1470,7 +1558,10 @@ describe('scanning without buffering whole files', () => {
         const fileCtx = { relPath: name, absPath };
         const buffered = await handler.parse(fileCtx, bytes);
         assert.ok(handler.parseFile, `${handler.format} streams`);
-        const streamed = await handler.parseFile(fileCtx, { size: bytes.byteLength, contentHash: buffered.contentHash });
+        const streamed = await handler.parseFile(fileCtx, {
+          size: bytes.byteLength,
+          contentHash: buffered.contentHash,
+        });
         assert.deepEqual(streamed, buffered, `${name}: streamed parse diverged from buffered parse`);
       }
     } finally {
@@ -1481,7 +1572,13 @@ describe('scanning without buffering whole files', () => {
   test('a touched archive with identical bytes is not re-parsed', async () => {
     const { comicArchiveHandler } = await import('../src/indexer/formats/comic-archive.ts');
     const target = join(booksDir, '触碰测试.cbz');
-    await writeFile(target, makeZip([['001.jpg', PNG], ['002.jpg', PNG]]));
+    await writeFile(
+      target,
+      makeZip([
+        ['001.jpg', PNG],
+        ['002.jpg', PNG],
+      ]),
+    );
     await ctx.scanner.scan();
     const original = comicArchiveHandler.parseFile!;
     let parses = 0;

@@ -1,52 +1,116 @@
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 
-export async function reviewUserManagement(context,page,base,shots) {
-  const button=name=>page.getByRole('button',{name,exact:true});
-  await page.getByRole('button',{name:/书架设置/}).click();
-  assert.equal(await page.getByRole('dialog',{name:'书架设置'}).getByRole('button',{name:'用户管理',exact:true}).count(),0);
-  await page.getByRole('dialog',{name:'书架设置'}).getByRole('button',{name:'关闭',exact:true}).click();
+export async function reviewUserManagement(context, page, base, shots) {
+  const button = (name) => page.getByRole('button', { name, exact: true });
+  await page.getByRole('button', { name: /书架设置/ }).click();
+  assert.equal(
+    await page.getByRole('dialog', { name: '书架设置' }).getByRole('button', { name: '用户管理', exact: true }).count(),
+    0,
+  );
+  await page.getByRole('dialog', { name: '书架设置' }).getByRole('button', { name: '关闭', exact: true }).click();
   // 我的 › 管理: one page per job, each a row of 我的.
-  await page.goto(base+'/#/me');await page.getByRole('link',{name:'用户管理'}).click();
-  const dialog=page.locator('.admin-page .user-management');
-  await page.getByText('共 1 个账号',{exact:true}).waitFor();
-  await button('新增用户').click();await dialog.getByLabel('用户名',{exact:true}).fill('family-ui');await dialog.getByLabel('初始密码').fill('password123');await dialog.getByLabel('显示名',{exact:true}).fill('家人');await button('创建账号').click();
-  const member=dialog.locator('li').filter({hasText:'@family-ui'});await member.waitFor();
-  const before=await member.boundingBox();
-  await member.getByRole('button',{name:'停用',exact:true}).click();
+  await page.goto(base + '/#/me');
+  await page.getByRole('link', { name: '用户管理' }).click();
+  const dialog = page.locator('.admin-page .user-management');
+  await page.getByText('共 1 个账号', { exact: true }).waitFor();
+  await button('新增用户').click();
+  await dialog.getByLabel('用户名', { exact: true }).fill('family-ui');
+  await dialog.getByLabel('初始密码').fill('password123');
+  await dialog.getByLabel('显示名', { exact: true }).fill('家人');
+  await button('创建账号').click();
+  const member = dialog.locator('li').filter({ hasText: '@family-ui' });
+  await member.waitFor();
+  const before = await member.boundingBox();
+  await member.getByRole('button', { name: '停用', exact: true }).click();
   await page.locator('dialog[role=alertdialog]').waitFor();
-  assert.equal(await dialog.locator('.notice[role=alert]').count(),0);
-  assert.deepEqual(await member.boundingBox(),before);
-  assert.equal(await page.locator('dialog[role=alertdialog] .sheet-cancel').evaluate(el=>el===document.activeElement),true);
-  await page.screenshot({path:join(shots,'floating-confirm-390.png')});
-  await page.keyboard.press('Escape');await page.locator('dialog[role=alertdialog]').waitFor({state:'detached'});
-  assert.equal(await member.getByRole('button',{name:'停用',exact:true}).evaluate(el=>el===document.activeElement),true);
-  await member.getByRole('button',{name:'停用',exact:true}).click();await page.locator('dialog[role=alertdialog] .sheet-cancel').click();
-  await context.route('**/api/v1/admin/users/*',route=>route.request().method()==='PATCH'?route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'TEST_FAILURE',message:'暂时无法保存，请重试'}})}):route.continue());
-  await member.getByRole('button',{name:'停用',exact:true}).click();await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();
-  await page.locator('.notyf [role=alert]').filter({hasText:'暂时无法保存，请重试'}).waitFor();
-  assert.equal(await dialog.locator('.user-management > [role=alert]').count(),0);
+  assert.equal(await dialog.locator('.notice[role=alert]').count(), 0);
+  assert.deepEqual(await member.boundingBox(), before);
+  assert.equal(
+    await page.locator('dialog[role=alertdialog] .sheet-cancel').evaluate((el) => el === document.activeElement),
+    true,
+  );
+  await page.screenshot({ path: join(shots, 'floating-confirm-390.png') });
+  await page.keyboard.press('Escape');
+  await page.locator('dialog[role=alertdialog]').waitFor({ state: 'detached' });
+  assert.equal(
+    await member.getByRole('button', { name: '停用', exact: true }).evaluate((el) => el === document.activeElement),
+    true,
+  );
+  await member.getByRole('button', { name: '停用', exact: true }).click();
+  await page.locator('dialog[role=alertdialog] .sheet-cancel').click();
+  await context.route('**/api/v1/admin/users/*', (route) =>
+    route.request().method() === 'PATCH'
+      ? route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'TEST_FAILURE', message: '暂时无法保存，请重试' } }),
+        })
+      : route.continue(),
+  );
+  await member.getByRole('button', { name: '停用', exact: true }).click();
+  await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();
+  await page.locator('.notyf [role=alert]').filter({ hasText: '暂时无法保存，请重试' }).waitFor();
+  assert.equal(await dialog.locator('.user-management > [role=alert]').count(), 0);
   await context.unroute('**/api/v1/admin/users/*');
-  await member.getByRole('button',{name:'设为管理员',exact:true}).click();await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();await member.getByRole('button',{name:'移除管理员',exact:true}).waitFor();
-  await member.getByRole('button',{name:'移除管理员',exact:true}).click();await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();await member.getByRole('button',{name:'设为管理员',exact:true}).waitFor();
-  await member.getByRole('button',{name:'停用',exact:true}).click();await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();await member.getByRole('button',{name:'启用',exact:true}).waitFor();
-  await member.getByRole('button',{name:'启用',exact:true}).click();await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();await member.getByRole('button',{name:'停用',exact:true}).waitFor();
-  await member.getByRole('button',{name:'重置密码',exact:true}).click();await dialog.getByLabel('新密码',{exact:true}).fill('password456');await button('确认重置密码').click();await page.getByText('密码已重置，旧会话已失效',{exact:true}).waitFor();
-  await page.screenshot({path:join(shots,'admin-users-390.png')});
-  await page.goto(base+'/#/me');await page.getByRole('link',{name:'注册与邀请'}).click();await dialog.getByLabel('注册方式').and(page.locator('select')).waitFor();await dialog.getByLabel('注册方式').and(page.locator('select')).selectOption('invite');await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();await page.getByText('已保存',{exact:true}).waitFor();
-  await page.getByText('创建邀请码',{exact:true}).click();await dialog.getByLabel('备注',{exact:true}).fill('家人注册');await button('生成邀请码').click();await dialog.getByLabel('新邀请码',{exact:true}).waitFor();
-  const code=await dialog.getByLabel('新邀请码',{exact:true}).inputValue();assert.ok(code.length>=20);
-  await page.screenshot({path:join(shots,'admin-registration-390.png')});
-  assert.equal(await dialog.evaluate(el=>el.scrollWidth>el.clientWidth),false);
-  const newcomer=await context.browser().newContext({viewport:{width:390,height:844}}), visitor=await newcomer.newPage();
+  await member.getByRole('button', { name: '设为管理员', exact: true }).click();
+  await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();
+  await member.getByRole('button', { name: '移除管理员', exact: true }).waitFor();
+  await member.getByRole('button', { name: '移除管理员', exact: true }).click();
+  await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();
+  await member.getByRole('button', { name: '设为管理员', exact: true }).waitFor();
+  await member.getByRole('button', { name: '停用', exact: true }).click();
+  await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();
+  await member.getByRole('button', { name: '启用', exact: true }).waitFor();
+  await member.getByRole('button', { name: '启用', exact: true }).click();
+  await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();
+  await member.getByRole('button', { name: '停用', exact: true }).waitFor();
+  await member.getByRole('button', { name: '重置密码', exact: true }).click();
+  await dialog.getByLabel('新密码', { exact: true }).fill('password456');
+  await button('确认重置密码').click();
+  await page.getByText('密码已重置，旧会话已失效', { exact: true }).waitFor();
+  await page.screenshot({ path: join(shots, 'admin-users-390.png') });
+  await page.goto(base + '/#/me');
+  await page.getByRole('link', { name: '注册与邀请' }).click();
+  await dialog.getByLabel('注册方式').and(page.locator('select')).waitFor();
+  await dialog.getByLabel('注册方式').and(page.locator('select')).selectOption('invite');
+  await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();
+  await page.getByText('已保存', { exact: true }).waitFor();
+  await page.getByText('创建邀请码', { exact: true }).click();
+  await dialog.getByLabel('备注', { exact: true }).fill('家人注册');
+  await button('生成邀请码').click();
+  await dialog.getByLabel('新邀请码', { exact: true }).waitFor();
+  const code = await dialog.getByLabel('新邀请码', { exact: true }).inputValue();
+  assert.ok(code.length >= 20);
+  await page.screenshot({ path: join(shots, 'admin-registration-390.png') });
+  assert.equal(await dialog.evaluate((el) => el.scrollWidth > el.clientWidth), false);
+  const newcomer = await context.browser().newContext({ viewport: { width: 390, height: 844 } }),
+    visitor = await newcomer.newPage();
   try {
-    await visitor.goto(base+'/#/shelf');await visitor.getByRole('button',{name:'注册新账号',exact:true}).click();await visitor.locator('#login-invite').waitFor();
-    await visitor.locator('#login-username').fill('invited-ui');await visitor.locator('#login-password').fill('password123');await visitor.locator('#login-invite').fill(code);
-    await visitor.getByRole('button',{name:'注册并登录',exact:true}).click();await visitor.locator('.shelf-screen').waitFor();
-    await visitor.goto(base+'/#/me');await visitor.getByRole('heading',{name:'我的'}).waitFor();
-    assert.equal(await visitor.getByRole('link',{name:/用户管理|注册与邀请|服务配置/}).count(),0);
-  } finally {await newcomer.close();}
-  await dialog.getByLabel('注册方式').and(page.locator('select')).selectOption('closed');await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();await page.getByText('已保存',{exact:true}).waitFor();
-  const anonymous=await context.browser().newContext(), login=await anonymous.newPage();
-  try {await login.goto(base);await login.getByText('此实例已关闭公开注册，请使用已有账号登录。',{exact:true}).waitFor();assert.equal(await login.getByRole('button',{name:'注册新账号',exact:true}).count(),0);}finally{await anonymous.close();}
+    await visitor.goto(base + '/#/shelf');
+    await visitor.getByRole('button', { name: '注册新账号', exact: true }).click();
+    await visitor.locator('#login-invite').waitFor();
+    await visitor.locator('#login-username').fill('invited-ui');
+    await visitor.locator('#login-password').fill('password123');
+    await visitor.locator('#login-invite').fill(code);
+    await visitor.getByRole('button', { name: '注册并登录', exact: true }).click();
+    await visitor.locator('.shelf-screen').waitFor();
+    await visitor.goto(base + '/#/me');
+    await visitor.getByRole('heading', { name: '我的' }).waitFor();
+    assert.equal(await visitor.getByRole('link', { name: /用户管理|注册与邀请|服务配置/ }).count(), 0);
+  } finally {
+    await newcomer.close();
+  }
+  await dialog.getByLabel('注册方式').and(page.locator('select')).selectOption('closed');
+  await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();
+  await page.getByText('已保存', { exact: true }).waitFor();
+  const anonymous = await context.browser().newContext(),
+    login = await anonymous.newPage();
+  try {
+    await login.goto(base);
+    await login.getByText('此实例已关闭公开注册，请使用已有账号登录。', { exact: true }).waitFor();
+    assert.equal(await login.getByRole('button', { name: '注册新账号', exact: true }).count(), 0);
+  } finally {
+    await anonymous.close();
+  }
 }

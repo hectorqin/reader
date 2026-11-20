@@ -6,8 +6,16 @@ it('persists the current reading position before draining local writes, without 
   const calls: string[] = [];
   const sync = { flush: vi.fn() };
   await App.prototype.saveBeforeUpdate.call({
-    reader: { async flushProgress() { calls.push('position'); } },
-    offline: { async flush() { calls.push('storage'); } },
+    reader: {
+      async flushProgress() {
+        calls.push('position');
+      },
+    },
+    offline: {
+      async flush() {
+        calls.push('storage');
+      },
+    },
     sync,
   } as unknown as App);
   expect(calls).toEqual(['position', 'storage']);
@@ -16,8 +24,14 @@ it('persists the current reading position before draining local writes, without 
 
 it('propagates local save failures so PWA activation can be stopped', async () => {
   const error = new Error('quota exceeded');
-  await expect(App.prototype.saveBeforeUpdate.call({
-    reader: { async flushProgress() { throw error; } },
-    offline: { flush: vi.fn() },
-  } as unknown as App)).rejects.toBe(error);
+  await expect(
+    App.prototype.saveBeforeUpdate.call({
+      reader: {
+        async flushProgress() {
+          throw error;
+        },
+      },
+      offline: { flush: vi.fn() },
+    } as unknown as App),
+  ).rejects.toBe(error);
 });

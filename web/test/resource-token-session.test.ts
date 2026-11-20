@@ -4,13 +4,20 @@ import { FakeTransport, makePlatform } from './helpers/env.ts';
 
 function setup() {
   const transport = new FakeTransport();
-  const api = new ReaderApi(makePlatform(transport), { load: async () => null, save: async () => {}, clear: async () => {} });
+  const api = new ReaderApi(makePlatform(transport), {
+    load: async () => null,
+    save: async () => {},
+    clear: async () => {},
+  });
   api.setBaseUrl('https://reader.test');
   const session = {
     user: { id: 'reader', username: 'reader', displayName: '', role: 'member' as const, createdAt: 0 },
-    accessToken: 'private-access', accessTokenExpiresAt: Date.now() + 3_600_000,
-    resourceToken: 'old-resource', resourceTokenExpiresAt: Date.now() + 1000,
-    refreshToken: 'refresh', refreshTokenExpiresAt: Date.now() + 86_400_000,
+    accessToken: 'private-access',
+    accessTokenExpiresAt: Date.now() + 3_600_000,
+    resourceToken: 'old-resource',
+    resourceTokenExpiresAt: Date.now() + 1000,
+    refreshToken: 'refresh',
+    refreshTokenExpiresAt: Date.now() + 86_400_000,
   };
   return { transport, api, session };
 }
@@ -38,7 +45,7 @@ it('keeps an unexpired access session usable if proactive resource renewal loses
   const { transport, api, session } = setup();
   transport.json(session);
   await api.login('reader', 'password');
-  transport.respondWith(request => {
+  transport.respondWith((request) => {
     if (request.url.endsWith('/auth/refresh')) throw new Error('network unavailable');
     return { status: 200, headers: {}, json: { items: [], total: 0, page: 1, pageSize: 50 } };
   });

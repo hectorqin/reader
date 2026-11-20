@@ -62,7 +62,10 @@ export interface NativePageHost {
  * consumer, and the translation between "section" and "native view" belongs next
  * to the code that knows what a section is.
  */
-export function createNativePageHost(invoke: (request: NativePageRequest) => Promise<boolean>, onHide: () => void): NativePageHost {
+export function createNativePageHost(
+  invoke: (request: NativePageRequest) => Promise<boolean>,
+  onHide: () => void,
+): NativePageHost {
   return {
     show: (request) => invoke(request),
     hide: onHide,

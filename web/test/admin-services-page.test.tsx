@@ -17,11 +17,17 @@ const groups = [
 ];
 const runtime = { api: { businessSettingsRequest: vi.fn(async () => ({ groups })) } } as any;
 const user: User = { id: 'admin', username: 'admin', displayName: '管理员', role: 'admin', createdAt: 0 };
-const paint = () => act(async () => render(
-  <RuntimeContext.Provider value={runtime}>
-    <MemoryRouter><AdminServicesPage /></MemoryRouter>
-  </RuntimeContext.Provider>, root,
-));
+const paint = () =>
+  act(async () =>
+    render(
+      <RuntimeContext.Provider value={runtime}>
+        <MemoryRouter>
+          <AdminServicesPage />
+        </MemoryRouter>
+      </RuntimeContext.Provider>,
+      root,
+    ),
+  );
 
 afterEach(() => {
   act(() => render(null, root));
@@ -29,11 +35,12 @@ afterEach(() => {
   dismissAllNotices();
 });
 
-const selectGroup = (group: string) => act(() => {
-  const select = root.querySelector<HTMLSelectElement>('[aria-label="配置分类"]')!;
-  select.value = group;
-  select.dispatchEvent(new Event('change', { bubbles: true }));
-});
+const selectGroup = (group: string) =>
+  act(() => {
+    const select = root.querySelector<HTMLSelectElement>('[aria-label="配置分类"]')!;
+    select.value = group;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
 
 it('shows the ready status only within the modules settings', async () => {
   useAuthStore.setState({ verifiedUser: { ...user, mediaState: 'ready' } });

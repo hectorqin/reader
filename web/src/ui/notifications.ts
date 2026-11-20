@@ -3,8 +3,16 @@ import 'notyf/notyf.min.css';
 import '../styles/notifications.css';
 
 export type NoticeKind = 'info' | 'success' | 'error' | 'loading';
-export interface NoticeOptions { kind?: NoticeKind; duration?: number }
-interface ActiveNotice { notification: NotyfNotification; node: HTMLElement; message: string; kind: NoticeKind }
+export interface NoticeOptions {
+  kind?: NoticeKind;
+  duration?: number;
+}
+interface ActiveNotice {
+  notification: NotyfNotification;
+  node: HTMLElement;
+  message: string;
+  kind: NoticeKind;
+}
 const active = new Map<symbol, ActiveNotice>();
 let library: Notyf | undefined;
 let container: HTMLElement | undefined;
@@ -12,8 +20,16 @@ let announcer: HTMLElement | undefined;
 
 function service(): Notyf {
   if (!library) {
-    library = new Notyf({ position: { x: 'center', y: 'bottom' }, ripple: false, dismissible: true,
-      types: ['info', 'success', 'error', 'loading'].map(type => ({ type, icon: false, background: 'var(--reader-surface)', className: 'global-notice' })),
+    library = new Notyf({
+      position: { x: 'center', y: 'bottom' },
+      ripple: false,
+      dismissible: true,
+      types: ['info', 'success', 'error', 'loading'].map((type) => ({
+        type,
+        icon: false,
+        background: 'var(--reader-surface)',
+        className: 'global-notice',
+      })),
     });
     container = document.querySelector<HTMLElement>('.notyf')!;
     announcer = document.querySelector<HTMLElement>('.notyf-announcer')!;
@@ -46,8 +62,12 @@ export function dismissNotice(id: symbol): void {
 
 /** Plain text only: Notyf accepts HTML, whereas server/plugin messages are untrusted. */
 export function notify(message: string, options: NoticeOptions = {}, id = Symbol('notice')): symbol {
-  if (!message) { dismissNotice(id); return id; }
-  const notyf = service(), kind = options.kind ?? 'info';
+  if (!message) {
+    dismissNotice(id);
+    return id;
+  }
+  const notyf = service(),
+    kind = options.kind ?? 'info';
   for (const [key, notice] of active) {
     if (!notice.node.isConnected || notice.node.classList.contains('notyf__toast--disappear')) dismissNotice(key);
   }
@@ -60,9 +80,13 @@ export function notify(message: string, options: NoticeOptions = {}, id = Symbol
   }
   dismissNotice(id);
   if (active.size >= 3) dismissNotice(active.keys().next().value!);
-  const escaped = document.createElement('span'); escaped.textContent = message;
-  const notification = notyf.open({ type: kind, message: escaped.innerHTML, dismissible: kind !== 'loading',
-    duration: kind === 'loading' ? 0 : options.duration ?? Math.min(12_000, Math.max(6000, message.length * 100)),
+  const escaped = document.createElement('span');
+  escaped.textContent = message;
+  const notification = notyf.open({
+    type: kind,
+    message: escaped.innerHTML,
+    dismissible: kind !== 'loading',
+    duration: kind === 'loading' ? 0 : (options.duration ?? Math.min(12_000, Math.max(6000, message.length * 100))),
   });
   const node = container!.lastElementChild as HTMLElement;
   node.dataset.kind = kind;
@@ -71,7 +95,10 @@ export function notify(message: string, options: NoticeOptions = {}, id = Symbol
   content.setAttribute('aria-live', kind === 'error' ? 'assertive' : 'polite');
   content.setAttribute('aria-atomic', 'true');
   const close = node.querySelector('button');
-  if (close) { close.type = 'button'; close.setAttribute('aria-label', '关闭提示'); }
+  if (close) {
+    close.type = 'button';
+    close.setAttribute('aria-label', '关闭提示');
+  }
   active.set(id, { notification, node, message, kind });
   notification.on(NotyfEvent.Dismiss, () => dismissNotice(id));
   return id;

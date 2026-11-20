@@ -1,11 +1,11 @@
 # Development
 
-[Project home](../README.en.md) · [Documentation](README.md) · [简体中文](development.zh-CN.md)
+[Project home](../README.md) · [Documentation](README.md) · [简体中文](development.zh-CN.md)
 
 ## Requirements
 
 - Node.js 22 or later (`engines` in `server/package.json`); 24 is recommended to match the current container and CI. The server uses built-in `node:sqlite` and runs TypeScript directly through `tsx`.
-- npm and Git. Server and Web have separate package manifests and lockfiles; there is no root-level npm script.
+- npm and Git. Server and Web have separate package manifests and lockfiles; the root `package.json` only holds repository tooling (Prettier and git hooks).
 - Chromium for UI reviews.
 - For Android: JDK 17+, Android SDK 35, and Build Tools 35.0.1. The Web asset script requires a POSIX shell; Windows users can use Git Bash or WSL.
 
@@ -14,9 +14,17 @@ Unless noted otherwise, run commands from the repository root.
 ## Install dependencies
 
 ```sh
+npm ci                  # repo root: Prettier + git hooks (husky, lint-staged)
 npm ci --prefix server
 npm ci --prefix web
 ```
+
+The root `package.json` holds repository tooling only. `npm ci` there installs two git hooks:
+
+- **pre-commit** formats staged files with Prettier (`.prettierrc.json`: 2 spaces, single quotes, semicolons, width 120; CSS keeps double quotes). Markdown is not reformatted.
+- **commit-msg** requires [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <subject>`, type one of `feat fix perf refactor style test docs build ci chore revert`, header ≤ 100 chars. Merge and revert messages pass through.
+
+Run `npm run format` to format everything, or `npm run format:check` to check as CI does. Editors should honour `.editorconfig`.
 
 For browser UI reviews, install Chromium from the Web directory:
 
@@ -108,7 +116,7 @@ Icons are mapped from a name to a Lucide glyph in one place, `ICONS` in `web/src
 
 ## CI and releases
 
-- GitHub Actions `.github/workflows/ci.yml` runs on every pull request and on pushes to every branch. Server and Web each run install → typecheck → test → build; a UI review job reuses the Web build and keeps screenshots as artifacts; the Android job runs `check-shell.sh`, verifies the packed Web assets, and builds a debug APK.
+- GitHub Actions `.github/workflows/ci.yml` runs on every pull request and on pushes to every branch. A format job runs `npm run format:check` at the root; Server and Web each run install → typecheck → test → build; a UI review job reuses the Web build and keeps screenshots as artifacts; the Android job runs `check-shell.sh`, verifies the packed Web assets, and builds a debug APK.
 - `.github/workflows/release.yml` runs only for `v*` tags or a manual run. It runs CI first, then builds the image on native amd64 and arm64 runners and publishes it to Docker Hub `hectorqin/reader-pro`: `x.y.z`, `x.y`, `latest`, and `sha-*` for tags; the branch name and `sha-*` for manual runs. It needs the `DOCKER_USERNAME` and `DOCKER_PASSWORD` repository secrets. `main` is the long-lived development branch; pushing to it does not release.
 
 ## Build and run
@@ -177,5 +185,6 @@ The application UI uses React 19 and React Router (hash routing only). React Que
 2. Keep changes focused and follow existing error handling and test patterns.
 3. Add appropriate regression checks for behavior changes. Documentation-only changes need link, command, and example checks.
 4. Describe the changes, validation, and known limitations when submitting.
+5. Use Conventional Commit messages (for example `fix(web): keep the shelf page after a refresh`); the hooks above format code and check the message.
 
 See the [API reference (中文)](api.md), [media architecture (中文)](media-implementation.md), and [media validation (中文)](media-validation.md).

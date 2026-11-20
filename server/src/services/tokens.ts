@@ -39,7 +39,14 @@ function signToken(
 ): { token: string; expiresAt: number } {
   const issuedAt = Math.floor(Date.now() / 1000);
   const expiresAt = issuedAt + ttl;
-  const payload: TokenPayload = { sub: user.id, role: user.role, type, iat: issuedAt, exp: expiresAt, ver: user.authVersion ?? 0 };
+  const payload: TokenPayload = {
+    sub: user.id,
+    role: user.role,
+    type,
+    iat: issuedAt,
+    exp: expiresAt,
+    ver: user.authVersion ?? 0,
+  };
   const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const body = base64url(JSON.stringify(payload));
   const signature = sign(config.jwtSecret, `${header}.${body}`);
@@ -70,7 +77,8 @@ function verifyToken(config: AppConfig, token: string, type: TokenPayload['type'
   } catch {
     throw unauthorized('bad token payload', 'TOKEN_INVALID');
   }
-  if (!payload || typeof payload.sub !== 'string' || payload.type !== type || !Number.isSafeInteger(payload.exp)) throw unauthorized('wrong token type or payload', 'TOKEN_INVALID');
+  if (!payload || typeof payload.sub !== 'string' || payload.type !== type || !Number.isSafeInteger(payload.exp))
+    throw unauthorized('wrong token type or payload', 'TOKEN_INVALID');
   if (payload.exp * 1000 <= Date.now()) throw unauthorized('token expired', 'TOKEN_EXPIRED');
   return payload;
 }

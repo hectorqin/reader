@@ -23,7 +23,10 @@ import { inflateSync } from 'node:zlib';
  */
 
 export class MobiError extends Error {
-  constructor(message: string, readonly code: 'NOT_MOBI' | 'DRM' | 'UNSUPPORTED' | 'CORRUPT') {
+  constructor(
+    message: string,
+    readonly code: 'NOT_MOBI' | 'DRM' | 'UNSUPPORTED' | 'CORRUPT',
+  ) {
     super(message);
   }
 }
@@ -83,15 +86,19 @@ export class PalmDb {
     if (78 + count * 8 > buf.length) throw new MobiError('记录表超出文件长度', 'CORRUPT');
     this.offsets = Array.from({ length: count }, (_, i) => buf.readUInt32BE(78 + i * 8));
     for (let i = 0; i < count; i += 1) {
-      const start = this.offsets[i]!, end = i + 1 < count ? this.offsets[i + 1]! : buf.length;
+      const start = this.offsets[i]!,
+        end = i + 1 < count ? this.offsets[i + 1]! : buf.length;
       if (start > end || end > buf.length) throw new MobiError(`第 ${i} 条记录越界`, 'CORRUPT');
     }
   }
 
-  get count(): number { return this.offsets.length; }
+  get count(): number {
+    return this.offsets.length;
+  }
 
   record(index: number): Buffer {
-    if (!Number.isInteger(index) || index < 0 || index >= this.offsets.length) throw new MobiError(`记录 ${index} 不存在`, 'CORRUPT');
+    if (!Number.isInteger(index) || index < 0 || index >= this.offsets.length)
+      throw new MobiError(`记录 ${index} 不存在`, 'CORRUPT');
     const end = index + 1 < this.offsets.length ? this.offsets[index + 1]! : this.buf.length;
     return this.buf.subarray(this.offsets[index]!, end);
   }
@@ -99,17 +106,25 @@ export class PalmDb {
 
 /** Reads the headers in a book's record 0. Throws on DRM: there is nothing to read. */
 export function readHeader(record0: Buffer): MobiHeader {
-  if (record0.length < 24 || record0.toString('latin1', 16, 20) !== 'MOBI') throw new MobiError('缺少 MOBI 头', 'NOT_MOBI');
+  if (record0.length < 24 || record0.toString('latin1', 16, 20) !== 'MOBI')
+    throw new MobiError('缺少 MOBI 头', 'NOT_MOBI');
   const u32 = (at: number): number => (at + 4 <= record0.length ? record0.readUInt32BE(at) : NONE);
   const encryption = record0.readUInt16BE(12);
   if (encryption !== 0) throw new MobiError('这本 Kindle 书带有 DRM 加密，无法打开', 'DRM');
   const headerLength = u32(20);
   const encoding = u32(28);
   const version = u32(36);
-  const nameOffset = u32(84), nameLength = u32(88);
-  const name = nameOffset !== NONE && nameOffset + nameLength <= record0.length ? record0.subarray(nameOffset, nameOffset + nameLength) : Buffer.alloc(0);
+  const nameOffset = u32(84),
+    nameLength = u32(88);
+  const name =
+    nameOffset !== NONE && nameOffset + nameLength <= record0.length
+      ? record0.subarray(nameOffset, nameOffset + nameLength)
+      : Buffer.alloc(0);
   const exthFlags = u32(128);
-  const exth = exthFlags !== NONE && exthFlags & 0x40 ? readExth(record0.subarray(16 + headerLength), encoding) : { creators: [], subjects: [], languages: [] };
+  const exth =
+    exthFlags !== NONE && exthFlags & 0x40
+      ? readExth(record0.subarray(16 + headerLength), encoding)
+      : { creators: [], subjects: [], languages: [] };
   return {
     compression: record0.readUInt16BE(0),
     numTextRecords: record0.readUInt16BE(8),
@@ -137,25 +152,57 @@ function readExth(buf: Buffer, encoding: number): Exth {
   const count = buf.readUInt32BE(8);
   let at = 12;
   for (let i = 0; i < count && at + 8 <= buf.length; i += 1) {
-    const type = buf.readUInt32BE(at), length = buf.readUInt32BE(at + 4);
+    const type = buf.readUInt32BE(at),
+      length = buf.readUInt32BE(at + 4);
     if (length < 8 || at + length > buf.length) break;
     const data = buf.subarray(at + 8, at + length);
     const text = (): string => decodeText(data, encoding).trim();
     const uint = (): number | undefined => (data.length >= 4 ? data.readUInt32BE(0) : undefined);
     switch (type) {
-      case 100: if (text()) exth.creators.push(text()); break;
-      case 101: exth.publisher = text(); break;
-      case 103: exth.description = text(); break;
-      case 104: exth.isbn = text(); break;
-      case 105: if (text()) exth.subjects.push(text()); break;
-      case 106: exth.date = text(); break;
-      case 113: exth.asin = text(); break;
-      case 121: { const value = uint(); if (value !== undefined) exth.kf8Boundary = value; break; }
-      case 201: { const value = uint(); if (value !== undefined) exth.coverOffset = value; break; }
-      case 202: { const value = uint(); if (value !== undefined) exth.thumbnailOffset = value; break; }
-      case 503: exth.title = text(); break;
-      case 524: if (text()) exth.languages.push(text()); break;
-      default: break;
+      case 100:
+        if (text()) exth.creators.push(text());
+        break;
+      case 101:
+        exth.publisher = text();
+        break;
+      case 103:
+        exth.description = text();
+        break;
+      case 104:
+        exth.isbn = text();
+        break;
+      case 105:
+        if (text()) exth.subjects.push(text());
+        break;
+      case 106:
+        exth.date = text();
+        break;
+      case 113:
+        exth.asin = text();
+        break;
+      case 121: {
+        const value = uint();
+        if (value !== undefined) exth.kf8Boundary = value;
+        break;
+      }
+      case 201: {
+        const value = uint();
+        if (value !== undefined) exth.coverOffset = value;
+        break;
+      }
+      case 202: {
+        const value = uint();
+        if (value !== undefined) exth.thumbnailOffset = value;
+        break;
+      }
+      case 503:
+        exth.title = text();
+        break;
+      case 524:
+        if (text()) exth.languages.push(text());
+        break;
+      default:
+        break;
     }
     at += length;
   }
@@ -184,12 +231,14 @@ export function decompressPalmDoc(input: Uint8Array): Buffer {
     } else if (byte <= 0xbf) {
       // A back-reference: 11 bits of distance, 3 bits of length (+3).
       const pair = (byte << 8) | (input[++i] ?? 0);
-      const distance = (pair & 0x3fff) >> 3, count = (pair & 0x07) + 3;
+      const distance = (pair & 0x3fff) >> 3,
+        count = (pair & 0x07) + 3;
       if (distance === 0 || distance > length) throw new MobiError('PalmDOC 回溯越界', 'CORRUPT');
       for (let n = 0; n < count; n += 1) push(out[length - distance]!);
     } else {
       // A space followed by a character.
-      push(0x20); push(byte ^ 0x80);
+      push(0x20);
+      push(byte ^ 0x80);
     }
   }
   return out.subarray(0, length);
@@ -199,15 +248,21 @@ export function decompressPalmDoc(input: Uint8Array): Buffer {
  * HUFF/CDIC (compression 17480): a Huffman code over a dictionary of phrases that
  * may themselves be compressed. Rare, but some publishers' MOBI 6 files use it.
  */
-export function huffCdicDecompressor(load: (index: number) => Buffer, huffRecord: number, huffCount: number): (input: Uint8Array) => Buffer {
+export function huffCdicDecompressor(
+  load: (index: number) => Buffer,
+  huffRecord: number,
+  huffCount: number,
+): (input: Uint8Array) => Buffer {
   const huff = load(huffRecord);
   if (huff.toString('latin1', 0, 4) !== 'HUFF') throw new MobiError('缺少 HUFF 记录', 'CORRUPT');
-  const offset1 = huff.readUInt32BE(8), offset2 = huff.readUInt32BE(12);
+  const offset1 = huff.readUInt32BE(8),
+    offset2 = huff.readUInt32BE(12);
   const table1 = Array.from({ length: 256 }, (_, i) => {
     const value = huff.readUInt32BE(offset1 + i * 4);
     return { found: (value & 0x80) !== 0, codeLength: value & 0x1f, term: value >>> 8 };
   });
-  const minCode: number[] = [0], maxCode: number[] = [0];
+  const minCode: number[] = [0],
+    maxCode: number[] = [0];
   for (let i = 0; i < 32; i += 1) {
     minCode.push(huff.readUInt32BE(offset2 + i * 8));
     maxCode.push(huff.readUInt32BE(offset2 + i * 8 + 4));
@@ -216,7 +271,9 @@ export function huffCdicDecompressor(load: (index: number) => Buffer, huffRecord
   for (let r = 1; r < huffCount; r += 1) {
     const cdic = load(huffRecord + r);
     if (cdic.toString('latin1', 0, 4) !== 'CDIC') throw new MobiError('缺少 CDIC 记录', 'CORRUPT');
-    const headerLength = cdic.readUInt32BE(4), entries = cdic.readUInt32BE(8), codeLength = cdic.readUInt32BE(12);
+    const headerLength = cdic.readUInt32BE(4),
+      entries = cdic.readUInt32BE(8),
+      codeLength = cdic.readUInt32BE(12);
     const body = cdic.subarray(headerLength);
     const n = Math.min(1 << codeLength, entries - dictionary.length);
     for (let i = 0; i < n; i += 1) {
@@ -238,7 +295,8 @@ export function huffCdicDecompressor(load: (index: number) => Buffer, huffRecord
     for (let position = 0; position < bits;) {
       const word = peek(position);
       const entry = table1[word >>> 24]!;
-      let codeLength = entry.codeLength, term = entry.term;
+      let codeLength = entry.codeLength,
+        term = entry.term;
       if (!entry.found) {
         while (codeLength < 32 && Math.floor(word / 2 ** (32 - codeLength)) < minCode[codeLength]!) codeLength += 1;
         term = maxCode[codeLength]!;
@@ -249,12 +307,15 @@ export function huffCdicDecompressor(load: (index: number) => Buffer, huffRecord
       const index = term - Math.floor(word / 2 ** (32 - codeLength));
       const phrase = dictionary[index];
       if (!phrase) throw new MobiError('HUFF 字典越界', 'CORRUPT');
-      if (!phrase.done) { phrase.bytes = decompress(phrase.bytes, depth + 1); phrase.done = true; }
+      if (!phrase.done) {
+        phrase.bytes = decompress(phrase.bytes, depth + 1);
+        phrase.done = true;
+      }
       parts.push(phrase.bytes);
     }
     return Buffer.concat(parts);
   };
-  return input => decompress(input, 0);
+  return (input) => decompress(input, 0);
 }
 
 /** Strips the per-record trailers that `trailingFlags` announces. */
@@ -278,7 +339,8 @@ export function trimTrailingEntries(record: Buffer, flags: number): Buffer {
 
 /** A forward variable-length number: 7 bits per byte, the last byte has its top bit set. */
 export function readVarLen(buf: Uint8Array, at: number): { value: number; length: number } {
-  let value = 0, length = 0;
+  let value = 0,
+    length = 0;
   while (length < 4 && at + length < buf.length) {
     const byte = buf[at + length]!;
     value = (value << 7) | (byte & 0x7f);
@@ -288,8 +350,14 @@ export function readVarLen(buf: Uint8Array, at: number): { value: number; length
   return { value, length };
 }
 
-export interface IndexEntry { name: string; tags: Map<number, number[]> }
-export interface IndexData { entries: IndexEntry[]; cncx: Map<number, string> }
+export interface IndexEntry {
+  name: string;
+  tags: Map<number, number[]>;
+}
+export interface IndexData {
+  entries: IndexEntry[];
+  cncx: Map<number, string>;
+}
 
 /**
  * An INDX table: the header record (with its TAGX tag description), the entry
@@ -298,10 +366,13 @@ export interface IndexData { entries: IndexEntry[]; cncx: Map<number, string> }
 export function readIndex(load: (index: number) => Buffer, first: number, encoding: number): IndexData {
   const head = load(first);
   if (head.toString('latin1', 0, 4) !== 'INDX') throw new MobiError('索引记录无效', 'CORRUPT');
-  const headerLength = head.readUInt32BE(4), recordCount = head.readUInt32BE(24), cncxCount = head.readUInt32BE(52);
+  const headerLength = head.readUInt32BE(4),
+    recordCount = head.readUInt32BE(24),
+    cncxCount = head.readUInt32BE(52);
   const tagx = head.subarray(headerLength);
   if (tagx.toString('latin1', 0, 4) !== 'TAGX') throw new MobiError('缺少 TAGX', 'CORRUPT');
-  const tagxLength = tagx.readUInt32BE(4), controlBytes = tagx.readUInt32BE(8);
+  const tagxLength = tagx.readUInt32BE(4),
+    controlBytes = tagx.readUInt32BE(8);
   const tagTable: Array<{ tag: number; values: number; mask: number; end: boolean }> = [];
   for (let at = 12; at + 4 <= tagxLength; at += 4) {
     tagTable.push({ tag: tagx[at]!, values: tagx[at + 1]!, mask: tagx[at + 2]!, end: (tagx[at + 3]! & 1) === 1 });
@@ -322,16 +393,21 @@ export function readIndex(load: (index: number) => Buffer, first: number, encodi
   for (let r = 0; r < recordCount; r += 1) {
     const record = load(first + 1 + r);
     if (record.toString('latin1', 0, 4) !== 'INDX') throw new MobiError('索引记录无效', 'CORRUPT');
-    const idxt = record.readUInt32BE(20), count = record.readUInt32BE(24);
+    const idxt = record.readUInt32BE(20),
+      count = record.readUInt32BE(24);
     for (let e = 0; e < count; e += 1) {
       const offset = record.readUInt16BE(idxt + 4 + e * 2);
       const nameLength = record[offset]!;
       const name = record.toString('latin1', offset + 1, offset + 1 + nameLength);
       const controlAt = offset + 1 + nameLength;
-      let at = controlAt + controlBytes, controlIndex = 0;
+      let at = controlAt + controlBytes,
+        controlIndex = 0;
       const present: Array<{ tag: number; valueCount: number; valueBytes: number; values: number }> = [];
       for (const { tag, values, mask, end } of tagTable) {
-        if (end) { controlIndex += 1; continue; }
+        if (end) {
+          controlIndex += 1;
+          continue;
+        }
         const masked = record[controlAt + controlIndex]! & mask;
         if (masked === 0) continue;
         if (masked === mask && bitCount(mask) > 1) {
@@ -347,9 +423,18 @@ export function readIndex(load: (index: number) => Buffer, first: number, encodi
       for (const { tag, valueCount, valueBytes, values } of present) {
         const list: number[] = [];
         if (valueCount > 0) {
-          for (let k = 0; k < valueCount * values; k += 1) { const v = readVarLen(record, at); list.push(v.value); at += v.length; }
+          for (let k = 0; k < valueCount * values; k += 1) {
+            const v = readVarLen(record, at);
+            list.push(v.value);
+            at += v.length;
+          }
         } else {
-          for (let consumed = 0; consumed < valueBytes;) { const v = readVarLen(record, at); list.push(v.value); at += v.length; consumed += v.length; }
+          for (let consumed = 0; consumed < valueBytes;) {
+            const v = readVarLen(record, at);
+            list.push(v.value);
+            at += v.length;
+            consumed += v.length;
+          }
         }
         tags.set(tag, list);
       }
@@ -359,12 +444,23 @@ export function readIndex(load: (index: number) => Buffer, first: number, encodi
   return { entries, cncx };
 }
 
-function bitCount(value: number): number { let n = 0; for (let v = value; v; v >>= 1) n += v & 1; return n; }
-function trailingZeros(value: number): number { let n = 0; for (let v = value; v && !(v & 1); v >>= 1) n += 1; return n; }
+function bitCount(value: number): number {
+  let n = 0;
+  for (let v = value; v; v >>= 1) n += v & 1;
+  return n;
+}
+function trailingZeros(value: number): number {
+  let n = 0;
+  for (let v = value; v && !(v & 1); v >>= 1) n += 1;
+  return n;
+}
 
 /** An embedded font: optionally XOR-obfuscated, optionally zlib-compressed. */
 export function readFontRecord(record: Buffer): Buffer {
-  const flags = record.readUInt32BE(8), dataStart = record.readUInt32BE(12), keyLength = record.readUInt32BE(16), keyStart = record.readUInt32BE(20);
+  const flags = record.readUInt32BE(8),
+    dataStart = record.readUInt32BE(12),
+    keyLength = record.readUInt32BE(16),
+    keyStart = record.readUInt32BE(20);
   let data = Buffer.from(record.subarray(dataStart));
   if (flags & 2 && keyLength > 0) {
     const key = record.subarray(keyStart, keyStart + keyLength);

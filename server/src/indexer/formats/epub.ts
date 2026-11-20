@@ -304,10 +304,16 @@ const MAX_STYLESHEET_BYTES = 2 * 1024 * 1024;
  * folder, not the chapter's, so they are resolved here, before the text moves into
  * the chapter. The URLs are written with a bare `&`: nothing decodes entities in CSS.
  */
-export async function inlineStylesheets(xhtml: string, baseDir: string, archive: {
-  exists(path: string): boolean; size(path: string): number; read(path: string): Promise<string>;
-  assetUrl(path: string, fragment: string): string;
-}): Promise<string> {
+export async function inlineStylesheets(
+  xhtml: string,
+  baseDir: string,
+  archive: {
+    exists(path: string): boolean;
+    size(path: string): number;
+    read(path: string): Promise<string>;
+    assetUrl(path: string, fragment: string): string;
+  },
+): Promise<string> {
   const links = [...xhtml.matchAll(/<link\b[^>]*>/gi)];
   if (!links.length) return xhtml;
   const replacements = new Map<string, string>();
@@ -320,7 +326,11 @@ export async function inlineStylesheets(xhtml: string, baseDir: string, archive:
     const cssPath = posix.normalize(baseDir === '.' ? splitFragment(href)[0] : `${baseDir}/${splitFragment(href)[0]}`);
     if (!archive.exists(cssPath) || archive.size(cssPath) > MAX_STYLESHEET_BYTES) continue;
     let css: string;
-    try { css = await archive.read(cssPath); } catch { continue; }
+    try {
+      css = await archive.read(cssPath);
+    } catch {
+      continue;
+    }
     const cssDir = posix.dirname(cssPath);
     const resolved = css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (whole: string, quote: string, value: string) => {
       const trimmed = value.trim();
@@ -329,9 +339,12 @@ export async function inlineStylesheets(xhtml: string, baseDir: string, archive:
       const full = posix.normalize(cssDir === '.' ? target : `${cssDir}/${target}`);
       return archive.exists(full) ? `url(${quote}${archive.assetUrl(full, fragment)}${quote})` : whole;
     });
-    replacements.set(tag, `<style data-href="${escapeAttribute(cssPath)}">${resolved.replace(/<\/style/gi, '<\\/style')}</style>`);
+    replacements.set(
+      tag,
+      `<style data-href="${escapeAttribute(cssPath)}">${resolved.replace(/<\/style/gi, '<\\/style')}</style>`,
+    );
   }
-  return replacements.size ? xhtml.replace(/<link\b[^>]*>/gi, tag => replacements.get(tag) ?? tag) : xhtml;
+  return replacements.size ? xhtml.replace(/<link\b[^>]*>/gi, (tag) => replacements.get(tag) ?? tag) : xhtml;
 }
 
 /**
@@ -451,7 +464,10 @@ async function readPackageWith(archive: ZipArchive, withTitles: boolean): Promis
   const containerEntry = archive.get('META-INF/container.xml');
   let opfPath = '';
   if (containerEntry) {
-    const container = xmlParser.parse((await archive.read('META-INF/container.xml')).toString('utf8')) as Record<string, any>;
+    const container = xmlParser.parse((await archive.read('META-INF/container.xml')).toString('utf8')) as Record<
+      string,
+      any
+    >;
     const rootfile = asArray(container?.container?.rootfiles?.rootfile).find(
       (entry) => typeof entry?.['@_full-path'] === 'string',
     );
@@ -492,27 +508,39 @@ async function readPackageWith(archive: ZipArchive, withTitles: boolean): Promis
    */
   if (!withTitles) return { spine, titles: new Map(), toc: [] };
   const declared = asArray(pkg?.manifest?.item);
-  const nav = declared.find(item => String(item?.['@_properties'] ?? '').split(/\s+/).includes('nav'));
-  const ncx = declared.find(item => item?.['@_media-type'] === 'application/x-dtbncx+xml');
+  const nav = declared.find((item) =>
+    String(item?.['@_properties'] ?? '')
+      .split(/\s+/)
+      .includes('nav'),
+  );
+  const ncx = declared.find((item) => item?.['@_media-type'] === 'application/x-dtbncx+xml');
   let toc: TocEntry[] = [];
-  for (const [item, kind] of [[nav, 'nav'], [ncx, 'ncx']] as const) {
+  for (const [item, kind] of [
+    [nav, 'nav'],
+    [ncx, 'ncx'],
+  ] as const) {
     if (!item) continue;
     const path = resolveHref(base, String(item['@_href']));
     try {
       const entries = parseNavigation((await archive.read(path, CHAPTER_PROBE_BYTES * 4)).toString('utf8'), kind);
-      toc = entries.flatMap(entry => {
+      toc = entries.flatMap((entry) => {
         const hash = entry.href.indexOf('#');
         const href = hash < 0 ? entry.href : entry.href.slice(0, hash);
         const fragment = hash < 0 ? '' : entry.href.slice(hash);
         const resolved = href ? resolveHref(posix.dirname(path), href) : path;
-        const index = spine.findIndex(s => s.path === resolved);
-        return index < 0 ? [] : [{ href: `xhtml:${resolved}${fragment}`, title: entry.title, level: entry.depth, spine: index }];
+        const index = spine.findIndex((s) => s.path === resolved);
+        return index < 0
+          ? []
+          : [{ href: `xhtml:${resolved}${fragment}`, title: entry.title, level: entry.depth, spine: index }];
       });
       if (toc.length) break;
-    } catch { /* Fall back to NCX or spine titles for malformed navigation. */ }
+    } catch {
+      /* Fall back to NCX or spine titles for malformed navigation. */
+    }
   }
   const titles = await readTitles(archive, base).catch(() => new Map<string, string>());
-  for (const entry of toc) if (!titles.has(spine[entry.spine!]!.path)) titles.set(spine[entry.spine!]!.path, entry.title);
+  for (const entry of toc)
+    if (!titles.has(spine[entry.spine!]!.path)) titles.set(spine[entry.spine!]!.path, entry.title);
   return { spine, titles, toc };
 }
 
@@ -529,8 +557,7 @@ function buildGroups(spine: SpineItem[], titles: Map<string, string>): Manifest[
   const groups: Manifest['groups'] = [];
   for (let offset = 0; offset < spine.length; offset += CHAPTER_WINDOW) {
     const count = Math.min(CHAPTER_WINDOW, spine.length - offset);
-    const label = (index: number): string =>
-      titles.get(spine[index]!.path) ?? `第 ${index + 1} 章`;
+    const label = (index: number): string => titles.get(spine[index]!.path) ?? `第 ${index + 1} 章`;
     groups.push({
       id: `spine:${offset}`,
       seq: groups.length,
@@ -594,7 +621,9 @@ function epubZipFromArchive(archive: ZipArchive): EpubZip {
       if (!archive.has(name)) return null;
       const read = async (type: 'string' | 'uint8array') => {
         const bytes = await archive.read(name);
-        return type === 'string' ? bytes.toString('utf8') : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        return type === 'string'
+          ? bytes.toString('utf8')
+          : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
       };
       return { async: read as EpubZipFile['async'] };
     },
@@ -669,12 +698,7 @@ interface ChapterContext {
  * alive instead of turning them into dead asset requests.
  */
 export function rewriteChapterDocument(xhtml: string, chapter: ChapterContext): string {
-  const withAssets = rewriteRelativeReferences(
-    xhtml,
-    chapter.baseDir,
-    chapter.assetUrl,
-    chapter.exists,
-  );
+  const withAssets = rewriteRelativeReferences(xhtml, chapter.baseDir, chapter.assetUrl, chapter.exists);
   return injectReaderAssets(withAssets, chapter);
 }
 

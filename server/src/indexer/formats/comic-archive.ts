@@ -55,7 +55,10 @@ function pageEntries(archive: ZipArchive): ReturnType<ZipArchive['files']> {
 }
 
 /** Reads the central directory and the first page from disk, never the whole archive. */
-async function parseArchiveOnDisk(ctx: HandlerContext, file: { size: number; contentHash: string }): Promise<ParsedSource> {
+async function parseArchiveOnDisk(
+  ctx: HandlerContext,
+  file: { size: number; contentHash: string },
+): Promise<ParsedSource> {
   const fallback = filenameMetadata(ctx.relPath);
   const { contentHash } = file;
 
@@ -146,7 +149,10 @@ export const comicArchiveHandler = registerFileHandler({
   },
 
   async parse(ctx: HandlerContext, buf: Buffer): Promise<ParsedSource> {
-    return parseArchiveOnDisk(ctx, { size: buf.byteLength, contentHash: createHash('sha256').update(buf).digest('hex') });
+    return parseArchiveOnDisk(ctx, {
+      size: buf.byteLength,
+      contentHash: createHash('sha256').update(buf).digest('hex'),
+    });
   },
 
   parseFile: parseArchiveOnDisk,

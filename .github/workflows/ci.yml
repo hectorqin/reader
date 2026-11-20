@@ -24,6 +24,22 @@ env:
   NODE_VERSION: 24
 
 jobs:
+  format:
+    name: Format · Prettier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+      # HUSKY=0: CI needs Prettier only, not the git hooks.
+      - run: npm ci
+        env:
+          HUSKY: 0
+      - run: npm run format:check
+
   server:
     name: Server · typecheck, test, build
     runs-on: ubuntu-latest

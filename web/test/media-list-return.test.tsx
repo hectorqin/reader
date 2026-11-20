@@ -1,7 +1,17 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter, Route, Routes, useLocation, useNavigate, useNavigationType, type Location, type NavigateFunction, type NavigationType } from 'react-router-dom';
+import {
+  MemoryRouter,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+  useNavigationType,
+  type Location,
+  type NavigateFunction,
+  type NavigationType,
+} from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '../src/shared/ui/render-root.ts';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
@@ -12,30 +22,72 @@ import { MediaPageFrame } from '../src/features/media/components/MediaPageFrame.
 import type { SearchItem } from '../src/features/media/api/media-api.ts';
 
 const favorites = { total: 60 };
-vi.mock('../src/features/media/queries/media.queries.ts', async importOriginal => ({
-  ...await importOriginal<typeof import('../src/features/media/queries/media.queries.ts')>(),
+vi.mock('../src/features/media/queries/media.queries.ts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/features/media/queries/media.queries.ts')>()),
   historyQuery: (_runtime: unknown, channel: string, params: URLSearchParams) => ({
     queryKey: ['list-return-history', channel, params.get('offset') ?? ''],
-    queryFn: async () => ({ items: Array.from({ length: 30 }, (_, index) => ({ id: 'h' + index, itemId: 'item' + index, partId: 'p' + index, title: '历史 ' + index, updatedAt: '2026-10-01T00:00:00Z', available: true })), total: 30 }),
+    queryFn: async () => ({
+      items: Array.from({ length: 30 }, (_, index) => ({
+        id: 'h' + index,
+        itemId: 'item' + index,
+        partId: 'p' + index,
+        title: '历史 ' + index,
+        updatedAt: '2026-10-01T00:00:00Z',
+        available: true,
+      })),
+      total: 30,
+    }),
   }),
   favoritesQuery: (_runtime: unknown, params: URLSearchParams) => {
     const offset = Number(params.get('offset')) || 0;
     return {
       queryKey: ['list-return-favorites', offset],
-      queryFn: async () => ({ items: offset < favorites.total ? [{ id: 'fav', kind: 'movie', title: '收藏电影', libraryId: 'lib', parentId: null, metadata: {}, overrides: {} }] : [], total: favorites.total }),
+      queryFn: async () => ({
+        items:
+          offset < favorites.total
+            ? [
+                {
+                  id: 'fav',
+                  kind: 'movie',
+                  title: '收藏电影',
+                  libraryId: 'lib',
+                  parentId: null,
+                  metadata: {},
+                  overrides: {},
+                },
+              ]
+            : [],
+        total: favorites.total,
+      }),
     };
   },
 }));
 
 const root = document.createElement('div');
 document.body.append(root);
-const results: SearchItem[] = Array.from({ length: 20 }, (_, index) => ({ id: 'film' + index, libraryId: 'lib', title: '结果 ' + index, kind: 'movie', channel: 'video', libraryName: '电影库', parentId: null, metadata: {}, overrides: {} }));
+const results: SearchItem[] = Array.from({ length: 20 }, (_, index) => ({
+  id: 'film' + index,
+  libraryId: 'lib',
+  title: '结果 ' + index,
+  kind: 'movie',
+  channel: 'video',
+  libraryName: '电影库',
+  parentId: null,
+  metadata: {},
+  overrides: {},
+}));
 const search = vi.fn(async () => ({ items: results, total: results.length }));
-const runtime = { mediaApi: { preferenceScope: () => 'list-return-test', search, coverUrl: () => '', thumbnailUrl: () => '' } } as any;
+const runtime = {
+  mediaApi: { preferenceScope: () => 'list-return-test', search, coverUrl: () => '', thumbnailUrl: () => '' },
+} as any;
 
 /** A stand-in detail page: the real frame, so its back arrow honours `state.returnTo`. */
 function Detail() {
-  return <MediaPageFrame className="media-secondary-page" title="详情"><p>详情内容</p></MediaPageFrame>;
+  return (
+    <MediaPageFrame className="media-secondary-page" title="详情">
+      <p>详情内容</p>
+    </MediaPageFrame>
+  );
 }
 
 /**
@@ -43,7 +95,10 @@ function Detail() {
  * per navigation, and on Node 24 undici rejects jsdom's AbortSignal there, so no
  * navigation ever happens in CI. A probe hands the test the router's state instead.
  */
-interface RouterHandle { state: { location: Location; historyAction: NavigationType }; navigate: NavigateFunction }
+interface RouterHandle {
+  state: { location: Location; historyAction: NavigationType };
+  navigate: NavigateFunction;
+}
 function Probe({ handle }: { handle: RouterHandle }) {
   handle.state = { location: useLocation(), historyAction: useNavigationType() };
   handle.navigate = useNavigate();
@@ -53,30 +108,50 @@ function Probe({ handle }: { handle: RouterHandle }) {
 function mount(initial: string) {
   const router = {} as RouterHandle;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  act(() => render(<RuntimeContext.Provider value={{ ...runtime, queryClient }}><QueryClientProvider client={queryClient}>
-    <MemoryRouter initialEntries={[initial]}>
-      <Probe handle={router} />
-      <Routes>
-        <Route path="/media/search" element={<MediaSearchPage />} />
-        <Route path="/media/favorites" element={<MediaFavoritesPage />} />
-        <Route path="/media/:channel/history" element={<MediaHistoryPage />} />
-        <Route path="/media/:channel/items/:id" element={<Detail />} />
-      </Routes>
-    </MemoryRouter>
-  </QueryClientProvider></RuntimeContext.Provider>, root));
+  act(() =>
+    render(
+      <RuntimeContext.Provider value={{ ...runtime, queryClient }}>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={[initial]}>
+            <Probe handle={router} />
+            <Routes>
+              <Route path="/media/search" element={<MediaSearchPage />} />
+              <Route path="/media/favorites" element={<MediaFavoritesPage />} />
+              <Route path="/media/:channel/history" element={<MediaHistoryPage />} />
+              <Route path="/media/:channel/items/:id" element={<Detail />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      </RuntimeContext.Provider>,
+      root,
+    ),
+  );
   return router;
 }
 
 async function settle(done: () => boolean) {
   const deadline = Date.now() + 4000;
-  while (!done() && Date.now() < deadline) await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+  while (!done() && Date.now() < deadline)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
   expect(done()).toBe(true);
 }
 const screen = () => root.querySelector<HTMLElement>('.media-screen')!;
-function scrollTo(top: number) { screen().scrollTop = top; screen().dispatchEvent(new Event('scroll')); }
-async function go(router: ReturnType<typeof mount>, delta: number) { await act(async () => { await router.navigate(delta); }); }
+function scrollTo(top: number) {
+  screen().scrollTop = top;
+  screen().dispatchEvent(new Event('scroll'));
+}
+async function go(router: ReturnType<typeof mount>, delta: number) {
+  await act(async () => {
+    await router.navigate(delta);
+  });
+}
 
-afterEach(() => { act(() => render(null, root)); favorites.total = 60; });
+afterEach(() => {
+  act(() => render(null, root));
+  favorites.total = 60;
+});
 
 describe('media history', () => {
   it('restores the scroll after Back, Back after Forward, and the detail back arrow', async () => {
@@ -146,10 +221,18 @@ describe('media search', () => {
     await settle(() => root.querySelectorAll('.media-search-result').length === 20);
     scrollTo(500);
     await act(async () => root.querySelector<HTMLButtonElement>('[data-scope=music]')!.click());
-    await settle(() => router.state.location.search.includes('scope=music') && root.querySelectorAll('.media-search-result').length === 20);
+    await settle(
+      () =>
+        router.state.location.search.includes('scope=music') &&
+        root.querySelectorAll('.media-search-result').length === 20,
+    );
     scrollTo(0);
     await act(async () => root.querySelector<HTMLButtonElement>('[data-scope=all]')!.click());
-    await settle(() => router.state.location.search.includes('scope=all') && root.querySelectorAll('.media-search-result').length === 20);
+    await settle(
+      () =>
+        router.state.location.search.includes('scope=all') &&
+        root.querySelectorAll('.media-search-result').length === 20,
+    );
     expect(screen().scrollTop).toBe(0);
   });
 });

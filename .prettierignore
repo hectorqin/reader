@@ -1,0 +1,18 @@
+# Generated / vendored
+node_modules/
+dist/
+build/
+artifacts/
+coverage/
+**/package-lock.json
+android/app/build/
+android/.gradle/
+android/app/src/main/assets/
+web/public/
+
+# Local tooling state
+.claude/
+.taskmaster/
+
+# Prose is hand-wrapped (mixed Chinese/English tables); not reflowed by Prettier.
+*.md

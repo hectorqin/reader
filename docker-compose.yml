@@ -20,13 +20,13 @@ services:
     logging:
       driver: json-file
       options:
-        max-size: "10m"
-        max-file: "3"
+        max-size: '10m'
+        max-file: '3'
     ports:
-      - "5888:5888"
+      - '5888:5888'
     environment:
       # Business settings are managed in the administrator UI and persisted in /data.
-      LOG_LEVEL: "info"
+      LOG_LEVEL: 'info'
       # Directory holding the built H5 client, served at `/`. Already set in the
       # image; only override if you build the client separately.
       # WEB_DIR: "/app/web"
@@ -46,7 +46,13 @@ services:
       # SQLite database, cover cache, scan journal, upload staging and plugins.
       - ./data:/data
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5888/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:5888/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3

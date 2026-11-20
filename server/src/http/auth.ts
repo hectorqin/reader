@@ -11,11 +11,13 @@ import { forbidden, unauthorized } from '../lib/errors.ts';
  * re-read from the database on every request instead of trusting the claims
  * embedded in the token.
  */
-export function authenticate(ctx: Pick<AppContext,'config'> & {users:Pick<AppContext['users'],'byId'>}) {
+export function authenticate(ctx: Pick<AppContext, 'config'> & { users: Pick<AppContext['users'], 'byId'> }) {
   return async function preHandler(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
     const credential = bearerToken(request);
     if (!credential) throw unauthorized('missing bearer token', 'NO_TOKEN');
-    const payload = credential.resource ? verifyResourceToken(ctx.config, credential.token) : verifyAccessToken(ctx.config, credential.token);
+    const payload = credential.resource
+      ? verifyResourceToken(ctx.config, credential.token)
+      : verifyAccessToken(ctx.config, credential.token);
     const row = ctx.users.byId(payload.sub);
     if (!row) throw unauthorized('account no longer exists', 'TOKEN_INVALID');
     if (row.disabled === 1) throw forbidden('account disabled', 'ACCOUNT_DISABLED');
@@ -45,7 +47,8 @@ function bearerToken(request: FastifyRequest): { token: string; resource: boolea
 
   if (!queryTokenAllowed(request)) return null;
   const query = (request.query ?? {}) as Record<string, unknown>;
-  if (typeof query.resource_token === 'string' && query.resource_token) return { token: query.resource_token, resource: true };
+  if (typeof query.resource_token === 'string' && query.resource_token)
+    return { token: query.resource_token, resource: true };
   const value = query.access_token;
   return typeof value === 'string' && value.length > 0 ? { token: value, resource: false } : null;
 }

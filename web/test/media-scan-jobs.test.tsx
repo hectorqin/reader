@@ -4,37 +4,96 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { act } from 'react';
 
 import { ScanJobs } from '../src/features/media/components/scan-jobs.tsx';
-const root=document.createElement('div');document.body.append(root);
-afterEach(()=>act(()=>render(null,root)));
-it('shows live phase timing and retains expanded diagnostics when polling updates a job',()=>{
-  const diagnostics={elapsedMs:5000,active:[{phase:'stat',ref:'film.mp4',elapsedMs:3000}],timings:{list:30,stat:1000,metadata:20},logs:[{at:1000,message:'开始扫描'}]};
-  const props={libraryName:'远端',busy:false,jobs:[{id:'scan',state:'running',inspected:5,error:null,diagnostics}],onCancel:vi.fn(),onRetry:vi.fn()};
-  act(()=>render(<ScanJobs {...props}/>,root));
+const root = document.createElement('div');
+document.body.append(root);
+afterEach(() => act(() => render(null, root)));
+it('shows live phase timing and retains expanded diagnostics when polling updates a job', () => {
+  const diagnostics = {
+    elapsedMs: 5000,
+    active: [{ phase: 'stat', ref: 'film.mp4', elapsedMs: 3000 }],
+    timings: { list: 30, stat: 1000, metadata: 20 },
+    logs: [{ at: 1000, message: '开始扫描' }],
+  };
+  const props = {
+    libraryName: '远端',
+    busy: false,
+    jobs: [{ id: 'scan', state: 'running', inspected: 5, error: null, diagnostics }],
+    onCancel: vi.fn(),
+    onRetry: vi.fn(),
+  };
+  act(() => render(<ScanJobs {...props} />, root));
   expect(root.textContent).toContain('校验文件 · film.mp4 · 已等待 3.0 秒');
   expect(root.textContent).toContain('平均 1.0 个文件/秒');
-  const details=root.querySelector('details')!;details.open=true;
-  act(()=>render(<ScanJobs {...props} jobs={[{...props.jobs[0]!,inspected:6}]}/>,root));
-  expect(root.querySelector('details')).toBe(details);expect(details.open).toBe(true);
+  const details = root.querySelector('details')!;
+  details.open = true;
+  act(() => render(<ScanJobs {...props} jobs={[{ ...props.jobs[0]!, inspected: 6 }]} />, root));
+  expect(root.querySelector('details')).toBe(details);
+  expect(details.open).toBe(true);
   expect(root.textContent).toContain('开始扫描');
 });
-it('shows inspected counts without inventing a total and prevents a retry while scanning',()=>{
-  const props={libraryName:'家庭影院',busy:false,jobs:[{id:'now',state:'running',inspected:136,error:null},{id:'old',state:'failed',inspected:0,error:'directory-unavailable'}],onCancel:vi.fn(),onRetry:vi.fn()};
-  act(()=>render(<ScanJobs {...props}/>,root));
-  expect(root.textContent).toContain('已检查 136 个文件');expect(root.querySelector('progress')!.hasAttribute('value')).toBe(false);
+it('shows inspected counts without inventing a total and prevents a retry while scanning', () => {
+  const props = {
+    libraryName: '家庭影院',
+    busy: false,
+    jobs: [
+      { id: 'now', state: 'running', inspected: 136, error: null },
+      { id: 'old', state: 'failed', inspected: 0, error: 'directory-unavailable' },
+    ],
+    onCancel: vi.fn(),
+    onRetry: vi.fn(),
+  };
+  act(() => render(<ScanJobs {...props} />, root));
+  expect(root.textContent).toContain('已检查 136 个文件');
+  expect(root.querySelector('progress')!.hasAttribute('value')).toBe(false);
   expect(root.textContent).toContain('媒体目录不可访问，原有资料已保留');
-  const retry=root.querySelector<HTMLButtonElement>('[aria-label="重新扫描媒体库"]')!;expect(retry.disabled).toBe(true);
-  act(()=>root.querySelector<HTMLButtonElement>('[aria-label="取消扫描"]')!.click());expect(props.onCancel).toHaveBeenCalledWith('now');
-  act(()=>render(<ScanJobs {...props} jobs={props.jobs.slice(1)}/>,root));
-  act(()=>root.querySelector<HTMLButtonElement>('[aria-label="重新扫描媒体库"]')!.click());expect(props.onRetry).toHaveBeenCalledOnce();
+  const retry = root.querySelector<HTMLButtonElement>('[aria-label="重新扫描媒体库"]')!;
+  expect(retry.disabled).toBe(true);
+  act(() => root.querySelector<HTMLButtonElement>('[aria-label="取消扫描"]')!.click());
+  expect(props.onCancel).toHaveBeenCalledWith('now');
+  act(() => render(<ScanJobs {...props} jobs={props.jobs.slice(1)} />, root));
+  act(() => root.querySelector<HTMLButtonElement>('[aria-label="重新扫描媒体库"]')!.click());
+  expect(props.onRetry).toHaveBeenCalledOnce();
 });
 
-it('shows queued libraries, retries a different library and pages long job lists',()=>{
-  const jobs=[{id:'queued',libraryId:'a',state:'queued',inspected:0,error:null},...Array.from({length:34},(_,i)=>({id:'failed-'+i,libraryId:'b',state:'failed',inspected:0,error:'directory-unavailable'}))];
-  const onCancel=vi.fn(),onRetry=vi.fn();
-  act(()=>render(<ScanJobs jobs={jobs} libraryName="媒体库" libraries={[{id:'a',name:'音乐',kind:'music',access:'all'},{id:'b',name:'影院',kind:'video',access:'all'}]} busy={false} onCancel={onCancel} onRetry={onRetry}/>,root));
-  expect(root.textContent).toContain('音乐 · 目录扫描');expect(root.textContent).toContain('排队中');expect(root.querySelector('progress')).toBeNull();
+it('shows queued libraries, retries a different library and pages long job lists', () => {
+  const jobs = [
+    { id: 'queued', libraryId: 'a', state: 'queued', inspected: 0, error: null },
+    ...Array.from({ length: 34 }, (_, i) => ({
+      id: 'failed-' + i,
+      libraryId: 'b',
+      state: 'failed',
+      inspected: 0,
+      error: 'directory-unavailable',
+    })),
+  ];
+  const onCancel = vi.fn(),
+    onRetry = vi.fn();
+  act(() =>
+    render(
+      <ScanJobs
+        jobs={jobs}
+        libraryName="媒体库"
+        libraries={[
+          { id: 'a', name: '音乐', kind: 'music', access: 'all' },
+          { id: 'b', name: '影院', kind: 'video', access: 'all' },
+        ]}
+        busy={false}
+        onCancel={onCancel}
+        onRetry={onRetry}
+      />,
+      root,
+    ),
+  );
+  expect(root.textContent).toContain('音乐 · 目录扫描');
+  expect(root.textContent).toContain('排队中');
+  expect(root.querySelector('progress')).toBeNull();
   expect(root.querySelectorAll('.media-scan-job')).toHaveLength(30);
-  act(()=>root.querySelector<HTMLButtonElement>('[aria-label="取消扫描"]')!.click());expect(onCancel).toHaveBeenCalledWith('queued');
-  const retry=root.querySelector<HTMLButtonElement>('[aria-label="重新扫描媒体库"]')!;expect(retry.disabled).toBe(false);act(()=>retry.click());expect(onRetry).toHaveBeenCalledWith('b');
-  act(()=>[...root.querySelectorAll('button')].find(button=>button.textContent==='下一页')!.click());expect(root.querySelectorAll('.media-scan-job')).toHaveLength(5);
+  act(() => root.querySelector<HTMLButtonElement>('[aria-label="取消扫描"]')!.click());
+  expect(onCancel).toHaveBeenCalledWith('queued');
+  const retry = root.querySelector<HTMLButtonElement>('[aria-label="重新扫描媒体库"]')!;
+  expect(retry.disabled).toBe(false);
+  act(() => retry.click());
+  expect(onRetry).toHaveBeenCalledWith('b');
+  act(() => [...root.querySelectorAll('button')].find((button) => button.textContent === '下一页')!.click());
+  expect(root.querySelectorAll('.media-scan-job')).toHaveLength(5);
 });
