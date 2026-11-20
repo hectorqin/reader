@@ -16,9 +16,26 @@ import { TtsService } from '../src/services/tts.ts';
 import { BrowseService } from '../src/services/browse.ts';
 import { UploadService } from '../src/services/uploads.ts';
 
-interface Session { token: string; id: string }
-interface Item { href: string; resourceRef: string; title: string; seq: number }
-interface Chapter { id: string; seq: number; title: string; kind: 'chapter'; mediaType: string; ref: string; volume?: string; note?: string }
+interface Session {
+  token: string;
+  id: string;
+}
+interface Item {
+  href: string;
+  resourceRef: string;
+  title: string;
+  seq: number;
+}
+interface Chapter {
+  id: string;
+  seq: number;
+  title: string;
+  kind: 'chapter';
+  mediaType: string;
+  ref: string;
+  volume?: string;
+  note?: string;
+}
 interface FixtureState {
   version: string;
   items: Chapter[];
@@ -33,11 +50,22 @@ const PLUGIN_ID = 'reader.source.chapters-test';
 const SOURCE_ID = 'test-chapters';
 const BOOK_REF = 'same-book-for-every-user';
 const auth = (session: Session) => ({ authorization: `Bearer ${session.token}` });
-const chapter = (id: string, seq: number, title: string): Chapter => ({ id, seq, title, kind: 'chapter', mediaType: 'text/plain', ref: id });
+const chapter = (id: string, seq: number, title: string): Chapter => ({
+  id,
+  seq,
+  title,
+  kind: 'chapter',
+  mediaType: 'text/plain',
+  ref: id,
+});
 const initialState = (): FixtureState => ({
   version: '1',
   items: [chapter('first/稳定?#', 0, '第一章'), chapter('second', 1, '第二章'), chapter('third', 2, '第三章')],
-  resources: { 'first/稳定?#': '第一章旧正文\n\n<script>alert("literal text")</script>', second: '第二章旧正文', third: '第三章旧正文' },
+  resources: {
+    'first/稳定?#': '第一章旧正文\n\n<script>alert("literal text")</script>',
+    second: '第二章旧正文',
+    third: '第三章旧正文',
+  },
 });
 
 async function harness() {
@@ -47,9 +75,19 @@ async function harness() {
   await mkdir(booksDir);
   await mkdir(dataDir);
   const config: AppConfig = {
-    booksDir, dataDir, host: '127.0.0.1', port: 0, jwtSecret: 'chapter-api-stable-restart-secret',
-    accessTokenTtl: 86400, refreshTokenTtl: 86400, scanInterval: 0, watchInterval: 0,
-    logLevel: 'silent', publicUrl: '', corsOrigins: [], webDir: join(root, 'no-web'),
+    booksDir,
+    dataDir,
+    host: '127.0.0.1',
+    port: 0,
+    jwtSecret: 'chapter-api-stable-restart-secret',
+    accessTokenTtl: 86400,
+    refreshTokenTtl: 86400,
+    scanInterval: 0,
+    watchInterval: 0,
+    logLevel: 'silent',
+    publicUrl: '',
+    corsOrigins: [],
+    webDir: join(root, 'no-web'),
   };
   let app: FastifyInstance;
   let ctx: AppContext;
@@ -72,24 +110,55 @@ async function harness() {
   async function stop() {
     if (!active) return;
     active = false;
-    try { await app.close(); } finally { ctx.db.close(); }
+    try {
+      await app.close();
+    } finally {
+      ctx.db.close();
+    }
   }
   await start();
-  const registration = await app!.inject({ method: 'POST', url: '/api/v1/auth/register', payload: { username: 'owner', password: 'password123' } });
+  const registration = await app!.inject({
+    method: 'POST',
+    url: '/api/v1/auth/register',
+    payload: { username: 'owner', password: 'password123' },
+  });
   assert.equal(registration.statusCode, 201, registration.body);
   const admin: Session = { token: registration.json().session.accessToken, id: registration.json().user.id };
   return {
-    root, booksDir, dataDir, admin,
-    get app() { return app; }, get ctx() { return ctx; },
+    root,
+    booksDir,
+    dataDir,
+    admin,
+    get app() {
+      return app;
+    },
+    get ctx() {
+      return ctx;
+    },
     async member(): Promise<Session> {
-      const creation = await app.inject({ method: 'POST', url: '/api/v1/admin/users', headers: auth(admin), payload: { username: 'reader', password: 'password123' } });
+      const creation = await app.inject({
+        method: 'POST',
+        url: '/api/v1/admin/users',
+        headers: auth(admin),
+        payload: { username: 'reader', password: 'password123' },
+      });
       assert.equal(creation.statusCode, 201, creation.body);
-      const login = await app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { username: 'reader', password: 'password123' } });
+      const login = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: { username: 'reader', password: 'password123' },
+      });
       assert.equal(login.statusCode, 200, login.body);
       return { token: login.json().accessToken, id: login.json().user.id };
     },
-    async restart() { await stop(); await start(); },
-    async close() { await stop(); await rm(root, { recursive: true, force: true }); },
+    async restart() {
+      await stop();
+      await start();
+    },
+    async close() {
+      await stop();
+      await rm(root, { recursive: true, force: true });
+    },
   };
 }
 
@@ -99,13 +168,36 @@ type Harness = Awaited<ReturnType<typeof harness>>;
 async function installFixture(h: Harness) {
   const directory = join(h.dataDir, 'plugins', 'chapters-test');
   await mkdir(directory, { recursive: true });
-  await writeFile(join(directory, 'plugin.json'), JSON.stringify({
-    id: PLUGIN_ID, name: '章节集成测试', version: '1.0.0', apiVersion: 1, runtime: 'node', entry: 'main.mjs',
-    sourceTypes: [{ id: 'chapters-test', label: '章节测试', capabilities: ['browse', 'detail', 'acquire.chapters', 'content.manifest', 'content.resource', 'content.update'] }],
-  }));
+  await writeFile(
+    join(directory, 'plugin.json'),
+    JSON.stringify({
+      id: PLUGIN_ID,
+      name: '章节集成测试',
+      version: '1.0.0',
+      apiVersion: 1,
+      runtime: 'node',
+      entry: 'main.mjs',
+      sourceTypes: [
+        {
+          id: 'chapters-test',
+          label: '章节测试',
+          capabilities: [
+            'browse',
+            'detail',
+            'acquire.chapters',
+            'content.manifest',
+            'content.resource',
+            'content.update',
+          ],
+        },
+      ],
+    }),
+  );
   await writeFile(join(directory, 'state.json'), JSON.stringify(initialState()));
   await writeFile(join(directory, 'calls.jsonl'), '');
-  await writeFile(join(directory, 'main.mjs'), `
+  await writeFile(
+    join(directory, 'main.mjs'),
+    `
 import { createInterface } from 'node:readline';
 import { appendFile, readFile } from 'node:fs/promises';
 const entry = { ref: ${JSON.stringify(BOOK_REF)}, title: '来自插件的章节书', authors: ['测试作者'] };
@@ -142,24 +234,50 @@ for await (const line of createInterface({ input: process.stdin, crlfDelay: Infi
     process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request?.id, error: { code: error.code ?? 'PLUGIN_ERROR', message: error.message } }) + '\\n');
   }
 }
-`);
-  const installed = await h.app.inject({ method: 'POST', url: '/api/v1/plugins', headers: auth(h.admin), payload: { folder: 'chapters-test', trusted: true } });
+`,
+  );
+  const installed = await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/plugins',
+    headers: auth(h.admin),
+    payload: { folder: 'chapters-test', trusted: true },
+  });
   assert.equal(installed.statusCode, 201, installed.body);
-  const source = await h.app.inject({ method: 'POST', url: '/api/v1/sources', headers: auth(h.admin), payload: {
-    id: SOURCE_ID, pluginId: PLUGIN_ID, sourceType: 'chapters-test', name: '测试章节来源', config: {},
-  } });
+  const source = await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/sources',
+    headers: auth(h.admin),
+    payload: {
+      id: SOURCE_ID,
+      pluginId: PLUGIN_ID,
+      sourceType: 'chapters-test',
+      name: '测试章节来源',
+      config: {},
+    },
+  });
   assert.equal(source.statusCode, 201, source.body);
   return {
-    async state(state: FixtureState) { await writeFile(join(directory, 'state.json'), JSON.stringify(state)); },
+    async state(state: FixtureState) {
+      await writeFile(join(directory, 'state.json'), JSON.stringify(state));
+    },
     async calls(method: string) {
-      return (await readFile(join(directory, 'calls.jsonl'), 'utf8')).trim().split('\n').filter(Boolean)
-        .map((line) => JSON.parse(line)).filter((call: { method: string }) => call.method === method);
+      return (await readFile(join(directory, 'calls.jsonl'), 'utf8'))
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line))
+        .filter((call: { method: string }) => call.method === method);
     },
   };
 }
 
 async function acquire(h: Harness, session: Session) {
-  const response = await h.app.inject({ method: 'POST', url: `/api/v1/sources/${SOURCE_ID}/acquire`, headers: auth(session), payload: { entryRef: BOOK_REF } });
+  const response = await h.app.inject({
+    method: 'POST',
+    url: `/api/v1/sources/${SOURCE_ID}/acquire`,
+    headers: auth(session),
+    payload: { entryRef: BOOK_REF },
+  });
   assert.equal(response.statusCode, 200, response.body);
   assert.equal(response.json().kind, 'ready', response.body);
   const id = response.json().publicationId as string;
@@ -168,17 +286,31 @@ async function acquire(h: Harness, session: Session) {
 }
 
 async function manifest(h: Harness, session: Session, id: string) {
-  const response = await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}/manifest?group=all`, headers: auth(session) });
+  const response = await h.app.inject({
+    method: 'GET',
+    url: `/api/v1/books/${id}/manifest?group=all`,
+    headers: auth(session),
+  });
   assert.equal(response.statusCode, 200, response.body);
-  return response.json() as { book: { id: string; title: string; format: string }; files: unknown[]; content: { revision: string }; items: Item[] };
+  return response.json() as {
+    book: { id: string; title: string; format: string };
+    files: unknown[];
+    content: { revision: string };
+    items: Item[];
+  };
 }
 
 function asset(h: Harness, session: Session, id: string, item: Item) {
-  return h.app.inject({ method: 'GET', url: `/api/v1/books/${id}/assets?ref=${encodeURIComponent(item.resourceRef)}`, headers: auth(session) });
+  return h.app.inject({
+    method: 'GET',
+    url: `/api/v1/books/${id}/assets?ref=${encodeURIComponent(item.resourceRef)}`,
+    headers: auth(session),
+  });
 }
 
 test('chapter acquisition creates a stable private publication and integrates with shelf, reading and progress', async (t) => {
-  const h = await harness(); t.after(() => h.close());
+  const h = await harness();
+  t.after(() => h.close());
   const fixture = await installFixture(h);
   const member = await h.member();
   const id = await acquire(h, member);
@@ -195,7 +327,11 @@ test('chapter acquisition creates a stable private publication and integrates wi
   assert.match(first.headers['content-type'] as string, /^text\/plain/);
   assert.equal(first.headers['x-content-type-options'], 'nosniff');
   assert.match(first.headers['content-security-policy'] as string, /sandbox/);
-  assert.match(first.body, /<script>alert\("literal text"\)<\/script>/, 'plain text remains text rather than executable HTML');
+  assert.match(
+    first.body,
+    /<script>alert\("literal text"\)<\/script>/,
+    'plain text remains text rather than executable HTML',
+  );
   assert.ok(first.body.includes(member.id));
   assert.equal((await asset(h, member, id, book.items[0]!)).body, first.body);
   assert.equal((await fixture.calls('readResource')).length, 1, 'already read chapters use the host cache');
@@ -206,27 +342,61 @@ test('chapter acquisition creates a stable private publication and integrates wi
   const toc = await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}/toc`, headers: auth(member) });
   assert.equal(toc.statusCode, 200, toc.body);
   assert.equal(toc.json().revision, book.content.revision);
-  assert.deepEqual(toc.json().toc.map((item: Item) => item.href), book.items.map((item) => item.href));
+  assert.deepEqual(
+    toc.json().toc.map((item: Item) => item.href),
+    book.items.map((item) => item.href),
+  );
   const wholeFile = await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}/content`, headers: auth(member) });
   assert.equal(wholeFile.statusCode, 400, wholeFile.body);
   assert.equal(wholeFile.json().error.code, 'CHAPTER_BOOK');
-  const locatorAsAsset = await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}/assets?ref=${encodeURIComponent(book.items[0]!.href)}`, headers: auth(member) });
+  const locatorAsAsset = await h.app.inject({
+    method: 'GET',
+    url: `/api/v1/books/${id}/assets?ref=${encodeURIComponent(book.items[0]!.href)}`,
+    headers: auth(member),
+  });
   assert.equal(locatorAsAsset.statusCode, 400, locatorAsAsset.body);
   const locator = `r1:0.42:${book.items[1]!.href}`;
-  const progress = await h.app.inject({ method: 'PUT', url: `/api/v1/sync/progress/${id}`, headers: auth(member), payload: {
-    locator, percentage: 0.42, chapterTitle: book.items[1]!.title, device: 'chapter-test', updatedAt: Date.now(),
-  } });
+  const progress = await h.app.inject({
+    method: 'PUT',
+    url: `/api/v1/sync/progress/${id}`,
+    headers: auth(member),
+    payload: {
+      locator,
+      percentage: 0.42,
+      chapterTitle: book.items[1]!.title,
+      device: 'chapter-test',
+      updatedAt: Date.now(),
+    },
+  });
   assert.equal(progress.statusCode, 200, progress.body);
   const continuing = await h.app.inject({ method: 'GET', url: '/api/v1/library/continue', headers: auth(member) });
-  assert.ok(continuing.json().items.some((item: { id: string }) => item.id === id), continuing.body);
+  assert.ok(
+    continuing.json().items.some((item: { id: string }) => item.id === id),
+    continuing.body,
+  );
 
-  for (const suffix of ['', '/manifest', '/items', '/toc', `/assets?ref=${encodeURIComponent(book.items[0]!.resourceRef)}`]) {
+  for (const suffix of [
+    '',
+    '/manifest',
+    '/items',
+    '/toc',
+    `/assets?ref=${encodeURIComponent(book.items[0]!.resourceRef)}`,
+  ]) {
     const denied = await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}${suffix}`, headers: auth(h.admin) });
     assert.equal(denied.statusCode, 404, `${suffix}: ${denied.body}`);
   }
-  const deniedRefresh = await h.app.inject({ method: 'POST', url: `/api/v1/books/${id}/refresh`, headers: auth(h.admin) });
+  const deniedRefresh = await h.app.inject({
+    method: 'POST',
+    url: `/api/v1/books/${id}/refresh`,
+    headers: auth(h.admin),
+  });
   assert.equal(deniedRefresh.statusCode, 404, deniedRefresh.body);
-  const deniedAdd = await h.app.inject({ method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(h.admin), payload: { bookIds: [id], action: 'add' } });
+  const deniedAdd = await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/library/browse/shelf',
+    headers: auth(h.admin),
+    payload: { bookIds: [id], action: 'add' },
+  });
   assert.equal(deniedAdd.json().applied, 0, deniedAdd.body);
   for (const url of ['/api/v1/books', '/api/v1/books?scope=library', '/api/v1/library/continue']) {
     const response = await h.app.inject({ method: 'GET', url, headers: auth(h.admin) });
@@ -241,7 +411,12 @@ test('chapter acquisition creates a stable private publication and integrates wi
   assert.ok(ownAsset.body.includes(h.admin.id));
   assert.ok(!ownAsset.body.includes(member.id));
 
-  const removed = await h.app.inject({ method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(member), payload: { bookIds: [id], action: 'remove' } });
+  const removed = await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/library/browse/shelf',
+    headers: auth(member),
+    payload: { bookIds: [id], action: 'remove' },
+  });
   assert.equal(removed.json().applied, 1, removed.body);
   assert.equal(await acquire(h, member), id, 'reacquiring a hidden publication restores the same shelf entry');
   const restored = await h.app.inject({ method: 'GET', url: `/api/v1/sync/progress/${id}`, headers: auth(member) });
@@ -249,21 +424,34 @@ test('chapter acquisition creates a stable private publication and integrates wi
 });
 
 test('chapter refresh preserves stable locators and distinguishes cached and uncached old snapshots', async (t) => {
-  const h = await harness(); t.after(() => h.close());
+  const h = await harness();
+  t.after(() => h.close());
   const fixture = await installFixture(h);
   const id = await acquire(h, h.admin);
   const before = await manifest(h, h.admin, id);
   const oldFirst = await asset(h, h.admin, id, before.items[0]!);
   assert.equal(oldFirst.statusCode, 200, oldFirst.body);
   const locator = `r1:0.65:${before.items[1]!.href}`;
-  const progress = await h.app.inject({ method: 'PUT', url: `/api/v1/sync/progress/${id}`, headers: auth(h.admin), payload: {
-    locator, percentage: 0.6, chapterTitle: '第二章', device: 'chapter-test', updatedAt: Date.now(),
-  } });
+  const progress = await h.app.inject({
+    method: 'PUT',
+    url: `/api/v1/sync/progress/${id}`,
+    headers: auth(h.admin),
+    payload: {
+      locator,
+      percentage: 0.6,
+      chapterTitle: '第二章',
+      device: 'chapter-test',
+      updatedAt: Date.now(),
+    },
+  });
   assert.equal(progress.statusCode, 200, progress.body);
 
   const updated = initialState();
   updated.version = '2';
-  updated.items = [chapter('inserted', 0, '新增序章'), ...updated.items.map((item) => ({ ...item, seq: item.seq + 1 }))];
+  updated.items = [
+    chapter('inserted', 0, '新增序章'),
+    ...updated.items.map((item) => ({ ...item, seq: item.seq + 1 })),
+  ];
   updated.resources['inserted'] = '新加入的序章';
   updated.resources['first/稳定?#'] = '第一章修订正文';
   updated.resources['second'] = '第二章修订正文';
@@ -273,19 +461,39 @@ test('chapter refresh preserves stable locators and distinguishes cached and unc
   assert.equal(refreshed.json().total, 4);
   const after = await manifest(h, h.admin, id);
   assert.notEqual(after.content.revision, before.content.revision);
-  assert.deepEqual(after.items.slice(1).map((item) => item.href), before.items.map((item) => item.href), 'inserting a chapter does not change any existing chapter locator');
-  assert.notEqual(after.items[1]!.resourceRef, before.items[0]!.resourceRef, 'resource references identify the snapshot separately from the locator');
-  const retainedProgress = await h.app.inject({ method: 'GET', url: `/api/v1/sync/progress/${id}`, headers: auth(h.admin) });
+  assert.deepEqual(
+    after.items.slice(1).map((item) => item.href),
+    before.items.map((item) => item.href),
+    'inserting a chapter does not change any existing chapter locator',
+  );
+  assert.notEqual(
+    after.items[1]!.resourceRef,
+    before.items[0]!.resourceRef,
+    'resource references identify the snapshot separately from the locator',
+  );
+  const retainedProgress = await h.app.inject({
+    method: 'GET',
+    url: `/api/v1/sync/progress/${id}`,
+    headers: auth(h.admin),
+  });
   assert.equal(retainedProgress.json().progress.locator, locator);
   const changedFirst = await asset(h, h.admin, id, after.items[1]!);
   assert.equal(changedFirst.statusCode, 200, changedFirst.body);
   assert.match(changedFirst.body, /修订正文/);
-  assert.equal((await asset(h, h.admin, id, before.items[0]!)).body, oldFirst.body, 'cached old snapshot keeps its original bytes');
+  assert.equal(
+    (await asset(h, h.admin, id, before.items[0]!)).body,
+    oldFirst.body,
+    'cached old snapshot keeps its original bytes',
+  );
   const readCalls = (await fixture.calls('readResource')).length;
   const expired = await asset(h, h.admin, id, before.items[1]!);
   assert.equal(expired.statusCode, 409, expired.body);
   assert.equal(expired.json().error.code, 'CHAPTER_SNAPSHOT_EXPIRED');
-  assert.equal((await fixture.calls('readResource')).length, readCalls, 'uncached stale references do not fetch current upstream bytes');
+  assert.equal(
+    (await fixture.calls('readResource')).length,
+    readCalls,
+    'uncached stale references do not fetch current upstream bytes',
+  );
 
   await fixture.state({ ...updated, failManifest: true });
   const failed = await h.app.inject({ method: 'POST', url: `/api/v1/books/${id}/refresh`, headers: auth(h.admin) });
@@ -297,19 +505,29 @@ test('chapter refresh preserves stable locators and distinguishes cached and unc
   await fixture.state(updated);
   const unchanged = await h.app.inject({ method: 'POST', url: `/api/v1/books/${id}/refresh`, headers: auth(h.admin) });
   assert.equal(unchanged.statusCode, 200, unchanged.body);
-  assert.equal(unchanged.json().revision, after.content.revision, 'the same directory keeps the same snapshot identity');
+  assert.equal(
+    unchanged.json().revision,
+    after.content.revision,
+    'the same directory keeps the same snapshot identity',
+  );
   assert.equal((await asset(h, h.admin, id, after.items[1]!)).body, changedFirst.body);
 });
 
 test('cached chapters remain readable after plugin disable, uninstall, scan and server restart', async (t) => {
-  const h = await harness(); t.after(() => h.close());
+  const h = await harness();
+  t.after(() => h.close());
   await installFixture(h);
   const member = await h.member();
   const id = await acquire(h, member);
   const before = await manifest(h, member, id);
   const first = await asset(h, member, id, before.items[0]!);
   assert.equal(first.statusCode, 200, first.body);
-  const disabled = await h.app.inject({ method: 'PATCH', url: `/api/v1/plugins/${PLUGIN_ID}`, headers: auth(h.admin), payload: { enabled: false } });
+  const disabled = await h.app.inject({
+    method: 'PATCH',
+    url: `/api/v1/plugins/${PLUGIN_ID}`,
+    headers: auth(h.admin),
+    payload: { enabled: false },
+  });
   assert.equal(disabled.statusCode, 200, disabled.body);
   assert.equal((await asset(h, member, id, before.items[0]!)).body, first.body);
   const unavailable = await asset(h, member, id, before.items[1]!);
@@ -323,7 +541,10 @@ test('cached chapters remain readable after plugin disable, uninstall, scan and 
   assert.equal(afterRestart.statusCode, 200, afterRestart.body);
   assert.equal(afterRestart.body, first.body);
   const shelf = await h.app.inject({ method: 'GET', url: '/api/v1/books', headers: auth(member) });
-  assert.ok(shelf.json().items.some((book: { id: string }) => book.id === id), shelf.body);
+  assert.ok(
+    shelf.json().items.some((book: { id: string }) => book.id === id),
+    shelf.body,
+  );
   const removed = await h.app.inject({ method: 'DELETE', url: `/api/v1/plugins/${PLUGIN_ID}`, headers: auth(h.admin) });
   assert.equal(removed.statusCode, 200, removed.body);
   await h.ctx.scanner.scan();
@@ -333,7 +554,8 @@ test('cached chapters remain readable after plugin disable, uninstall, scan and 
 });
 
 test('chapter reading rejects executable upstream resources without replacing already cached content', async (t) => {
-  const h = await harness(); t.after(() => h.close());
+  const h = await harness();
+  t.after(() => h.close());
   const fixture = await installFixture(h);
   const id = await acquire(h, h.admin);
   const book = await manifest(h, h.admin, id);
@@ -347,172 +569,403 @@ test('chapter reading rejects executable upstream resources without replacing al
 });
 
 test('directories keep volumes and notes; covers are read through the source, saved on acquisition and can be changed', async (t) => {
-  const h = await harness(); t.after(() => h.close());
+  const h = await harness();
+  t.after(() => h.close());
   const fixture = await installFixture(h);
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHf8AAAAASUVORK5CYII=';
   const gif = Buffer.from('GIF89a\u0001\u0000\u0001\u0000\u0000\u0000\u0000;', 'latin1').toString('base64');
   const state = initialState();
-  state.items[0] = { ...state.items[0]!, volume: '第一卷', note: '2024-01-01' }; state.items[1] = { ...state.items[1]!, volume: '第一卷' };
+  state.items[0] = { ...state.items[0]!, volume: '第一卷', note: '2024-01-01' };
+  state.items[1] = { ...state.items[1]!, volume: '第一卷' };
   state.covers = { cover: png, other: gif, 'not-an-image': Buffer.from('<svg onload="alert(1)"/>').toString('base64') };
   await fixture.state(state);
-  const member = await h.member(), id = await acquire(h, member);
-  const book = await manifest(h, member, id) as Awaited<ReturnType<typeof manifest>> & { items: Array<Item & { volume?: string; note?: string }> };
-  assert.deepEqual(book.items.map((item) => [item.volume, item.note]), [['第一卷', '2024-01-01'], ['第一卷', undefined], [undefined, undefined]]);
+  const member = await h.member(),
+    id = await acquire(h, member);
+  const book = (await manifest(h, member, id)) as Awaited<ReturnType<typeof manifest>> & {
+    items: Array<Item & { volume?: string; note?: string }>;
+  };
+  assert.deepEqual(
+    book.items.map((item) => [item.volume, item.note]),
+    [
+      ['第一卷', '2024-01-01'],
+      ['第一卷', undefined],
+      [undefined, undefined],
+    ],
+  );
   const toc = await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}/toc`, headers: auth(member) });
-  assert.deepEqual(toc.json().toc.map((item: { volume?: string }) => item.volume), ['第一卷', '第一卷', undefined]);
+  assert.deepEqual(
+    toc.json().toc.map((item: { volume?: string }) => item.volume),
+    ['第一卷', '第一卷', undefined],
+  );
 
   const shelved = await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}`, headers: auth(member) });
   const coverUrl = shelved.json().book.coverUrl as string;
-  assert.match(coverUrl, new RegExp(`^/api/v1/books/${id}/cover\\?v=[a-f0-9]{10}$`), 'the cover is saved when the book is added');
+  assert.match(
+    coverUrl,
+    new RegExp(`^/api/v1/books/${id}/cover\\?v=[a-f0-9]{10}$`),
+    'the cover is saved when the book is added',
+  );
   const cover = await h.app.inject({ method: 'GET', url: coverUrl, headers: auth(member) });
-  assert.equal(cover.statusCode, 200); assert.equal(cover.headers['content-type'], 'image/png'); assert.ok(cover.rawPayload.equals(Buffer.from(png, 'base64')));
+  assert.equal(cover.statusCode, 200);
+  assert.equal(cover.headers['content-type'], 'image/png');
+  assert.ok(cover.rawPayload.equals(Buffer.from(png, 'base64')));
 
-  const query = (coverRef: string) => `entryRef=${encodeURIComponent(BOOK_REF)}&coverRef=${encodeURIComponent(coverRef)}`;
-  const preview = await h.app.inject({ method: 'GET', url: `/api/v1/sources/${SOURCE_ID}/cover?${query('other')}`, headers: auth(member) });
-  assert.equal(preview.statusCode, 200, preview.body); assert.equal(preview.headers['content-type'], 'image/gif'); assert.equal(preview.headers['x-content-type-options'], 'nosniff');
-  const candidate = await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}/cover-candidate?${query('other')}`, headers: auth(member) });
+  const query = (coverRef: string) =>
+    `entryRef=${encodeURIComponent(BOOK_REF)}&coverRef=${encodeURIComponent(coverRef)}`;
+  const preview = await h.app.inject({
+    method: 'GET',
+    url: `/api/v1/sources/${SOURCE_ID}/cover?${query('other')}`,
+    headers: auth(member),
+  });
+  assert.equal(preview.statusCode, 200, preview.body);
+  assert.equal(preview.headers['content-type'], 'image/gif');
+  assert.equal(preview.headers['x-content-type-options'], 'nosniff');
+  const candidate = await h.app.inject({
+    method: 'GET',
+    url: `/api/v1/books/${id}/cover-candidate?${query('other')}`,
+    headers: auth(member),
+  });
   assert.equal(candidate.statusCode, 200, candidate.body);
-  for (const url of [`/api/v1/sources/${SOURCE_ID}/cover?${query('not-an-image')}`, `/api/v1/books/${id}/cover-candidate?${query('not-an-image')}`]) {
+  for (const url of [
+    `/api/v1/sources/${SOURCE_ID}/cover?${query('not-an-image')}`,
+    `/api/v1/books/${id}/cover-candidate?${query('not-an-image')}`,
+  ]) {
     const rejected = await h.app.inject({ method: 'GET', url, headers: auth(member) });
     assert.equal(rejected.statusCode, 400, 'bytes that are not a raster image never reach the browser');
   }
-  assert.equal((await h.app.inject({ method: 'GET', url: `/api/v1/sources/${SOURCE_ID}/cover?${query('other')}` })).statusCode, 401);
+  assert.equal(
+    (await h.app.inject({ method: 'GET', url: `/api/v1/sources/${SOURCE_ID}/cover?${query('other')}` })).statusCode,
+    401,
+  );
 
-  const changed = await h.app.inject({ method: 'POST', url: `/api/v1/books/${id}/cover-source`, headers: auth(member), payload: { entryRef: BOOK_REF, coverRef: 'other' } });
+  const changed = await h.app.inject({
+    method: 'POST',
+    url: `/api/v1/books/${id}/cover-source`,
+    headers: auth(member),
+    payload: { entryRef: BOOK_REF, coverRef: 'other' },
+  });
   assert.equal(changed.statusCode, 200, changed.body);
-  const after = (await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}`, headers: auth(member) })).json().book.coverUrl as string;
+  const after = (await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}`, headers: auth(member) })).json().book
+    .coverUrl as string;
   assert.notEqual(after, coverUrl, 'a changed cover has a new URL');
   const replaced = await h.app.inject({ method: 'GET', url: after, headers: auth(member) });
-  assert.equal(replaced.headers['content-type'], 'image/gif'); assert.ok(replaced.rawPayload.equals(Buffer.from(gif, 'base64')));
-  const refused = await h.app.inject({ method: 'POST', url: `/api/v1/books/${id}/cover-source`, headers: auth(member), payload: { entryRef: BOOK_REF, coverRef: 'not-an-image' } });
-  assert.equal(refused.statusCode, 400); assert.equal((await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}`, headers: auth(member) })).json().book.coverUrl, after);
-  const foreign = await h.app.inject({ method: 'POST', url: `/api/v1/books/${id}/cover-source`, headers: auth(h.admin), payload: { entryRef: BOOK_REF, coverRef: 'other' } });
+  assert.equal(replaced.headers['content-type'], 'image/gif');
+  assert.ok(replaced.rawPayload.equals(Buffer.from(gif, 'base64')));
+  const refused = await h.app.inject({
+    method: 'POST',
+    url: `/api/v1/books/${id}/cover-source`,
+    headers: auth(member),
+    payload: { entryRef: BOOK_REF, coverRef: 'not-an-image' },
+  });
+  assert.equal(refused.statusCode, 400);
+  assert.equal(
+    (await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}`, headers: auth(member) })).json().book.coverUrl,
+    after,
+  );
+  const foreign = await h.app.inject({
+    method: 'POST',
+    url: `/api/v1/books/${id}/cover-source`,
+    headers: auth(h.admin),
+    payload: { entryRef: BOOK_REF, coverRef: 'other' },
+  });
   assert.equal(foreign.statusCode, 404, 'another account cannot change this book');
 });
 
 test('a local book takes a cover from a source as a manual override that survives a rescan and can be restored', async (t) => {
-  const h = await harness(); t.after(() => h.close());
+  const h = await harness();
+  t.after(() => h.close());
   const fixture = await installFixture(h);
   const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHf8AAAAASUVORK5CYII=';
-  await fixture.state({ ...initialState(), covers: { cover: png, 'not-an-image': Buffer.from('<svg/>').toString('base64') } });
+  await fixture.state({
+    ...initialState(),
+    covers: { cover: png, 'not-an-image': Buffer.from('<svg/>').toString('base64') },
+  });
   await writeFile(join(h.booksDir, '本地小说.txt'), '第一章 开始\n\n正文内容。\n');
   await h.ctx.scanner.scan();
   const library = await h.app.inject({ method: 'GET', url: '/api/v1/books?scope=library', headers: auth(h.admin) });
-  const local = library.json().items.find((item: { title: string }) => item.title === '本地小说') as { id: string; coverUrl: string | null };
-  assert.ok(local, library.body); assert.equal(local.coverUrl, null);
-  await h.app.inject({ method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(h.admin), payload: { bookIds: [local.id], action: 'add' } });
-  const read = async () => (await h.app.inject({ method: 'GET', url: `/api/v1/books/${local.id}`, headers: auth(h.admin) })).json().book as { coverUrl: string | null; manualFields: string[] };
+  const local = library.json().items.find((item: { title: string }) => item.title === '本地小说') as {
+    id: string;
+    coverUrl: string | null;
+  };
+  assert.ok(local, library.body);
+  assert.equal(local.coverUrl, null);
+  await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/library/browse/shelf',
+    headers: auth(h.admin),
+    payload: { bookIds: [local.id], action: 'add' },
+  });
+  const read = async () =>
+    (await h.app.inject({ method: 'GET', url: `/api/v1/books/${local.id}`, headers: auth(h.admin) })).json().book as {
+      coverUrl: string | null;
+      manualFields: string[];
+    };
 
-  const missing = await h.app.inject({ method: 'POST', url: `/api/v1/books/${local.id}/cover-source`, headers: auth(h.admin), payload: { entryRef: BOOK_REF, coverRef: 'cover' } });
+  const missing = await h.app.inject({
+    method: 'POST',
+    url: `/api/v1/books/${local.id}/cover-source`,
+    headers: auth(h.admin),
+    payload: { entryRef: BOOK_REF, coverRef: 'cover' },
+  });
   assert.equal(missing.statusCode, 400, 'a local book must name the source the cover comes from');
-  const refused = await h.app.inject({ method: 'POST', url: `/api/v1/books/${local.id}/cover-source`, headers: auth(h.admin), payload: { sourceId: SOURCE_ID, entryRef: BOOK_REF, coverRef: 'not-an-image' } });
-  assert.equal(refused.statusCode, 400); assert.equal((await read()).coverUrl, null);
-  const changed = await h.app.inject({ method: 'POST', url: `/api/v1/books/${local.id}/cover-source`, headers: auth(h.admin), payload: { sourceId: SOURCE_ID, entryRef: BOOK_REF, coverRef: 'cover' } });
+  const refused = await h.app.inject({
+    method: 'POST',
+    url: `/api/v1/books/${local.id}/cover-source`,
+    headers: auth(h.admin),
+    payload: { sourceId: SOURCE_ID, entryRef: BOOK_REF, coverRef: 'not-an-image' },
+  });
+  assert.equal(refused.statusCode, 400);
+  assert.equal((await read()).coverUrl, null);
+  const changed = await h.app.inject({
+    method: 'POST',
+    url: `/api/v1/books/${local.id}/cover-source`,
+    headers: auth(h.admin),
+    payload: { sourceId: SOURCE_ID, entryRef: BOOK_REF, coverRef: 'cover' },
+  });
   assert.equal(changed.statusCode, 200, changed.body);
   const book = await read();
-  assert.ok(book.coverUrl); assert.ok(book.manualFields.includes('cover'));
+  assert.ok(book.coverUrl);
+  assert.ok(book.manualFields.includes('cover'));
   const cover = await h.app.inject({ method: 'GET', url: book.coverUrl!, headers: auth(h.admin) });
-  assert.equal(cover.headers['content-type'], 'image/png'); assert.ok(cover.rawPayload.equals(Buffer.from(png, 'base64')));
+  assert.equal(cover.headers['content-type'], 'image/png');
+  assert.ok(cover.rawPayload.equals(Buffer.from(png, 'base64')));
 
   await writeFile(join(h.booksDir, '本地小说.txt'), '第一章 开始\n\n正文内容改了。\n');
   await h.ctx.scanner.scan();
-  const rescanned = (await h.app.inject({ method: 'GET', url: '/api/v1/books?scope=library', headers: auth(h.admin) })).json().items.find((item: { title: string }) => item.title === '本地小说') as { id: string; coverUrl: string | null };
+  const rescanned = (await h.app.inject({ method: 'GET', url: '/api/v1/books?scope=library', headers: auth(h.admin) }))
+    .json()
+    .items.find((item: { title: string }) => item.title === '本地小说') as { id: string; coverUrl: string | null };
   assert.ok(rescanned.coverUrl, 'a rescan keeps the chosen cover');
 
-  const restored = await h.app.inject({ method: 'DELETE', url: `/api/v1/books/${rescanned.id}/cover-source`, headers: auth(h.admin) });
+  const restored = await h.app.inject({
+    method: 'DELETE',
+    url: `/api/v1/books/${rescanned.id}/cover-source`,
+    headers: auth(h.admin),
+  });
   assert.equal(restored.statusCode, 200, restored.body);
-  const after = (await h.app.inject({ method: 'GET', url: '/api/v1/books?scope=library', headers: auth(h.admin) })).json().items.find((item: { title: string }) => item.title === '本地小说') as { coverUrl: string | null; manualFields: string[] };
-  assert.equal(after.coverUrl, null); assert.ok(!after.manualFields.includes('cover'));
+  const after = (await h.app.inject({ method: 'GET', url: '/api/v1/books?scope=library', headers: auth(h.admin) }))
+    .json()
+    .items.find((item: { title: string }) => item.title === '本地小说') as {
+    coverUrl: string | null;
+    manualFields: string[];
+  };
+  assert.equal(after.coverUrl, null);
+  assert.ok(!after.manualFields.includes('cover'));
 });
 
 test('the local library browses folder by folder with covers, like any source in 发现', async (t) => {
-  const h = await harness(); t.after(() => h.close());
-  await mkdir(join(h.booksDir, '科幻', '刘慈欣'), { recursive: true }); await mkdir(join(h.booksDir, '科学'));
+  const h = await harness();
+  t.after(() => h.close());
+  await mkdir(join(h.booksDir, '科幻', '刘慈欣'), { recursive: true });
+  await mkdir(join(h.booksDir, '科学'));
   await writeFile(join(h.booksDir, '根目录的书.txt'), '第一章\n\n正文一。\n');
   await writeFile(join(h.booksDir, '科幻', '科幻的书.txt'), '第一章\n\n正文二。\n');
   await writeFile(join(h.booksDir, '科幻', '刘慈欣', '三体.txt'), '第一章\n\n正文三。\n');
   await writeFile(join(h.booksDir, '科学', '科学的书.txt'), '第一章\n\n正文四。\n');
   await h.ctx.scanner.scan();
   const browse = async (query = '') => {
-    const response = await h.app.inject({ method: 'GET', url: `/api/v1/sources/local/browse${query}`, headers: auth(h.admin) });
+    const response = await h.app.inject({
+      method: 'GET',
+      url: `/api/v1/sources/local/browse${query}`,
+      headers: auth(h.admin),
+    });
     assert.equal(response.statusCode, 200, response.body);
-    return response.json() as { title: string; items: Array<{ ref: string; title: string; coverRef?: string }>; navigation?: Array<{ title: string; ref: string }>; nextCursor?: string };
+    return response.json() as {
+      title: string;
+      items: Array<{ ref: string; title: string; coverRef?: string }>;
+      navigation?: Array<{ title: string; ref: string }>;
+      nextCursor?: string;
+    };
   };
   const root = await browse();
-  assert.deepEqual([root.title, root.items.map((item) => item.title), root.navigation?.map((item) => item.title)], ['本地书库', ['根目录的书'], ['科幻', '科学']]);
+  assert.deepEqual(
+    [root.title, root.items.map((item) => item.title), root.navigation?.map((item) => item.title)],
+    ['本地书库', ['根目录的书'], ['科幻', '科学']],
+  );
   const folder = await browse(`?ref=${encodeURIComponent('科幻')}`);
-  assert.deepEqual([folder.title, folder.items.map((item) => item.title), folder.navigation?.map((item) => [item.title, item.ref])], ['科幻', ['科幻的书'], [['刘慈欣', '科幻/刘慈欣']]]);
+  assert.deepEqual(
+    [folder.title, folder.items.map((item) => item.title), folder.navigation?.map((item) => [item.title, item.ref])],
+    ['科幻', ['科幻的书'], [['刘慈欣', '科幻/刘慈欣']]],
+  );
   const leaf = await browse(`?ref=${encodeURIComponent('科幻/刘慈欣')}`);
-  assert.deepEqual([leaf.title, leaf.items.map((item) => item.title), leaf.navigation], ['刘慈欣', ['三体'], undefined]);
-  assert.equal((await h.app.inject({ method: 'GET', url: `/api/v1/sources/local/browse?ref=${encodeURIComponent('../etc')}`, headers: auth(h.admin) })).statusCode, 403);
+  assert.deepEqual(
+    [leaf.title, leaf.items.map((item) => item.title), leaf.navigation],
+    ['刘慈欣', ['三体'], undefined],
+  );
+  assert.equal(
+    (
+      await h.app.inject({
+        method: 'GET',
+        url: `/api/v1/sources/local/browse?ref=${encodeURIComponent('../etc')}`,
+        headers: auth(h.admin),
+      })
+    ).statusCode,
+    403,
+  );
 
   const book = leaf.items[0]!;
   assert.equal(book.coverRef, undefined, 'a text file has no cover');
-  assert.equal((book as { metadata?: { publicationId?: string } }).metadata?.publicationId, undefined, 'a library book is not yet a shelf book');
+  assert.equal(
+    (book as { metadata?: { publicationId?: string } }).metadata?.publicationId,
+    undefined,
+    'a library book is not yet a shelf book',
+  );
   const shelved = await h.app.inject({ method: 'GET', url: '/api/v1/books', headers: auth(h.admin) });
   assert.deepEqual(shelved.json().items, [], 'a scanned book joins the library, not a shelf');
-  await h.app.inject({ method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(h.admin), payload: { bookIds: [book.ref], action: 'add' } });
+  await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/library/browse/shelf',
+    headers: auth(h.admin),
+    payload: { bookIds: [book.ref], action: 'add' },
+  });
   const fixture = await installFixture(h);
-  await fixture.state({ ...initialState(), covers: { cover: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHf8AAAAASUVORK5CYII=' } });
-  await h.app.inject({ method: 'POST', url: `/api/v1/books/${book.ref}/cover-source`, headers: auth(h.admin), payload: { sourceId: SOURCE_ID, entryRef: BOOK_REF, coverRef: 'cover' } });
+  await fixture.state({
+    ...initialState(),
+    covers: { cover: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHf8AAAAASUVORK5CYII=' },
+  });
+  await h.app.inject({
+    method: 'POST',
+    url: `/api/v1/books/${book.ref}/cover-source`,
+    headers: auth(h.admin),
+    payload: { sourceId: SOURCE_ID, entryRef: BOOK_REF, coverRef: 'cover' },
+  });
   const covered = (await browse(`?ref=${encodeURIComponent('科幻/刘慈欣')}`)).items[0]!;
-  assert.match(covered.coverRef ?? '', /^cover@[0-9a-f]{10}$/, 'the cover address names the cover, so a changed one is not served from cache');
-  assert.equal((covered as { metadata?: { publicationId?: string } }).metadata?.publicationId, book.ref, 'once shelved, the entry names the shelf book so a client offers 阅读');
-  const image = await h.app.inject({ method: 'GET', url: `/api/v1/sources/local/cover?entryRef=${covered.ref}&coverRef=${encodeURIComponent(covered.coverRef!)}`, headers: auth(h.admin) });
-  assert.equal(image.statusCode, 200, image.body); assert.equal(image.headers['content-type'], 'image/png');
+  assert.match(
+    covered.coverRef ?? '',
+    /^cover@[0-9a-f]{10}$/,
+    'the cover address names the cover, so a changed one is not served from cache',
+  );
+  assert.equal(
+    (covered as { metadata?: { publicationId?: string } }).metadata?.publicationId,
+    book.ref,
+    'once shelved, the entry names the shelf book so a client offers 阅读',
+  );
+  const image = await h.app.inject({
+    method: 'GET',
+    url: `/api/v1/sources/local/cover?entryRef=${covered.ref}&coverRef=${encodeURIComponent(covered.coverRef!)}`,
+    headers: auth(h.admin),
+  });
+  assert.equal(image.statusCode, 200, image.body);
+  assert.equal(image.headers['content-type'], 'image/png');
 });
 
 test('only an administrator edits a local book, from 书库 or the shelf; a reader sees the edit', async (t) => {
-  const h = await harness(); t.after(() => h.close());
+  const h = await harness();
+  t.after(() => h.close());
   await writeFile(join(h.booksDir, '书库里的书.txt'), '第一章\n\n正文。\n');
   await h.ctx.scanner.scan();
   const member = await h.member();
   const id = h.ctx.db.get<{ id: string }>("SELECT id FROM books WHERE title = '书库里的书'")!.id;
-  const patch = (session: Session, payload: object) => h.app.inject({ method: 'PATCH', url: `/api/v1/books/${id}/metadata`, headers: auth(session), payload });
+  const patch = (session: Session, payload: object) =>
+    h.app.inject({ method: 'PATCH', url: `/api/v1/books/${id}/metadata`, headers: auth(session), payload });
 
   // The admin need not shelve it first: 书库 is where the library is edited.
   const edited = await patch(h.admin, { title: '改过的书名', author: '某作者' });
   assert.equal(edited.statusCode, 200, edited.body);
   assert.deepEqual([edited.json().book.title, edited.json().book.author], ['改过的书名', '某作者']);
   const listed = await h.app.inject({ method: 'GET', url: '/api/v1/sources/local/browse', headers: auth(member) });
-  assert.deepEqual(listed.json().items.map((item: { title: string }) => item.title), ['改过的书名'], 'the edit is the library\'s, so every reader sees it');
+  assert.deepEqual(
+    listed.json().items.map((item: { title: string }) => item.title),
+    ['改过的书名'],
+    "the edit is the library's, so every reader sees it",
+  );
 
   // A reader cannot, in 书库 or with the book on their own shelf: it would rename it for everyone.
   assert.equal((await patch(member, { title: 'x' })).json().error.code, 'ADMIN_REQUIRED');
-  await h.app.inject({ method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(member), payload: { bookIds: [id], action: 'add' } });
+  await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/library/browse/shelf',
+    headers: auth(member),
+    payload: { bookIds: [id], action: 'add' },
+  });
   assert.equal((await patch(member, { title: 'x' })).statusCode, 403);
-  assert.equal((await h.app.inject({ method: 'DELETE', url: `/api/v1/books/${id}/metadata/title`, headers: auth(member) })).statusCode, 403);
-  assert.equal((await h.app.inject({ method: 'POST', url: `/api/v1/books/${id}/cover-source`, headers: auth(member), payload: { sourceId: 'any', entryRef: 'e', coverRef: 'c' } })).statusCode, 403);
-  assert.equal((await h.app.inject({ method: 'DELETE', url: `/api/v1/books/${id}/cover-source`, headers: auth(member) })).statusCode, 403);
+  assert.equal(
+    (await h.app.inject({ method: 'DELETE', url: `/api/v1/books/${id}/metadata/title`, headers: auth(member) }))
+      .statusCode,
+    403,
+  );
+  assert.equal(
+    (
+      await h.app.inject({
+        method: 'POST',
+        url: `/api/v1/books/${id}/cover-source`,
+        headers: auth(member),
+        payload: { sourceId: 'any', entryRef: 'e', coverRef: 'c' },
+      })
+    ).statusCode,
+    403,
+  );
+  assert.equal(
+    (await h.app.inject({ method: 'DELETE', url: `/api/v1/books/${id}/cover-source`, headers: auth(member) }))
+      .statusCode,
+    403,
+  );
   const book = await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}`, headers: auth(member) });
-  assert.equal(book.json().book.title, '改过的书名', 'reading the book is still everyone\'s');
+  assert.equal(book.json().book.title, '改过的书名', "reading the book is still everyone's");
 
-  const undone = await h.app.inject({ method: 'DELETE', url: `/api/v1/books/${id}/metadata/title`, headers: auth(h.admin) });
+  const undone = await h.app.inject({
+    method: 'DELETE',
+    url: `/api/v1/books/${id}/metadata/title`,
+    headers: auth(h.admin),
+  });
   assert.equal(undone.json().book.title, '书库里的书');
-  assert.equal((await h.app.inject({ method: 'PATCH', url: '/api/v1/books/no-such-book/metadata', headers: auth(h.admin), payload: { title: 'x' } })).statusCode, 404);
+  assert.equal(
+    (
+      await h.app.inject({
+        method: 'PATCH',
+        url: '/api/v1/books/no-such-book/metadata',
+        headers: auth(h.admin),
+        payload: { title: 'x' },
+      })
+    ).statusCode,
+    404,
+  );
 });
 
 test('by default a book joins the library only, an upload included, even for the uploader; autoShelf restores sharing', async (t) => {
-  const h = await harness(); t.after(() => h.close());
-  const shelf = async (session: Session) => (await h.app.inject({ method: 'GET', url: '/api/v1/books', headers: auth(session) })).json().items.map((item: { title: string }) => item.title).sort();
-  const library = async (session: Session) => (await h.app.inject({ method: 'GET', url: '/api/v1/books?scope=library', headers: auth(session) })).json().items.map((item: { title: string }) => item.title).sort();
+  const h = await harness();
+  t.after(() => h.close());
+  const shelf = async (session: Session) =>
+    (await h.app.inject({ method: 'GET', url: '/api/v1/books', headers: auth(session) }))
+      .json()
+      .items.map((item: { title: string }) => item.title)
+      .sort();
+  const library = async (session: Session) =>
+    (await h.app.inject({ method: 'GET', url: '/api/v1/books?scope=library', headers: auth(session) }))
+      .json()
+      .items.map((item: { title: string }) => item.title)
+      .sort();
   await writeFile(join(h.booksDir, '扫描到的书.txt'), '第一章\n\n正文。\n');
   await h.ctx.scanner.scan();
-  assert.deepEqual(await shelf(h.admin), []); assert.deepEqual(await library(h.admin), ['扫描到的书']);
+  assert.deepEqual(await shelf(h.admin), []);
+  assert.deepEqual(await library(h.admin), ['扫描到的书']);
   const member = await h.member();
-  assert.deepEqual(await shelf(member), [], 'a new account starts with an empty shelf'); assert.deepEqual(await library(member), ['扫描到的书']);
+  assert.deepEqual(await shelf(member), [], 'a new account starts with an empty shelf');
+  assert.deepEqual(await library(member), ['扫描到的书']);
 
-  const boundary = '----reader-test', file = '第一章\n\n自己上传的正文。\n';
+  const boundary = '----reader-test',
+    file = '第一章\n\n自己上传的正文。\n';
   const body = `--${boundary}\r\nContent-Disposition: form-data; name="path"\r\n\r\n\r\n--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="上传的书.txt"\r\nContent-Type: text/plain\r\n\r\n${file}\r\n--${boundary}--\r\n`;
-  const uploaded = await h.app.inject({ method: 'POST', url: '/api/v1/library/upload', headers: { ...auth(member), 'content-type': `multipart/form-data; boundary=${boundary}` }, payload: body });
+  const uploaded = await h.app.inject({
+    method: 'POST',
+    url: '/api/v1/library/upload',
+    headers: { ...auth(member), 'content-type': `multipart/form-data; boundary=${boundary}` },
+    payload: body,
+  });
   assert.equal(uploaded.statusCode, 200, uploaded.body);
-  assert.deepEqual(await shelf(member), [], 'an upload joins the library, not even the uploader\'s shelf');
-  assert.deepEqual(await shelf(h.admin), [], 'nor anybody else\'s');
+  assert.deepEqual(await shelf(member), [], "an upload joins the library, not even the uploader's shelf");
+  assert.deepEqual(await shelf(h.admin), [], "nor anybody else's");
   assert.deepEqual(await library(h.admin), ['上传的书', '扫描到的书']);
-  assert.deepEqual(await library(member), ['上传的书', '扫描到的书'], 'the uploader finds it in 书库, to add when they choose');
+  assert.deepEqual(
+    await library(member),
+    ['上传的书', '扫描到的书'],
+    'the uploader finds it in 书库, to add when they choose',
+  );
 
-  const { autoShelf } = await import('./auto-shelf.ts'); autoShelf(h.ctx.db);
+  const { autoShelf } = await import('./auto-shelf.ts');
+  autoShelf(h.ctx.db);
   await writeFile(join(h.booksDir, '共享的书.txt'), '第一章\n\n共享正文。\n');
   await h.ctx.scanner.scan();
-  assert.deepEqual(await shelf(h.admin), ['共享的书']); assert.deepEqual(await shelf(member), ['共享的书']);
+  assert.deepEqual(await shelf(h.admin), ['共享的书']);
+  assert.deepEqual(await shelf(member), ['共享的书']);
 });

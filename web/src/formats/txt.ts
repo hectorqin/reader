@@ -76,7 +76,11 @@ export function loadTxt(ctx: LoadContext, options: TxtOptions = {}): TxtSplitRes
   if (splitChapters) {
     for (const line of lines) {
       const trimmed = line.trim();
-      if (trimmed.length > 0 && trimmed.length <= MAX_HEADING_LENGTH && (options.headingPrefix ? trimmed.startsWith(options.headingPrefix) : matchHeading(trimmed))) {
+      if (
+        trimmed.length > 0 &&
+        trimmed.length <= MAX_HEADING_LENGTH &&
+        (options.headingPrefix ? trimmed.startsWith(options.headingPrefix) : matchHeading(trimmed))
+      ) {
         chapters.push({ title: trimmed, start: offset });
       }
       offset += line.length + 1;

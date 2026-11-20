@@ -8,7 +8,11 @@ import { registerErrorHandler } from '../src/http/errors.ts';
 import { signAccessToken, signResourceToken, verifyAccessToken, verifyResourceToken } from '../src/services/tokens.ts';
 import { UserService, type UserRow } from '../src/services/users.ts';
 
-const config = { jwtSecret: 'resource-token-test-secret', accessTokenTtl: 604_800, refreshTokenTtl: 31_536_000 } as AppConfig;
+const config = {
+  jwtSecret: 'resource-token-test-secret',
+  accessTokenTtl: 604_800,
+  refreshTokenTtl: 31_536_000,
+} as AppConfig;
 const identity = { id: 'user', role: 'member' as const, authVersion: 0 };
 
 test('resource credentials are short lived and cannot be used as access tokens', () => {
@@ -23,32 +27,67 @@ test('resource credentials are short lived and cannot be used as access tokens',
 });
 
 test('resource tickets authenticate only allowlisted reads and still enforce account revocation', async () => {
-  const row: UserRow = { id: 'user', username: 'reader', display_name: '', password_hash: '', role: 'member', disabled: 0, created_at: 0, updated_at: 0, auth_version: 0 };
+  const row: UserRow = {
+    id: 'user',
+    username: 'reader',
+    display_name: '',
+    password_hash: '',
+    role: 'member',
+    disabled: 0,
+    created_at: 0,
+    updated_at: 0,
+    auth_version: 0,
+  };
   const app = Fastify({ logger: false });
   registerErrorHandler(app);
-  const auth = authenticate({ config, users: { byId: id => id === row.id ? row : undefined } });
-  for (const path of ['/api/v1/books/book/assets', '/api/v1/books/book/cover', '/api/v1/books/book/content', '/api/v1/books/book/manifest', '/api/v1/tts', '/api/v1/auth/me']) {
-    app.get(path, { preHandler: auth }, request => ({ user: currentUser(request).id }));
+  const auth = authenticate({ config, users: { byId: (id) => (id === row.id ? row : undefined) } });
+  for (const path of [
+    '/api/v1/books/book/assets',
+    '/api/v1/books/book/cover',
+    '/api/v1/books/book/content',
+    '/api/v1/books/book/manifest',
+    '/api/v1/tts',
+    '/api/v1/auth/me',
+  ]) {
+    app.get(path, { preHandler: auth }, (request) => ({ user: currentUser(request).id }));
   }
   app.post('/api/v1/books/book/assets', { preHandler: auth }, () => ({ ok: true }));
   const token = signResourceToken(config, identity).token;
   try {
-    for (const path of ['/api/v1/books/book/assets', '/api/v1/books/book/cover', '/api/v1/books/book/content', '/api/v1/tts']) {
-      for (const method of ['GET', 'HEAD'] as const) assert.equal((await app.inject({ method, url: `${path}?resource_token=${token}` })).statusCode, 200);
+    for (const path of [
+      '/api/v1/books/book/assets',
+      '/api/v1/books/book/cover',
+      '/api/v1/books/book/content',
+      '/api/v1/tts',
+    ]) {
+      for (const method of ['GET', 'HEAD'] as const)
+        assert.equal((await app.inject({ method, url: `${path}?resource_token=${token}` })).statusCode, 200);
     }
-    for (const path of ['/api/v1/auth/me', '/api/v1/books/book/manifest']) assert.equal((await app.inject(`${path}?resource_token=${token}`)).statusCode, 401);
-    assert.equal((await app.inject({ method: 'POST', url: `/api/v1/books/book/assets?resource_token=${token}` })).statusCode, 401);
-    assert.equal((await app.inject({ url: '/api/v1/auth/me', headers: { authorization: `Bearer ${token}` } })).statusCode, 401);
+    for (const path of ['/api/v1/auth/me', '/api/v1/books/book/manifest'])
+      assert.equal((await app.inject(`${path}?resource_token=${token}`)).statusCode, 401);
+    assert.equal(
+      (await app.inject({ method: 'POST', url: `/api/v1/books/book/assets?resource_token=${token}` })).statusCode,
+      401,
+    );
+    assert.equal(
+      (await app.inject({ url: '/api/v1/auth/me', headers: { authorization: `Bearer ${token}` } })).statusCode,
+      401,
+    );
     assert.equal((await app.inject(`/api/v1/books/book/assets?access_token=${token}`)).statusCode, 401);
     const access = signAccessToken(config, identity).token;
     assert.equal((await app.inject(`/api/v1/books/book/assets?resource_token=${access}`)).statusCode, 401);
-    assert.equal((await app.inject(`/api/v1/books/book/assets?resource_token=invalid&access_token=${access}`)).statusCode, 401);
+    assert.equal(
+      (await app.inject(`/api/v1/books/book/assets?resource_token=invalid&access_token=${access}`)).statusCode,
+      401,
+    );
     row.disabled = 1;
     assert.equal((await app.inject(`/api/v1/books/book/assets?resource_token=${token}`)).statusCode, 403);
     row.disabled = 0;
     row.auth_version = 1;
     assert.equal((await app.inject(`/api/v1/books/book/assets?resource_token=${token}`)).statusCode, 401);
-  } finally { await app.close(); }
+  } finally {
+    await app.close();
+  }
 });
 
 test('login and refresh issue resource credentials tied to the current account version', async () => {
@@ -64,5 +103,7 @@ test('login and refresh issue resource credentials tied to the current account v
     await users.resetPassword(user.id, 'another-password');
     const replacement = await users.login('resource-reader', 'another-password');
     assert.equal(verifyResourceToken(config, replacement.resourceToken).ver, 1);
-  } finally { db.close(); }
+  } finally {
+    db.close();
+  }
 });

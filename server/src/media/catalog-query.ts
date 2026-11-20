@@ -34,16 +34,30 @@ export interface CatalogReply<Q extends CatalogQuery = CatalogQuery> {
 }
 
 /** One dispatch table for workers, in-memory fixtures and benchmark controls. */
-export function executeCatalogQuery(catalog: MediaCatalog, folders: MediaFolders, state: MediaUserState, query: CatalogQuery): CatalogResult {
+export function executeCatalogQuery(
+  catalog: MediaCatalog,
+  folders: MediaFolders,
+  state: MediaUserState,
+  query: CatalogQuery,
+): CatalogResult {
   switch (query.method) {
-    case 'librarySummaries': return catalog.librarySummaries(...query.args);
-    case 'list': return catalog.list(...query.args);
-    case 'browse': return catalog.browse(...query.args);
-    case 'search': return catalog.search(...query.args);
-    case 'detail': return catalog.detail(...query.args);
-    case 'folders': return folders.list(...query.args);
-    case 'file': return folders.file(...query.args);
-    case 'favorites': return state.favorites(...query.args);
-    case 'history': return state.history(...query.args);
+    case 'librarySummaries':
+      return catalog.librarySummaries(...query.args);
+    case 'list':
+      return catalog.list(...query.args);
+    case 'browse':
+      return catalog.browse(...query.args);
+    case 'search':
+      return catalog.search(...query.args);
+    case 'detail':
+      return catalog.detail(...query.args);
+    case 'folders':
+      return folders.list(...query.args);
+    case 'file':
+      return folders.file(...query.args);
+    case 'favorites':
+      return state.favorites(...query.args);
+    case 'history':
+      return state.history(...query.args);
   }
 }

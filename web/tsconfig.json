@@ -18,7 +18,7 @@
     "noEmit": true,
     // React owns the application UI; the reader and media engines retain
     // imperative DOM internals behind explicit React lifecycle boundaries.
-    "jsx": "react-jsx",
+    "jsx": "react-jsx"
   },
   "include": ["src", "test", "vite.config.ts"]
 }

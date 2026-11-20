@@ -96,11 +96,6 @@ export class FetchTransport implements Transport {
 
   private errorFromText(status: number, text: string): ApiError {
     const { code, message } = parseErrorBody(text);
-    return new ApiError(
-      errorForStatus(status),
-      message || `request failed with status ${status}`,
-      code,
-      status,
-    );
+    return new ApiError(errorForStatus(status), message || `request failed with status ${status}`, code, status);
   }
 }

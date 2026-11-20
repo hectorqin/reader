@@ -79,7 +79,7 @@ export interface AssetSigning {
  * about which URLs are real.
  */
 export function makeAssetSigner(api: AssetSigning): ((url: string) => string | null) | null {
-  const readToken = (value: AssetSigning['accessToken'] | undefined) => typeof value === 'function' ? value() : value;
+  const readToken = (value: AssetSigning['accessToken'] | undefined) => (typeof value === 'function' ? value() : value);
   if (!readToken(api.resourceToken) && !readToken(api.accessToken)) return null;
   return (url) => {
     if (!isApiAsset(url, api.baseUrl) || hasToken(url)) return null;
@@ -91,7 +91,8 @@ export function makeAssetSigner(api: AssetSigning): ((url: string) => string | n
 
 export function withAssetToken(html: string, api: ApiClient): string {
   const session = api.currentSession;
-  const resource = session?.resourceToken && (session.resourceTokenExpiresAt ?? Infinity) > Date.now() ? session.resourceToken : null;
+  const resource =
+    session?.resourceToken && (session.resourceTokenExpiresAt ?? Infinity) > Date.now() ? session.resourceToken : null;
   const token = resource || session?.accessToken;
   const parameter = resource ? 'resource_token' : 'access_token';
   if (!token) return html;

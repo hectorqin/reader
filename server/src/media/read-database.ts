@@ -17,13 +17,17 @@ export class MediaReadDatabase implements MediaDatabase {
     return this.raw.prepare(sql).get(...params) as T | undefined;
   }
 
-  prepare(sql:string){return this.raw.prepare(sql);}
+  prepare(sql: string) {
+    return this.raw.prepare(sql);
+  }
 
   all<T = Row>(sql: string, ...params: SqlValue[]): T[] {
     return this.raw.prepare(sql).all(...params) as T[];
   }
 
-  run(): never { throw new Error('media catalog connection is read-only'); }
+  run(): never {
+    throw new Error('media catalog connection is read-only');
+  }
 
   transaction<T>(fn: () => T): T {
     this.raw.exec('BEGIN');
@@ -37,5 +41,7 @@ export class MediaReadDatabase implements MediaDatabase {
     }
   }
 
-  close(): void { this.raw.close(); }
+  close(): void {
+    this.raw.close();
+  }
 }

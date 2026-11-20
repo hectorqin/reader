@@ -11,17 +11,37 @@ backup/restore 前必须停止使用该数据目录的所有服务和插件。
 
 async function main(): Promise<void> {
   const [command, source, target, confirmation, ...extra] = process.argv.slice(2);
-  if (!command || command === '--help') { console.log(HELP); return; }
-  if (!source || extra.length || !['backup', 'verify', 'restore'].includes(command) ||
-      (command === 'verify' ? !!target : !target || confirmation !== '--server-stopped')) {
+  if (!command || command === '--help') {
+    console.log(HELP);
+    return;
+  }
+  if (
+    !source ||
+    extra.length ||
+    !['backup', 'verify', 'restore'].includes(command) ||
+    (command === 'verify' ? !!target : !target || confirmation !== '--server-stopped')
+  ) {
     throw new Error(HELP);
   }
-  const result = command === 'verify' ? await verifyBackup(source)
-    : command === 'backup' ? await createBackup(source, target!) : await restoreBackup(source, target!);
-  console.log(JSON.stringify({ operation: command, createdAt: result.createdAt,
-    files: result.entries.filter(entry => entry.kind === 'file').length,
-    bytes: result.entries.reduce((sum, entry) => sum + (entry.size ?? 0), 0),
-    destination: target ?? source }, null, 2));
+  const result =
+    command === 'verify'
+      ? await verifyBackup(source)
+      : command === 'backup'
+        ? await createBackup(source, target!)
+        : await restoreBackup(source, target!);
+  console.log(
+    JSON.stringify(
+      {
+        operation: command,
+        createdAt: result.createdAt,
+        files: result.entries.filter((entry) => entry.kind === 'file').length,
+        bytes: result.entries.reduce((sum, entry) => sum + (entry.size ?? 0), 0),
+        destination: target ?? source,
+      },
+      null,
+      2,
+    ),
+  );
 }
 
 main().catch((error: unknown) => {

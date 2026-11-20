@@ -105,19 +105,34 @@ function makeEngine(options: {
   return { engine, audios, spoken, errors };
 }
 
-it('uses the current configured waiting limit for each sentence',async()=>{
-  let timeout=65000;
-  const schedule=vi.fn(()=>0 as unknown as ReturnType<typeof setTimeout>);
-  const engine=new HttpTtsEngine({baseUrl:'http://nas.local',accessToken:()=>null,requestTimeoutMs:()=>timeout,
-    createAudio:()=>new FakeAudio() as unknown as HTMLAudioElement,setTimeout:schedule,clearTimeout:()=>{}});
-  engine.setQueueLoader(async()=>({chunks:[{text:'试听。'}],startIndex:0}));
-  await engine.play(0);expect(schedule).toHaveBeenLastCalledWith(expect.any(Function),65000);
-  engine.stop();timeout=35000;await engine.play(0);expect(schedule).toHaveBeenLastCalledWith(expect.any(Function),35000);engine.stop();
+it('uses the current configured waiting limit for each sentence', async () => {
+  let timeout = 65000;
+  const schedule = vi.fn(() => 0 as unknown as ReturnType<typeof setTimeout>);
+  const engine = new HttpTtsEngine({
+    baseUrl: 'http://nas.local',
+    accessToken: () => null,
+    requestTimeoutMs: () => timeout,
+    createAudio: () => new FakeAudio() as unknown as HTMLAudioElement,
+    setTimeout: schedule,
+    clearTimeout: () => {},
+  });
+  engine.setQueueLoader(async () => ({ chunks: [{ text: '试听。' }], startIndex: 0 }));
+  await engine.play(0);
+  expect(schedule).toHaveBeenLastCalledWith(expect.any(Function), 65000);
+  engine.stop();
+  timeout = 35000;
+  await engine.play(0);
+  expect(schedule).toHaveBeenLastCalledWith(expect.any(Function), 35000);
+  engine.stop();
 });
 
 describe('HttpTtsEngine', () => {
   it('uses resource tickets for audio URLs without exposing the access token', async () => {
-    const { engine, audios } = makeEngine({ chunks: [['只读语音']], token: 'private-access', resourceToken: 'readonly-ticket' });
+    const { engine, audios } = makeEngine({
+      chunks: [['只读语音']],
+      token: 'private-access',
+      resourceToken: 'readonly-ticket',
+    });
     await engine.play(0);
     expect(audios[0]!.src).toContain('resource_token=readonly-ticket');
     expect(audios[0]!.src).not.toContain('private-access');
@@ -216,8 +231,12 @@ describe('HttpTtsEngine', () => {
   it('renews resource credentials before starting the next sentence', async () => {
     let finishRenewal!: () => void;
     const options = {
-      chunks: [['一。', '二。']], resourceToken: 'old-resource',
-      prepareRequest: () => new Promise<void>(resolve => { finishRenewal = resolve; }),
+      chunks: [['一。', '二。']],
+      resourceToken: 'old-resource',
+      prepareRequest: () =>
+        new Promise<void>((resolve) => {
+          finishRenewal = resolve;
+        }),
     };
     const { engine, audios } = makeEngine(options);
     await engine.play(0);
@@ -239,7 +258,10 @@ describe('HttpTtsEngine', () => {
     let finishRenewal!: () => void;
     const { engine, audios } = makeEngine({
       chunks: [['一。']],
-      prepareRequest: () => new Promise<void>(resolve => { finishRenewal = resolve; }),
+      prepareRequest: () =>
+        new Promise<void>((resolve) => {
+          finishRenewal = resolve;
+        }),
     });
     await engine.play(0);
     engine.stop();
@@ -251,7 +273,8 @@ describe('HttpTtsEngine', () => {
 
   it('reports credential renewal failures without playing expired audio', async () => {
     const { engine, audios, errors } = makeEngine({
-      chunks: [['一。']], prepareRequest: () => Promise.reject(new Error('offline')),
+      chunks: [['一。']],
+      prepareRequest: () => Promise.reject(new Error('offline')),
     });
     await engine.play(0);
     await Promise.resolve();
@@ -262,14 +285,21 @@ describe('HttpTtsEngine', () => {
 
   it('probes the server and answers null when it has no engine', async () => {
     const engine = new HttpTtsEngine({ baseUrl: 'http://nas.local:8080', accessToken: () => null });
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ http: false, formats: [], maxLength: 800, voices: [] }), { status: 200 }),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(JSON.stringify({ http: false, formats: [], maxLength: 800, voices: [] }), { status: 200 }),
+      );
     expect(await engine.probe()).toBeNull();
 
     fetchSpy.mockResolvedValue(
       new Response(
-        JSON.stringify({ http: true, formats: ['audio/mpeg'], maxLength: 800, voices: [{ id: 'v1', name: '晓晓', lang: 'zh-CN' }] }),
+        JSON.stringify({
+          http: true,
+          formats: ['audio/mpeg'],
+          maxLength: 800,
+          voices: [{ id: 'v1', name: '晓晓', lang: 'zh-CN' }],
+        }),
         { status: 200 },
       ),
     );

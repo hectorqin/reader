@@ -129,12 +129,26 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
   });
 
   // 想读 / 在读 / 已读 mark on the reader's shelf; `null` clears it so progress decides.
-  app.put('/api/v1/books/:id/reading-status', { preHandler: auth, schema: { body: { type: 'object', additionalProperties: false, required: ['status'], properties: { status: { anyOf: [{ type: 'string', enum: [...READING_STATES] }, { type: 'null' }] } } } } }, async (request, reply) => {
-    const user = currentUser(request);
-    const { id } = request.params as { id: string };
-    ctx.shelf.setReadingStatus(user.id, id, (request.body as { status: ReadingState | null }).status);
-    return reply.status(204).send();
-  });
+  app.put(
+    '/api/v1/books/:id/reading-status',
+    {
+      preHandler: auth,
+      schema: {
+        body: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['status'],
+          properties: { status: { anyOf: [{ type: 'string', enum: [...READING_STATES] }, { type: 'null' }] } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const user = currentUser(request);
+      const { id } = request.params as { id: string };
+      ctx.shelf.setReadingStatus(user.id, id, (request.body as { status: ReadingState | null }).status);
+      return reply.status(204).send();
+    },
+  );
 
   app.get('/api/v1/books/:id', { preHandler: auth }, async (request) => {
     const user = currentUser(request);
@@ -187,11 +201,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     // A mutable chapter publication ships one complete snapshot. Clients derive
     // TOC and windows from it so a concurrent refresh cannot mix two revisions.
     const wantsAll = query.group === 'all' || book.format === 'chapters';
-    const groupIndex = wantsAll
-      ? null
-      : requested !== null && Number.isFinite(requested)
-        ? requested
-        : 0;
+    const groupIndex = wantsAll ? null : requested !== null && Number.isFinite(requested) ? requested : 0;
 
     const windowed =
       content && !wantsAll && groupIndex !== null && content.groups[groupIndex]
@@ -227,7 +237,9 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
       // `content` is null only for a book whose format exposes no addressable
       // structure at all; the client then falls back to the raw file.
       content: windowed,
-      ...(windowed ? { items: windowed.items, groups: windowed.groups, kind: windowed.kind, total: windowed.total } : {}),
+      ...(windowed
+        ? { items: windowed.items, groups: windowed.groups, kind: windowed.kind, total: windowed.total }
+        : {}),
     };
   });
 
@@ -235,7 +247,8 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     ctx.shelf.get(user.id, id);
-    if (!ctx.sources?.chapters.has(id)) throw badRequest('this book has no remote chapter directory', 'SOURCE_UNSUPPORTED');
+    if (!ctx.sources?.chapters.has(id))
+      throw badRequest('this book has no remote chapter directory', 'SOURCE_UNSUPPORTED');
     return withSignal(request, reply, (signal) => ctx.sources!.refreshPublication(user.id, id, signal));
   });
 
@@ -305,8 +318,14 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
       const manifest = await ctx.sources.chapters.manifest(user.id, id);
       return {
         revision: manifest.revision,
-        toc: manifest.items.map((item) => ({ href: item.href, title: item.title, level: 0, spine: item.seq,
-          ...(item.volume ? { volume: item.volume } : {}), ...(item.note ? { note: item.note } : {}) })),
+        toc: manifest.items.map((item) => ({
+          href: item.href,
+          title: item.title,
+          level: 0,
+          spine: item.seq,
+          ...(item.volume ? { volume: item.volume } : {}),
+          ...(item.note ? { note: item.note } : {}),
+        })),
       };
     }
     const handler = resolveHandler(ctx, id, book.format);
@@ -319,7 +338,12 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     // table of contents. `pdf` and `image` land here.
     const manifest = await handler.manifest(context);
     return {
-      toc: manifest.items.map((item: ContentItem) => ({ href: item.href, title: item.title, level: 0, spine: item.seq })),
+      toc: manifest.items.map((item: ContentItem) => ({
+        href: item.href,
+        title: item.title,
+        level: 0,
+        spine: item.seq,
+      })),
     };
   });
 
@@ -331,23 +355,40 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
    * its own contents.
    */
   app.get('/api/v1/books/:id/search', { preHandler: auth }, async (request, reply) => {
-    const user = currentUser(request), { id } = request.params as { id: string };
-    const book = ctx.shelf.get(user.id, id), query = request.query as Record<string, string | undefined>;
-    if (typeof query.q !== 'string' || !query.q.trim() || query.q.length > 200) throw badRequest('关键词须为 1–200 个字符');
+    const user = currentUser(request),
+      { id } = request.params as { id: string };
+    const book = ctx.shelf.get(user.id, id),
+      query = request.query as Record<string, string | undefined>;
+    if (typeof query.q !== 'string' || !query.q.trim() || query.q.length > 200)
+      throw badRequest('关键词须为 1–200 个字符');
     if (query.cursor !== undefined && typeof query.cursor !== 'string') throw badRequest('无效的搜索游标');
     const manifest = await contentManifest(ctx, user.id, id, book.format);
     if (!manifest) throw badRequest('此格式暂不支持正文搜索', 'UNSUPPORTED_FORMAT');
-    const overrides = new ReadingOverrideService(ctx.db).get(user.id,id);
-    if (overrides.headingPrefix) throw badRequest('自定义 TXT 目录使用本地搜索','SEARCH_LOCAL_LAYOUT');
+    const overrides = new ReadingOverrideService(ctx.db).get(user.id, id);
+    if (overrides.headingPrefix) throw badRequest('自定义 TXT 目录使用本地搜索', 'SEARCH_LOCAL_LAYOUT');
     const chapters = ctx.sources?.chapters.has(id) ? ctx.sources.chapters : undefined;
-    const handler = chapters ? null : resolveHandler(ctx,id,book.format);
-    reply.header('cache-control','no-store');
-    return withSignal(request,reply,signal => searchBookPage(manifest,query.q!.trim(),query.cursor,overrides,async (item, chapterSignal) => {
-      const ref = item.resourceRef ?? (item.format === 'html' && item.href.startsWith('chapter:') ? item.href.replace('chapter:','chapter-full:') : item.href);
-      if (chapters) return chapters.asset(user.id,id,ref,chapterSignal);
-      if (!handler) throw badRequest('此格式暂不支持正文搜索','UNSUPPORTED_FORMAT');
-      return handler.asset({...sourceContext(ctx,id),bookId:id},{ref});
-    },signal,chapters ? 1 : 8));
+    const handler = chapters ? null : resolveHandler(ctx, id, book.format);
+    reply.header('cache-control', 'no-store');
+    return withSignal(request, reply, (signal) =>
+      searchBookPage(
+        manifest,
+        query.q!.trim(),
+        query.cursor,
+        overrides,
+        async (item, chapterSignal) => {
+          const ref =
+            item.resourceRef ??
+            (item.format === 'html' && item.href.startsWith('chapter:')
+              ? item.href.replace('chapter:', 'chapter-full:')
+              : item.href);
+          if (chapters) return chapters.asset(user.id, id, ref, chapterSignal);
+          if (!handler) throw badRequest('此格式暂不支持正文搜索', 'UNSUPPORTED_FORMAT');
+          return handler.asset({ ...sourceContext(ctx, id), bookId: id }, { ref });
+        },
+        signal,
+        chapters ? 1 : 8,
+      ),
+    );
   });
 
   app.get('/api/v1/books/:id/assets', { preHandler: auth }, async (request, reply) => {
@@ -359,7 +400,9 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     if (ref.length > 512) throw badRequest('ref is too long');
 
     if (ctx.sources?.chapters.has(id)) {
-      const payload = await withSignal(request, reply, (signal) => ctx.sources!.chapters.asset(user.id, id, ref, signal));
+      const payload = await withSignal(request, reply, (signal) =>
+        ctx.sources!.chapters.asset(user.id, id, ref, signal),
+      );
       reply.header('x-content-type-options', 'nosniff');
       reply.header('content-security-policy', "default-src 'none'; img-src data:; sandbox");
       return sendAssetPayload(request, reply, payload);
@@ -417,9 +460,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     // live inside an embedded archive: `第01卷/vol.cbz` is the archive, and
     // serving that *path* is how a client fetches the volume's pages out of it.
     const dirHandler = directoryHandlerForFormat(book.format);
-    const owned = dirHandler?.files
-      ? await dirHandler.files({ ...sourceContext(ctx, id), bookId: id })
-      : null;
+    const owned = dirHandler?.files ? await dirHandler.files({ ...sourceContext(ctx, id), bookId: id }) : null;
     const rows = ctx.db.all<{ rel_path: string; size: number }>(
       'SELECT rel_path, size FROM book_files WHERE book_id = ? AND missing = 0',
       id,
@@ -430,9 +471,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     // belongs to this book. `owned` is the authoritative list — it is the same
     // walk the manifest published — but a path directly under the folder that the
     // walk skips (or an older client asking for one) still resolves here.
-    const folderRow = rows.find(
-      (candidate) => normalizeRel(candidate.rel_path) === parentPath(wanted),
-    );
+    const folderRow = rows.find((candidate) => normalizeRel(candidate.rel_path) === parentPath(wanted));
     const ownsFolder = dirHandler !== null && folderRow !== undefined;
     if (!row && !entry && !ownsFolder) throw notFound('no such file for this book', 'FILE_MISSING');
 
@@ -456,10 +495,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     if (!row && entry && ownsFolder) {
       const absOwner = resolveInside(ctx.config.booksDir, assertSafeRel(wanted));
       if (!existsSync(absOwner)) throw notFound('file is no longer on disk', 'FILE_MISSING');
-      const payload = await dirHandler?.asset(
-        { ...sourceContext(ctx, id), bookId: id },
-        { ref: entry.ref },
-      );
+      const payload = await dirHandler?.asset({ ...sourceContext(ctx, id), bookId: id }, { ref: entry.ref });
       if (!payload) throw notFound('no such file for this book', 'FILE_MISSING');
       reply.header('etag', `"${id}:${createHash('sha256').update(wanted).digest('hex').slice(0, 16)}"`);
       reply.header('cache-control', 'private, max-age=86400');
@@ -490,7 +526,16 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const abs = resolveInside(ctx.config.dataDir, assertSafeRel(coverPath));
     if (!existsSync(abs)) throw notFound('cover cache missing', 'NO_COVER');
     const ext = extname(abs).toLowerCase();
-    const mime = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.svg' ? 'image/svg+xml' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+    const mime =
+      ext === '.png'
+        ? 'image/png'
+        : ext === '.gif'
+          ? 'image/gif'
+          : ext === '.svg'
+            ? 'image/svg+xml'
+            : ext === '.webp'
+              ? 'image/webp'
+              : 'image/jpeg';
     reply.header('content-type', mime);
     reply.header('cache-control', 'public, max-age=31536000, immutable');
     return reply.send(createReadStream(abs));
@@ -506,8 +551,16 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     ctx.shelf.getEditable(user, id);
     const patch = (request.body ?? {}) as Record<string, unknown>;
     const allowed = [
-      'title', 'author', 'publisher', 'language', 'isbn', 'description',
-      'series', 'seriesIndex', 'pubdate', 'tags',
+      'title',
+      'author',
+      'publisher',
+      'language',
+      'isbn',
+      'description',
+      'series',
+      'seriesIndex',
+      'pubdate',
+      'tags',
     ];
     const filtered: Record<string, unknown> = {};
     for (const key of allowed) {
@@ -552,12 +605,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
      * shelf. It is the same rule the write endpoints already follow: the screen
      * answers questions about the reader, not about the disk alone.
      */
-    return ctx.browse.list(
-      query.path ?? '',
-      numberParam(query.page, 1),
-      numberParam(query.pageSize, 200),
-      user.id,
-    );
+    return ctx.browse.list(query.path ?? '', numberParam(query.page, 1), numberParam(query.pageSize, 200), user.id);
   });
 
   app.post('/api/v1/library/browse/move', { preHandler: auth }, async (request) => {
@@ -602,8 +650,16 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
    * single-book dialog does not.
    */
   const BATCH_FIELDS = [
-    'title', 'author', 'publisher', 'language', 'isbn', 'description',
-    'series', 'seriesIndex', 'pubdate', 'tags',
+    'title',
+    'author',
+    'publisher',
+    'language',
+    'isbn',
+    'description',
+    'series',
+    'seriesIndex',
+    'pubdate',
+    'tags',
   ];
 
   app.post('/api/v1/library/browse/metadata', { preHandler: auth }, async (request) => {
@@ -787,11 +843,16 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
 
   app.get('/api/v1/library/stats', { preHandler: auth }, async (request) => {
     const user = currentUser(request);
-    const books = ctx.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM user_books WHERE user_id = ? AND hidden = 0', user.id);
+    const books = ctx.db.get<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM user_books WHERE user_id = ? AND hidden = 0',
+      user.id,
+    );
     const library = ctx.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM books');
     const files = ctx.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM book_files WHERE missing = 0');
     const missing = ctx.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM book_files WHERE missing = 1');
-    const formats = ctx.db.all<{ format: string; n: number }>('SELECT format, COUNT(*) AS n FROM books GROUP BY format');
+    const formats = ctx.db.all<{ format: string; n: number }>(
+      'SELECT format, COUNT(*) AS n FROM books GROUP BY format',
+    );
     return {
       myBooks: books?.n ?? 0,
       libraryBooks: library?.n ?? 0,
@@ -809,10 +870,25 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
 
   app.post('/api/v1/admin/users', { preHandler: auth }, async (request, reply) => {
     requireAdmin(request);
-    const body = (request.body ?? {}) as { username?: string; password?: string; displayName?: string; role?: 'admin' | 'member'; mediaEnabled?:boolean };
-    if (typeof body.username!=='string' || typeof body.password!=='string' || !body.username || !body.password || body.username.length>100 || body.password.length>1024 || (body.displayName!==undefined && (typeof body.displayName!=='string' || body.displayName.length>100))) throw badRequest('请填写有效的用户名、密码和显示名');
-    if (body.role!==undefined && body.role!=='admin' && body.role!=='member') throw badRequest('无效的用户角色');
-    if (body.mediaEnabled!==undefined && typeof body.mediaEnabled!=='boolean') throw badRequest('无效的影音权限');
+    const body = (request.body ?? {}) as {
+      username?: string;
+      password?: string;
+      displayName?: string;
+      role?: 'admin' | 'member';
+      mediaEnabled?: boolean;
+    };
+    if (
+      typeof body.username !== 'string' ||
+      typeof body.password !== 'string' ||
+      !body.username ||
+      !body.password ||
+      body.username.length > 100 ||
+      body.password.length > 1024 ||
+      (body.displayName !== undefined && (typeof body.displayName !== 'string' || body.displayName.length > 100))
+    )
+      throw badRequest('请填写有效的用户名、密码和显示名');
+    if (body.role !== undefined && body.role !== 'admin' && body.role !== 'member') throw badRequest('无效的用户角色');
+    if (body.mediaEnabled !== undefined && typeof body.mediaEnabled !== 'boolean') throw badRequest('无效的影音权限');
     const user = await ctx.users.createAsAdmin({
       username: body.username,
       password: body.password,
@@ -828,14 +904,21 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const actor = currentUser(request);
     requireAdmin(request);
     const { id } = request.params as { id: string };
-    const body = (request.body ?? {}) as { disabled?: boolean; role?: 'admin' | 'member'; mediaEnabled?:boolean };
+    const body = (request.body ?? {}) as { disabled?: boolean; role?: 'admin' | 'member'; mediaEnabled?: boolean };
     const target = ctx.users.byId(id);
     if (!target) throw notFound('用户不存在');
-    if (body.disabled!==undefined && typeof body.disabled!=='boolean') throw badRequest('无效的账号状态');
-    if (body.mediaEnabled!==undefined && typeof body.mediaEnabled!=='boolean') throw badRequest('无效的影音权限');
-    if (body.role!==undefined && body.role!=='admin' && body.role!=='member') throw badRequest('无效的用户角色');
-    if (id === actor.id && (body.disabled || body.role==='member')) throw badRequest('不能停用自己或移除自己的管理员权限', 'SELF_LOCKOUT');
-    if (target.role==='admin' && !target.disabled && (body.disabled || body.role==='member') && ctx.db.get<{n:number}>("SELECT count(*) AS n FROM users WHERE role='admin' AND disabled=0")!.n<=1) throw badRequest('必须保留至少一名启用的管理员','LAST_ADMIN');
+    if (body.disabled !== undefined && typeof body.disabled !== 'boolean') throw badRequest('无效的账号状态');
+    if (body.mediaEnabled !== undefined && typeof body.mediaEnabled !== 'boolean') throw badRequest('无效的影音权限');
+    if (body.role !== undefined && body.role !== 'admin' && body.role !== 'member') throw badRequest('无效的用户角色');
+    if (id === actor.id && (body.disabled || body.role === 'member'))
+      throw badRequest('不能停用自己或移除自己的管理员权限', 'SELF_LOCKOUT');
+    if (
+      target.role === 'admin' &&
+      !target.disabled &&
+      (body.disabled || body.role === 'member') &&
+      ctx.db.get<{ n: number }>("SELECT count(*) AS n FROM users WHERE role='admin' AND disabled=0")!.n <= 1
+    )
+      throw badRequest('必须保留至少一名启用的管理员', 'LAST_ADMIN');
     if (body.disabled !== undefined) ctx.users.setDisabled(id, body.disabled);
     if (body.role !== undefined) ctx.users.setRole(id, body.role);
     if (body.mediaEnabled !== undefined) ctx.users.setMediaEnabled(id, body.mediaEnabled);

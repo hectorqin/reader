@@ -30,7 +30,12 @@ export function savedScroll(key: string): number | undefined {
  * explicit in-page actions (new search, another page) that should not jump to an old position
  * of the URL they lead to.
  */
-export function useScrollMemory(anchor: RefObject<HTMLElement | null>, key: string | undefined, ready: boolean, container = '.media-screen'): () => void {
+export function useScrollMemory(
+  anchor: RefObject<HTMLElement | null>,
+  key: string | undefined,
+  ready: boolean,
+  container = '.media-screen',
+): () => void {
   const restored = useRef<string | undefined>(undefined);
   const skip = useRef(false);
   useEffect(() => {
@@ -47,5 +52,7 @@ export function useScrollMemory(anchor: RefObject<HTMLElement | null>, key: stri
     screen.addEventListener('scroll', record, { passive: true });
     return () => screen.removeEventListener('scroll', record);
   }, [anchor, key, ready, container]);
-  return useCallback(() => { skip.current = true; }, []);
+  return useCallback(() => {
+    skip.current = true;
+  }, []);
 }

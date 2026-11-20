@@ -144,10 +144,7 @@ function multipart(
   const chunks: Buffer[] = [];
   for (const [name, value] of Object.entries(fields)) {
     chunks.push(
-      Buffer.from(
-        `--${boundary}\r\ncontent-disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`,
-        'utf8',
-      ),
+      Buffer.from(`--${boundary}\r\ncontent-disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`, 'utf8'),
     );
   }
   for (const file of files) {
@@ -240,10 +237,9 @@ describe('uploading a book', () => {
   test('stores the file, indexes it, and reports the book it became', async () => {
     const target = await freshTarget();
     const epub = await makeEpub('三体', 'urn:upload-one');
-    const { body, contentType } = multipart(
-      [{ field: 'file', filename: '三体.epub', content: epub }],
-      { path: target },
-    );
+    const { body, contentType } = multipart([{ field: 'file', filename: '三体.epub', content: epub }], {
+      path: target,
+    });
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/library/upload',
@@ -308,10 +304,9 @@ describe('uploading a book', () => {
   test('traversal in the destination directory is refused', async () => {
     const epub = await makeEpub('逃逸', 'urn:upload-three');
     for (const target of ['../外面', '..', '/etc', '待整理/../..']) {
-      const { body, contentType } = multipart(
-        [{ field: 'file', filename: '逃逸.epub', content: epub }],
-        { path: target },
-      );
+      const { body, contentType } = multipart([{ field: 'file', filename: '逃逸.epub', content: epub }], {
+        path: target,
+      });
       const res = await app.inject({
         method: 'POST',
         url: '/api/v1/library/upload',
@@ -328,10 +323,10 @@ describe('uploading a book', () => {
     const second = await makeEpub('重名', 'urn:dupe-2');
 
     const upload = async (content: Buffer, onConflict?: string) => {
-      const { body, contentType } = multipart(
-        [{ field: 'file', filename: '重名.epub', content }],
-        { path: target, ...(onConflict ? { onConflict } : {}) },
-      );
+      const { body, contentType } = multipart([{ field: 'file', filename: '重名.epub', content }], {
+        path: target,
+        ...(onConflict ? { onConflict } : {}),
+      });
       return app.inject({
         method: 'POST',
         url: '/api/v1/library/upload',
@@ -423,7 +418,10 @@ describe('uploading a book', () => {
       scan: { startedAt: number; finishedAt: number };
     };
     assert.equal(result.uploaded.length, 2);
-    assert.ok(result.uploaded.every((item) => item.bookId), 'both files should be indexed');
+    assert.ok(
+      result.uploaded.every((item) => item.bookId),
+      'both files should be indexed',
+    );
     // One scan, not one per file: a batch is one library change.
     assert.ok(result.scan.finishedAt >= result.scan.startedAt);
   });
@@ -493,19 +491,36 @@ describe('uploading a book', () => {
 
     const zip = new JSZip();
     zip.file('inside.txt', 'from an archive');
-    const body = multipart([
-      { field: 'files', filename: 'member-book.txt', content: Buffer.from('a member book') },
-      { field: 'files', filename: 'member-notes.docx', content: Buffer.from('not a book') },
-      { field: 'files', filename: 'member-comic.zip', content: await zip.generateAsync({ type: 'nodebuffer' }) },
-    ], { path: '成员上传' });
+    const body = multipart(
+      [
+        { field: 'files', filename: 'member-book.txt', content: Buffer.from('a member book') },
+        { field: 'files', filename: 'member-notes.docx', content: Buffer.from('not a book') },
+        { field: 'files', filename: 'member-comic.zip', content: await zip.generateAsync({ type: 'nodebuffer' }) },
+      ],
+      { path: '成员上传' },
+    );
     await mkdir(join(booksDir, '成员上传'), { recursive: true });
-    const upload = await app.inject({ method: 'POST', url: '/api/v1/library/upload', headers: { ...headers, 'content-type': body.contentType }, payload: body.body });
+    const upload = await app.inject({
+      method: 'POST',
+      url: '/api/v1/library/upload',
+      headers: { ...headers, 'content-type': body.contentType },
+      payload: body.body,
+    });
     assert.equal(upload.statusCode, 200, upload.body);
-    const result = upload.json() as { uploaded: Array<{ path: string; kind: string }>; skipped: Array<{ name: string }> };
+    const result = upload.json() as {
+      uploaded: Array<{ path: string; kind: string }>;
+      skipped: Array<{ name: string }>;
+    };
     // The zip is stored as the comic archive it names, not unpacked into the library.
-    assert.deepEqual(result.uploaded.map((item) => item.path).sort(), ['成员上传/member-book.txt', '成员上传/member-comic.zip']);
+    assert.deepEqual(result.uploaded.map((item) => item.path).sort(), [
+      '成员上传/member-book.txt',
+      '成员上传/member-comic.zip',
+    ]);
     assert.ok(result.uploaded.every((item) => item.kind === 'file'));
-    assert.deepEqual(result.skipped.map((item) => item.name), ['member-notes.docx']);
+    assert.deepEqual(
+      result.skipped.map((item) => item.name),
+      ['member-notes.docx'],
+    );
     assert.deepEqual((await readdir(join(booksDir, '成员上传'))).sort(), ['member-book.txt', 'member-comic.zip']);
   });
 
@@ -518,8 +533,15 @@ describe('uploading a book', () => {
       const probe = await app.inject({ method: 'GET', url: '/api/v1/library/upload', headers });
       assert.deepEqual(probe.json(), { writable: true, allowed: false });
       const before = await readdir(join(booksDir, '成员上传'));
-      const body = multipart([{ field: 'files', filename: 'turned-off.txt', content: Buffer.from('no') }], { path: '成员上传' });
-      const upload = await app.inject({ method: 'POST', url: '/api/v1/library/upload', headers: { ...headers, 'content-type': body.contentType }, payload: body.body });
+      const body = multipart([{ field: 'files', filename: 'turned-off.txt', content: Buffer.from('no') }], {
+        path: '成员上传',
+      });
+      const upload = await app.inject({
+        method: 'POST',
+        url: '/api/v1/library/upload',
+        headers: { ...headers, 'content-type': body.contentType },
+        payload: body.body,
+      });
       assert.equal(upload.statusCode, 403);
       assert.equal((upload.json() as { error: { code: string } }).error.code, 'UPLOAD_DISABLED');
       assert.deepEqual(await readdir(join(booksDir, '成员上传')), before);
@@ -535,8 +557,16 @@ describe('uploading a book', () => {
     const member = await ctx.users.login('upload-member', 'password123');
     const headers = { authorization: `Bearer ${member.accessToken}` };
     const before = await readdir(join(booksDir, '成员上传'));
-    const body = multipart([{ field: 'files', filename: 'member-book.txt', content: Buffer.from('replaced') }], { path: '成员上传', onConflict: 'overwrite' });
-    const upload = await app.inject({ method: 'POST', url: '/api/v1/library/upload', headers: { ...headers, 'content-type': body.contentType }, payload: body.body });
+    const body = multipart([{ field: 'files', filename: 'member-book.txt', content: Buffer.from('replaced') }], {
+      path: '成员上传',
+      onConflict: 'overwrite',
+    });
+    const upload = await app.inject({
+      method: 'POST',
+      url: '/api/v1/library/upload',
+      headers: { ...headers, 'content-type': body.contentType },
+      payload: body.body,
+    });
     assert.equal(upload.statusCode, 403);
     assert.equal((upload.json() as { error: { code: string } }).error.code, 'ADMIN_REQUIRED');
     assert.deepEqual(await readdir(join(booksDir, '成员上传')), before);
@@ -560,10 +590,9 @@ describe('uploading an archive', () => {
       ['系列/第02卷.epub', await makeEpub('第二卷', 'urn:series-2')],
       ['系列/说明.txt', '第一卷：开始\n第二卷：结束\n'],
     ]);
-    const { body, contentType } = multipart(
-      [{ field: 'file', filename: '系列合集.zip', content: archive }],
-      { path: target },
-    );
+    const { body, contentType } = multipart([{ field: 'file', filename: '系列合集.zip', content: archive }], {
+      path: target,
+    });
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/library/upload',
@@ -588,10 +617,9 @@ describe('uploading an archive', () => {
       ['套图/第01卷/002.jpg', Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])],
       ['套图/第02卷/001.jpg', Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])],
     ]);
-    const { body, contentType } = multipart(
-      [{ field: 'file', filename: '漫画.zip', content: archive }],
-      { path: target },
-    );
+    const { body, contentType } = multipart([{ field: 'file', filename: '漫画.zip', content: archive }], {
+      path: target,
+    });
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/library/upload',
@@ -602,11 +630,15 @@ describe('uploading an archive', () => {
     const result = res.json() as { uploaded: Array<{ path: string; bookId?: string; title?: string }> };
     // `漫画/` is one folder, so it is flattened; the volumes inside it are not.
     // Flattening those would destroy the volume layout the comic handler reads.
-    assert.deepEqual(
-      result.uploaded.map((item) => item.path).sort(),
-      [`${target}/第01卷/001.jpg`, `${target}/第01卷/002.jpg`, `${target}/第02卷/001.jpg`],
+    assert.deepEqual(result.uploaded.map((item) => item.path).sort(), [
+      `${target}/第01卷/001.jpg`,
+      `${target}/第01卷/002.jpg`,
+      `${target}/第02卷/001.jpg`,
+    ]);
+    assert.ok(
+      result.uploaded.every((item) => item.bookId),
+      'the folder as a whole should be a book',
     );
-    assert.ok(result.uploaded.every((item) => item.bookId), 'the folder as a whole should be a book');
   });
 
   test('an entry name cannot escape the target directory', async () => {
@@ -615,9 +647,7 @@ describe('uploading an archive', () => {
       ['/绝对路径.txt', 'nope'],
       ['ok/正常.txt', '这本书在目录里\n'],
     ]);
-    const { body, contentType } = multipart([
-      { field: 'file', filename: '恶意.zip', content: archive },
-    ]);
+    const { body, contentType } = multipart([{ field: 'file', filename: '恶意.zip', content: archive }]);
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/library/upload',
@@ -639,9 +669,7 @@ describe('uploading an archive', () => {
   });
 
   test('a zip that contains nothing is refused', async () => {
-    const { body, contentType } = multipart([
-      { field: 'file', filename: '空.zip', content: makeZip([]) },
-    ]);
+    const { body, contentType } = multipart([{ field: 'file', filename: '空.zip', content: makeZip([]) }]);
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/library/upload',
@@ -739,7 +767,7 @@ describe('batch management', () => {
     assert.equal(back!.n, before!.n);
   });
 
-  test('a row reports whether its book is on the caller\'s shelf', async () => {
+  test("a row reports whether its book is on the caller's shelf", async () => {
     /*
      * The file manager could describe the disk and not the shelf, and the two
      * diverge the moment a reader takes a book off their shelf. Without this flag
@@ -748,15 +776,24 @@ describe('batch management', () => {
      * found the one screen that could explain it unable to say anything.
      */
     const listing = async (): Promise<Array<{ name: string; shelfState: string | null }>> =>
-      (await app.inject({
-        method: 'GET', url: `/api/v1/library/browse?path=${encodeURIComponent(batchRoot)}`, headers: auth(),
-      })).json<{ entries: Array<{ name: string; shelfState: string | null }> }>().entries;
+      (
+        await app.inject({
+          method: 'GET',
+          url: `/api/v1/library/browse?path=${encodeURIComponent(batchRoot)}`,
+          headers: auth(),
+        })
+      ).json<{ entries: Array<{ name: string; shelfState: string | null }> }>().entries;
 
     // A fresh scan puts every book on every user's shelf, so both start `on`.
-    assert.deepEqual((await listing()).map((entry) => entry.shelfState), ['on', 'on']);
+    assert.deepEqual(
+      (await listing()).map((entry) => entry.shelfState),
+      ['on', 'on'],
+    );
 
     const removed = await app.inject({
-      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      method: 'POST',
+      url: '/api/v1/library/browse/shelf',
+      headers: auth(),
       payload: { paths: [`${batchRoot}/卷一.epub`], action: 'remove' },
     });
     assert.equal(removed.statusCode, 200, removed.body);
@@ -777,12 +814,15 @@ describe('batch management', () => {
      * not reversibility.
      */
     const total = async (search: string): Promise<number> =>
-      (await app.inject({ method: 'GET', url: `/api/v1/books?search=${encodeURIComponent(search)}`, headers: auth() }))
-        .json<{ total: number }>().total;
+      (
+        await app.inject({ method: 'GET', url: `/api/v1/books?search=${encodeURIComponent(search)}`, headers: auth() })
+      ).json<{ total: number }>().total;
     assert.equal(await total('合集第一卷'), 0, 'precondition: the book is off the shelf');
 
     const added = await app.inject({
-      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      method: 'POST',
+      url: '/api/v1/library/browse/shelf',
+      headers: auth(),
       payload: { paths: [`${batchRoot}/卷一.epub`], action: 'add' },
     });
     assert.equal(added.statusCode, 200, added.body);
@@ -798,7 +838,9 @@ describe('batch management', () => {
      * avoid in the first place.
      */
     const off = await app.inject({
-      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      method: 'POST',
+      url: '/api/v1/library/browse/shelf',
+      headers: auth(),
       payload: { paths: [batchRoot], action: 'remove' },
     });
     assert.equal(off.statusCode, 200, off.body);
@@ -806,7 +848,9 @@ describe('batch management', () => {
     assert.equal(await total('合集第二卷'), 0);
 
     const restored = await app.inject({
-      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      method: 'POST',
+      url: '/api/v1/library/browse/shelf',
+      headers: auth(),
       payload: { paths: [batchRoot], action: 'unhide' },
     });
     assert.equal(restored.statusCode, 200, restored.body);

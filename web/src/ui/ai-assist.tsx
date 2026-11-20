@@ -30,7 +30,12 @@ export function keptAnswer(action: AssistAction, question: string, answer: strin
   return text.length > MAX_KEPT_ANSWER ? `${text.slice(0, MAX_KEPT_ANSWER - 1)}…` : text;
 }
 
-export function AiAssistSheet({ quote, ask, keep, onClose }: {
+export function AiAssistSheet({
+  quote,
+  ask,
+  keep,
+  onClose,
+}: {
   quote: string;
   ask(action: AssistAction, question: string): Promise<string>;
   /** Saves the answer as an annotation on the passage. Absent where notes cannot be written. */
@@ -40,16 +45,24 @@ export function AiAssistSheet({ quote, ask, keep, onClose }: {
   const [asked, setAsked] = useState<{ action: AssistAction; question: string } | null>(null);
   const [kept, setKept] = useState<'' | 'saving' | 'saved'>('');
   const [busy, setBusy] = useState<AssistAction | null>(null);
-  const [answer, setAnswer] = useState(''), [error, setError] = useState(''), [question, setQuestion] = useState('');
+  const [answer, setAnswer] = useState(''),
+    [error, setError] = useState(''),
+    [question, setQuestion] = useState('');
   /** Only the latest request may write: a slow 翻译 must not overwrite the 解释 asked after it. */
   const latest = useRef(0);
 
   async function run(action: AssistAction, text = ''): Promise<void> {
     const id = ++latest.current;
-    setBusy(action); setError(''); setAnswer(''); setKept('');
+    setBusy(action);
+    setError('');
+    setAnswer('');
+    setKept('');
     try {
       const result = await ask(action, text);
-      if (id === latest.current) { setAnswer(result); setAsked({ action, question: text }); }
+      if (id === latest.current) {
+        setAnswer(result);
+        setAsked({ action, question: text });
+      }
     } catch (failure) {
       if (id === latest.current) setError(failure instanceof Error ? failure.message : 'AI 请求失败');
     } finally {
@@ -62,26 +75,70 @@ export function AiAssistSheet({ quote, ask, keep, onClose }: {
       <div className="ai-assist">
         <blockquote>{quote}</blockquote>
         <div className="ai-assist-actions">
-          <Button aria-pressed={busy === 'translate'} onClick={() => void run('translate')}>翻译</Button>
-          <Button aria-pressed={busy === 'explain'} onClick={() => void run('explain')}>解释</Button>
+          <Button aria-pressed={busy === 'translate'} onClick={() => void run('translate')}>
+            翻译
+          </Button>
+          <Button aria-pressed={busy === 'explain'} onClick={() => void run('explain')}>
+            解释
+          </Button>
         </div>
-        <form className="ai-assist-ask" onSubmit={(event) => { event.preventDefault(); const text = question.trim(); if (text) void run('ask', text); }}>
-          <label className="sheet-field"><span>就这段话提问</span>
-            <input value={question} maxLength={MAX_QUESTION} enterKeyHint="send" placeholder="例如：这里指的是谁？" onInput={(event) => setQuestion(event.currentTarget.value)} />
+        <form
+          className="ai-assist-ask"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const text = question.trim();
+            if (text) void run('ask', text);
+          }}
+        >
+          <label className="sheet-field">
+            <span>就这段话提问</span>
+            <input
+              value={question}
+              maxLength={MAX_QUESTION}
+              enterKeyHint="send"
+              placeholder="例如：这里指的是谁？"
+              onInput={(event) => setQuestion(event.currentTarget.value)}
+            />
           </label>
-          <Button type="submit" className="primary" disabled={!question.trim()}>提问</Button>
+          <Button type="submit" className="primary" disabled={!question.trim()}>
+            提问
+          </Button>
         </form>
-        {busy && <p className="ai-assist-status" role="status">{WORKING[busy]}</p>}
-        {error && <p className="ai-assist-error" role="alert">{error}</p>}
-        {answer && <article className="ai-assist-answer" aria-live="polite">{answer}</article>}
-        {answer && keep && asked && <div className="ai-assist-keep">
-          <Button disabled={kept !== ''} onClick={() => {
-            setKept('saving'); setError('');
-            void keep(keptAnswer(asked.action, asked.question, answer)).then(() => setKept('saved'), (failure: unknown) => {
-              setKept(''); setError(failure instanceof Error ? failure.message : '保存失败，请重试');
-            });
-          }}>{kept === 'saved' ? '已存为批注' : kept === 'saving' ? '正在保存…' : '存为批注'}</Button>
-        </div>}
+        {busy && (
+          <p className="ai-assist-status" role="status">
+            {WORKING[busy]}
+          </p>
+        )}
+        {error && (
+          <p className="ai-assist-error" role="alert">
+            {error}
+          </p>
+        )}
+        {answer && (
+          <article className="ai-assist-answer" aria-live="polite">
+            {answer}
+          </article>
+        )}
+        {answer && keep && asked && (
+          <div className="ai-assist-keep">
+            <Button
+              disabled={kept !== ''}
+              onClick={() => {
+                setKept('saving');
+                setError('');
+                void keep(keptAnswer(asked.action, asked.question, answer)).then(
+                  () => setKept('saved'),
+                  (failure: unknown) => {
+                    setKept('');
+                    setError(failure instanceof Error ? failure.message : '保存失败，请重试');
+                  },
+                );
+              }}
+            >
+              {kept === 'saved' ? '已存为批注' : kept === 'saving' ? '正在保存…' : '存为批注'}
+            </Button>
+          </div>
+        )}
         <p className="ai-assist-hint">选中的文字和它的前后文会发送给管理员配置的 AI 服务；回答可能有误。</p>
       </div>
     </Sheet>

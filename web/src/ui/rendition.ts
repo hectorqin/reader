@@ -56,7 +56,12 @@ export function cachedChapterLacksStyles(bytes: Uint8Array, mediaType: string): 
   const head = new TextDecoder().decode(bytes.subarray(0, 64 * 1024));
   for (const [tag] of head.matchAll(/<link\b[^>]*>/gi)) {
     const rel = /\brel\s*=\s*["']([^"']*)["']/i.exec(tag)?.[1]?.toLowerCase() ?? '';
-    if (rel.split(/\s+/).includes('stylesheet') && !rel.includes('alternate') && tag.includes('__reader-book-resource__')) return true;
+    if (
+      rel.split(/\s+/).includes('stylesheet') &&
+      !rel.includes('alternate') &&
+      tag.includes('__reader-book-resource__')
+    )
+      return true;
   }
   return false;
 }

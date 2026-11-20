@@ -287,7 +287,8 @@ export class SyncEngine {
         if (!pull.hasMore) break;
         const cursor = pull.serverTime;
         pull = await this.api.pull(cursor, undefined, { signal: run.signal });
-        if (pull.serverTime <= cursor && pull.hasMore) throw new ApiError('server', '同步分页游标没有前进', 'INVALID_SYNC_CURSOR');
+        if (pull.serverTime <= cursor && pull.hasMore)
+          throw new ApiError('server', '同步分页游标没有前进', 'INVALID_SYNC_CURSOR');
       }
       this.rememberNoteBooks();
 
@@ -299,8 +300,12 @@ export class SyncEngine {
     } catch (err) {
       // A terminal auth response clears ReaderApi's session before arriving
       // here. Surface that failure only while this lifecycle is still current.
-      if (!this.stopped && run.generation === this.generation &&
-          (run.account === this.accountKey() || !this.api.currentSession())) this.handleFailure(err);
+      if (
+        !this.stopped &&
+        run.generation === this.generation &&
+        (run.account === this.accountKey() || !this.api.currentSession())
+      )
+        this.handleFailure(err);
     } finally {
       if (run.generation === this.generation) this.running = false;
     }
@@ -367,11 +372,14 @@ export class SyncEngine {
       const offset = index * CHUNK;
       const progressChunk = batch.progress.slice(offset, offset + CHUNK);
       const noteChunk = notes.slice(offset, offset + CHUNK);
-      const result = await this.api.push({
-        since: this.offline.current.serverTime,
-        ...(progressChunk.length > 0 ? { progress: progressChunk } : {}),
-        ...(noteChunk.length > 0 ? { notes: noteChunk } : {}),
-      }, { signal: run.signal });
+      const result = await this.api.push(
+        {
+          since: this.offline.current.serverTime,
+          ...(progressChunk.length > 0 ? { progress: progressChunk } : {}),
+          ...(noteChunk.length > 0 ? { notes: noteChunk } : {}),
+        },
+        { signal: run.signal },
+      );
       this.assertCurrent(run);
       serverTime = Math.max(serverTime, result.serverTime);
       rejected += result.rejected;

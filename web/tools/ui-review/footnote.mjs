@@ -13,31 +13,44 @@ import { join, resolve } from 'node:path';
 import { chromium } from 'playwright';
 import { ILLUSTRATED_ID, createReviewServer } from './server.mjs';
 
-const shots = process.env.UI_REVIEW_DIR ? resolve(process.env.UI_REVIEW_DIR) : join(resolve(import.meta.dirname, '../../..'), 'artifacts/ui-review/footnote');
+const shots = process.env.UI_REVIEW_DIR
+  ? resolve(process.env.UI_REVIEW_DIR)
+  : join(resolve(import.meta.dirname, '../../..'), 'artifacts/ui-review/footnote');
 await mkdir(shots, { recursive: true });
 const errors = [];
 
-for (const [name, width, height] of [['phone', 390, 844], ['desktop', 1366, 768]]) {
+for (const [name, width, height] of [
+  ['phone', 390, 844],
+  ['desktop', 1366, 768],
+]) {
   // A server and a browser per size: the jump at the end saves a reading position,
   // and the next size has to open the book where the marks are.
   const server = createReviewServer({ port: 0 });
   await server.listen();
   const base = 'http://127.0.0.1:' + server.server.address().port;
-  const browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
+  const browser = await chromium.launch({
+    headless: true,
+    ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}),
+  });
   try {
     const page = await browser.newPage({ viewport: { width, height } });
-    page.on('pageerror', error => errors.push(error.message));
+    page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(base + '/#/shelf');
     await page.locator('input[autocomplete=username]').fill('review');
     await page.locator('input[type=password]').fill('password12');
     await page.locator('button[type=submit]').click();
     await page.locator('.shelf-screen').waitFor();
 
-    const place = () => page.locator('book-content').evaluate(el => {
-      const flow = el.shadowRoot.querySelector('.book-flow');
-      const scroller = el.dataset.paginated === 'true' ? flow : el;
-      return { x: scroller.scrollLeft, y: scroller.scrollTop, first: flow.querySelector('p')?.textContent?.slice(0, 6) };
-    });
+    const place = () =>
+      page.locator('book-content').evaluate((el) => {
+        const flow = el.shadowRoot.querySelector('.book-flow');
+        const scroller = el.dataset.paginated === 'true' ? flow : el;
+        return {
+          x: scroller.scrollLeft,
+          y: scroller.scrollTop,
+          first: flow.querySelector('p')?.textContent?.slice(0, 6),
+        };
+      });
     const sheet = page.locator('.reader-screen .sheet.footnote-sheet');
 
     await page.goto(base + '/#/book/' + ILLUSTRATED_ID);
@@ -51,13 +64,31 @@ for (const [name, width, height] of [['phone', 390, 844], ['desktop', 1366, 768]
     let before = await place();
     await mark.click();
     await sheet.waitFor();
-    assert.equal(await sheet.locator('.footnote-text').innerText(), '[1] 这是本章之内的脚注，点一下引用标记就在原处读到。');
+    assert.equal(
+      await sheet.locator('.footnote-text').innerText(),
+      '[1] 这是本章之内的脚注，点一下引用标记就在原处读到。',
+    );
     assert.deepEqual(await place(), before, name + ': reading a note does not move the page');
     // The sheet slides in; it is measured where it comes to rest.
-    await sheet.evaluate(el => Promise.all(el.getAnimations().map(animation => animation.finished)));
-    const box = await sheet.evaluate(el => { const r = el.getBoundingClientRect(); return { height: r.height, top: r.top, bottom: innerHeight - r.bottom, left: r.left, right: innerWidth - r.right }; });
-    assert.ok(box.height < height / 2, name + `: the sheet is as tall as the note, not a half screen (${box.height}px)`);
-    assert.ok(box.top >= 0 && box.bottom >= 0 && box.left >= 0 && box.right >= 0, name + ': the sheet is inside the window ' + JSON.stringify(box));
+    await sheet.evaluate((el) => Promise.all(el.getAnimations().map((animation) => animation.finished)));
+    const box = await sheet.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return {
+        height: r.height,
+        top: r.top,
+        bottom: innerHeight - r.bottom,
+        left: r.left,
+        right: innerWidth - r.right,
+      };
+    });
+    assert.ok(
+      box.height < height / 2,
+      name + `: the sheet is as tall as the note, not a half screen (${box.height}px)`,
+    );
+    assert.ok(
+      box.top >= 0 && box.bottom >= 0 && box.left >= 0 && box.right >= 0,
+      name + ': the sheet is inside the window ' + JSON.stringify(box),
+    );
     await page.screenshot({ path: join(shots, `footnote-${name}-same-chapter.png`), animations: 'disabled' });
     await page.keyboard.press('Escape');
     await sheet.waitFor({ state: 'detached' });
@@ -79,7 +110,10 @@ for (const [name, width, height] of [['phone', 390, 844], ['desktop', 1366, 768]
     before = await place();
     await page.locator('book-content #r2').click();
     await sheet.waitFor();
-    assert.equal(await sheet.locator('.footnote-text').innerText(), '[2] 这是写在后记里的书后注，读者不必翻到这里就能读到它。');
+    assert.equal(
+      await sheet.locator('.footnote-text').innerText(),
+      '[2] 这是写在后记里的书后注，读者不必翻到这里就能读到它。',
+    );
     assert.deepEqual(await place(), before, name + ': a note from another chapter is read without going there');
     await page.screenshot({ path: join(shots, `footnote-${name}-other-chapter.png`), animations: 'disabled' });
 

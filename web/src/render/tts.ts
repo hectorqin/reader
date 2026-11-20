@@ -158,7 +158,11 @@ export class TtsEngine implements SpeechEngineShape {
   }
 
   static isSupported(): boolean {
-    return typeof window !== 'undefined' && 'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function';
+    return (
+      typeof window !== 'undefined' &&
+      'speechSynthesis' in window &&
+      typeof window.SpeechSynthesisUtterance === 'function'
+    );
   }
 
   private get synthesis(): SpeechSynthesis | null {
@@ -399,8 +403,7 @@ export class TtsEngine implements SpeechEngineShape {
     // The queue is intentionally left in place so a rewind works, but the
     // controller is told playback ran out so it can continue into the next
     // chapter instead of stopping at every chapter boundary.
-    void this
-      .loadQueue(this.queue.length)
+    void this.loadQueue(this.queue.length)
       .then((loaded) => {
         if (generation !== this.generation || !loaded.chunks.length) return;
         this.queue = loaded.chunks;
@@ -481,9 +484,7 @@ function findRawVoice(synthesis: SpeechSynthesis, voice: TtsVoice): SpeechSynthe
   } catch {
     return null;
   }
-  return (
-    voices.find((candidate) => (candidate.voiceURI || `${candidate.name}|${candidate.lang}`) === voice.id) ?? null
-  );
+  return voices.find((candidate) => (candidate.voiceURI || `${candidate.name}|${candidate.lang}`) === voice.id) ?? null;
 }
 
 function clamp(value: number, min: number, max: number): number {

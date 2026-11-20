@@ -22,19 +22,7 @@ import { filenameMetadata } from '../metadata.ts';
 export const imageHandler = registerFileHandler({
   format: 'image',
   kind: 'single-image',
-  extensions: [
-    'jpg',
-    'jpeg',
-    'jpe',
-    'png',
-    'gif',
-    'webp',
-    'bmp',
-    'avif',
-    'tif',
-    'tiff',
-    'jxl',
-  ],
+  extensions: ['jpg', 'jpeg', 'jpe', 'png', 'gif', 'webp', 'bmp', 'avif', 'tif', 'tiff', 'jxl'],
   label: '单张图片（按单页读物处理）',
   /**
    * Inside a comic folder the same extensions are pages, not books.

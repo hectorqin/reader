@@ -25,8 +25,9 @@ export const FIXTURE = {
 };
 
 /** A long chapter, so pagination has something to paginate. */
-export const LONG_CHAPTER = Array.from({ length: 40 }, (_v, i) =>
-  `第 ${i + 1} 段。这一段有足够多的字，用来把这一章撑到好几屏，这样翻页才看得出来。`,
+export const LONG_CHAPTER = Array.from(
+  { length: 40 },
+  (_v, i) => `第 ${i + 1} 段。这一段有足够多的字，用来把这一章撑到好几屏，这样翻页才看得出来。`,
 ).join('\n\n');
 
 export const SCENES = [
@@ -64,7 +65,11 @@ export const SCENES = [
     name: 'reader-paged',
     label: '阅读页 · 翻页模式',
     note: '分栏后的一页；底部的「本章 x/y 页」应当与正文对得上',
-    steps: [{ click: 'button[aria-label="阅读设置"]' }, { click: 'button:has-text("翻页")' }, { click: 'button[aria-label="关闭"]' }],
+    steps: [
+      { click: 'button[aria-label="阅读设置"]' },
+      { click: 'button:has-text("翻页")' },
+      { click: 'button[aria-label="关闭"]' },
+    ],
   },
   {
     name: 'reader-txt-settings',

@@ -47,7 +47,10 @@ beforeAll(() => {
  * restore that computes 1000.4 lands on 1000, and a step that computes 0.4 lands
  * on 0.
  */
-function scrollable(element: HTMLElement, geometry: { clientHeight: number; scrollHeight: number; clientWidth?: number; scrollWidth?: number }): void {
+function scrollable(
+  element: HTMLElement,
+  geometry: { clientHeight: number; scrollHeight: number; clientWidth?: number; scrollWidth?: number },
+): void {
   const state = { top: 0, left: 0 };
   Object.defineProperty(element, 'clientHeight', { get: () => geometry.clientHeight, configurable: true });
   Object.defineProperty(element, 'scrollHeight', { get: () => geometry.scrollHeight, configurable: true });
@@ -63,7 +66,10 @@ function scrollable(element: HTMLElement, geometry: { clientHeight: number; scro
   Object.defineProperty(element, 'scrollLeft', {
     get: () => Math.round(state.left),
     set: (value: number) => {
-      state.left = Math.min(Math.max(0, value), Math.max(0, (geometry.scrollWidth ?? 400) - (geometry.clientWidth ?? 400)));
+      state.left = Math.min(
+        Math.max(0, value),
+        Math.max(0, (geometry.scrollWidth ?? 400) - (geometry.clientWidth ?? 400)),
+      );
     },
     configurable: true,
   });
@@ -126,7 +132,9 @@ describe('page turns in scroll mode', () => {
     let resize: (() => void) | undefined;
     const previousObserver = globalThis.ResizeObserver;
     globalThis.ResizeObserver = class {
-      constructor(callback: () => void) { resize = callback; }
+      constructor(callback: () => void) {
+        resize = callback;
+      }
       observe() {}
       unobserve() {}
       disconnect() {}
@@ -142,7 +150,7 @@ describe('page turns in scroll mode', () => {
       expect(view.position().pageInChapter).toBe(2);
       await view.seekPageInChapter(2);
       view.applySettings({ theme: 'green' });
-      await new Promise(resolve => requestAnimationFrame(resolve));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
       expect(view.position().pageInChapter).toBe(3);
     } finally {
       view.dispose();

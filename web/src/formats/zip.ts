@@ -51,7 +51,9 @@ export class BookArchive {
 }
 
 export function normalise(path: string): string {
-  return decodeURIComponent(path).replace(/^\.?\//, '').toLowerCase();
+  return decodeURIComponent(path)
+    .replace(/^\.?\//, '')
+    .toLowerCase();
 }
 
 /** Resolves a relative href against a base directory, collapsing `../`. */

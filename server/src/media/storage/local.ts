@@ -18,13 +18,24 @@ export class LocalMediaStorage implements MediaStorage {
   }
 
   private entry(ref: string, info: Stats): StorageEntry {
-    return { ref, name: basename(ref), size: info.size, modifiedAt: info.mtimeMs,
-      fileIdentity: info.ino ? `${info.dev}:${info.ino}` : null };
+    return {
+      ref,
+      name: basename(ref),
+      size: info.size,
+      modifiedAt: info.mtimeMs,
+      fileIdentity: info.ino ? `${info.dev}:${info.ino}` : null,
+    };
   }
 
   private async checkedPath(ref: string): Promise<string> {
-    if (!ref || isAbsolute(ref) || ref.includes('\\') || ref.includes(':') || ref.includes('\0') ||
-      ref.split('/').some(part => !part || part === '.' || part === '..')) {
+    if (
+      !ref ||
+      isAbsolute(ref) ||
+      ref.includes('\\') ||
+      ref.includes(':') ||
+      ref.includes('\0') ||
+      ref.split('/').some((part) => !part || part === '.' || part === '..')
+    ) {
       throw new StorageError('invalid-ref', 'Invalid media resource reference');
     }
     let candidate = this.root;
@@ -76,16 +87,18 @@ export class LocalMediaStorage implements MediaStorage {
   }
 
   /** Bounded sidecar hint; large directories fall back to fixed-name probes. */
-  async siblingNames(ref:string):Promise<Set<string>|undefined> {
+  async siblingNames(ref: string): Promise<Set<string> | undefined> {
     await this.stat(ref);
-    const slash=ref.lastIndexOf('/'),prefix=slash<0?'':ref.slice(0,slash);
-    const directory=prefix?await this.checkedPath(prefix):this.root;
+    const slash = ref.lastIndexOf('/'),
+      prefix = slash < 0 ? '' : ref.slice(0, slash);
+    const directory = prefix ? await this.checkedPath(prefix) : this.root;
     // This is only a negative lookup hint. Existing candidates (including links
     // and directories) must still pass stat/open. Preserve spelling so sidecar
     // matching also opens the correct path on case-sensitive filesystems.
-    const names=new Set<string>();let count=0;
-    for await(const entry of await opendir(directory)){
-      if(++count>256)return undefined;
+    const names = new Set<string>();
+    let count = 0;
+    for await (const entry of await opendir(directory)) {
+      if (++count > 256) return undefined;
       names.add(entry.name);
     }
     return names;
@@ -102,8 +115,11 @@ export class LocalMediaStorage implements MediaStorage {
     for (const entry of entries) {
       if (!entry.isFile() || entry.isSymbolicLink()) continue;
       const child = prefix ? `${prefix}/${entry.name}` : entry.name;
-      try { files.push(await this.stat(child)); }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+      try {
+        files.push(await this.stat(child));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      }
     }
     return files;
   }
@@ -129,8 +145,15 @@ export class LocalMediaStorage implements MediaStorage {
       }
       const start = range?.start ?? 0;
       const end = range?.end ?? info.size - 1;
-      if (range && (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) ||
-        start < 0 || end < start || start >= info.size || end >= info.size)) {
+      if (
+        range &&
+        (!Number.isSafeInteger(start) ||
+          !Number.isSafeInteger(end) ||
+          start < 0 ||
+          end < start ||
+          start >= info.size ||
+          end >= info.size)
+      ) {
         throw new StorageError('invalid-range', 'Byte range is outside the resource');
       }
       const stream = handle.createReadStream({ ...(info.size ? { start, end } : {}), autoClose: true, signal });

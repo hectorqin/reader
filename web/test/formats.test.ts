@@ -297,11 +297,7 @@ describe('TXT loading', () => {
 
 describe('CBZ loading', () => {
   it('orders pages naturally and emits one fixed-layout section per page', async () => {
-    const bytes = await makeCbz([
-      { name: '010.png' },
-      { name: '002.png' },
-      { name: '001.png' },
-    ]);
+    const bytes = await makeCbz([{ name: '010.png' }, { name: '002.png' }, { name: '001.png' }]);
     const { doc } = await loadBook(ctx(bytes, 'comic.cbz'));
     expect(doc.layout).toBe('fixed');
     expect(doc.sections.map((section) => section.id)).toEqual(['001.png', '002.png', '010.png']);
@@ -340,9 +336,7 @@ describe('CBZ loading', () => {
   });
 
   it('refuses an empty comic directory instead of opening a blank book', async () => {
-    await expect(
-      loadBook(ctx(new Uint8Array(), 'loose'), { fileName: 'loose', comicPages: [] }),
-    ).rejects.toThrow();
+    await expect(loadBook(ctx(new Uint8Array(), 'loose'), { fileName: 'loose', comicPages: [] })).rejects.toThrow();
   });
 });
 
@@ -351,7 +345,7 @@ describe('PDF loading', () => {
     const { doc } = await loadBook(ctx(utf8('%PDF-1.7 fake'), 'doc.pdf'));
     expect(doc.format).toBe('pdf');
     expect(doc.layout).toBe('fixed');
-    expect(doc.sections.map(section => section.id)).toEqual(['pdf', 'pdf:2', 'pdf:3']);
+    expect(doc.sections.map((section) => section.id)).toEqual(['pdf', 'pdf:2', 'pdf:3']);
     expect(doc.pdf).toBeDefined();
   });
 });

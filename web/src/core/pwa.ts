@@ -2,18 +2,27 @@ import '../styles/pwa.css';
 
 /** Native shells and development builds keep their existing loading lifecycle. */
 export function registerPwa(): void {
-  if (!import.meta.env.PROD || window.ReaderAndroid || !window.isSecureContext
-    || !['http:', 'https:'].includes(location.protocol) || !('serviceWorker' in navigator)) return;
+  if (
+    !import.meta.env.PROD ||
+    window.ReaderAndroid ||
+    !window.isSecureContext ||
+    !['http:', 'https:'].includes(location.protocol) ||
+    !('serviceWorker' in navigator)
+  )
+    return;
 
   const register = () => {
     const base = new URL(import.meta.env.BASE_URL, document.baseURI);
-    void navigator.serviceWorker.register(new URL('sw.js', base), {
-      scope: base.pathname,
-      updateViaCache: 'none',
-    }).then((registration) => watchPwaUpdates(registration)).catch((error: unknown) => {
-      // PWA availability must not prevent ordinary online reading.
-      console.warn('离线应用缓存注册失败', error);
-    });
+    void navigator.serviceWorker
+      .register(new URL('sw.js', base), {
+        scope: base.pathname,
+        updateViaCache: 'none',
+      })
+      .then((registration) => watchPwaUpdates(registration))
+      .catch((error: unknown) => {
+        // PWA availability must not prevent ordinary online reading.
+        console.warn('离线应用缓存注册失败', error);
+      });
   };
   if (document.readyState === 'complete') register();
   else window.addEventListener('load', register, { once: true });
@@ -22,7 +31,9 @@ export function registerPwa(): void {
 /** Keep activation opt-in, including when another tab activates the new worker. */
 export function watchPwaUpdates(
   registration: ServiceWorkerRegistration,
-    save: () => Promise<void> = async () => { await window.__readerFlush?.(); },
+  save: () => Promise<void> = async () => {
+    await window.__readerFlush?.();
+  },
   reload: () => void = () => location.reload(),
 ): () => void {
   const banner = document.createElement('aside');
@@ -72,7 +83,10 @@ export function watchPwaUpdates(
         await save();
         updating = true;
         message.textContent = '正在更新…';
-        if (changed || !registration.waiting) { finish(); return; }
+        if (changed || !registration.waiting) {
+          finish();
+          return;
+        }
         timeout = setTimeout(failed, 15_000);
         registration.waiting.postMessage({ type: 'SKIP_WAITING' });
       } catch {
@@ -90,7 +104,9 @@ export function watchPwaUpdates(
   const check = () => {
     if (document.visibilityState !== 'visible') return;
     show();
-    void registration.update().catch(() => { /* Offline: try again on return. */ });
+    void registration.update().catch(() => {
+      /* Offline: try again on return. */
+    });
   };
   // Only changes after initial control represent upgrades of an existing page.
   let controlled = !!navigator.serviceWorker.controller;

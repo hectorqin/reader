@@ -21,14 +21,20 @@ const runtime = {
 const user = { id: 'u', username: 'lin', displayName: '林间', role: 'member', createdAt: 0 };
 const paint = (path: string) => {
   act(() => render(null, root)); // a fresh router per call
-  act(() => render(
-  <RuntimeContext.Provider value={runtime}>
-    <MemoryRouter initialEntries={[path]}>
-      <Routes><Route element={<AppShell />}><Route path="*" element={<main data-testid="page">页面</main>} /></Route></Routes>
-    </MemoryRouter>
-  </RuntimeContext.Provider>,
-  root,
-));
+  act(() =>
+    render(
+      <RuntimeContext.Provider value={runtime}>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="*" element={<main data-testid="page">页面</main>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </RuntimeContext.Provider>,
+      root,
+    ),
+  );
 };
 
 beforeEach(() => useAuthStore.setState({ session: { user } as any, verifiedUser: user as any }));
@@ -43,10 +49,31 @@ afterEach(() => {
 
 describe('shell navigation', () => {
   it('decides where the bar shows: top-level pages, pushed pages, and the full-screen ones', () => {
-    expect(['/', '/shelf', '/me', '/media/video', '/media/music/albums', '/media/audiobook/books', '/media/audiobook/narrators'].map(navMode)).toEqual(Array(7).fill('top'));
+    expect(
+      [
+        '/',
+        '/shelf',
+        '/me',
+        '/media/video',
+        '/media/music/albums',
+        '/media/audiobook/books',
+        '/media/audiobook/narrators',
+      ].map(navMode),
+    ).toEqual(Array(7).fill('top'));
     expect(navMode('/media/audiobook/narrators/someone')).toBe('push');
-    expect(['/library', '/sources', '/media/video/items/x', '/media/video/settings', '/media/video/favorites', '/media/queue'].map(navMode)).toEqual(Array(6).fill('push'));
-    expect(['/book/abc', '/media/video/player', '/media/music/player/lyrics'].map(navMode)).toEqual(Array(3).fill('hidden'));
+    expect(
+      [
+        '/library',
+        '/sources',
+        '/media/video/items/x',
+        '/media/video/settings',
+        '/media/video/favorites',
+        '/media/queue',
+      ].map(navMode),
+    ).toEqual(Array(6).fill('push'));
+    expect(['/book/abc', '/media/video/player', '/media/music/player/lyrics'].map(navMode)).toEqual(
+      Array(3).fill('hidden'),
+    );
   });
 
   it('puts the navigation after the page, marks 影音 and the channel current, and themes the page', () => {
@@ -56,7 +83,12 @@ describe('shell navigation', () => {
     expect(nav.getAttribute('aria-label')).toBe('主导航');
     expect(page.closest('.app-shell-body')).not.toBeNull();
     expect(page.compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect([...nav.querySelectorAll('.app-nav-item')].map(a => a.textContent)).toEqual(['首页', '书架', '影音', '我的']);
+    expect([...nav.querySelectorAll('.app-nav-item')].map((a) => a.textContent)).toEqual([
+      '首页',
+      '书架',
+      '影音',
+      '我的',
+    ]);
     expect(nav.querySelector('.app-nav-item[aria-current="page"]')?.textContent).toBe('影音');
     expect(nav.querySelector('.app-nav-subitem[aria-current="page"]')?.textContent).toBe('音乐');
     expect(document.body.dataset.appNav).toBe('top');
@@ -79,7 +111,9 @@ describe('shell navigation', () => {
   });
 
   it('says whether the server is reachable under the account, and searches books and media together', () => {
-    expect(['idle', 'syncing', 'offline', 'error', 'signed-out'].map(state => connectionLabel(state as never).label)).toEqual(['已连接', '正在同步', '离线', '同步出错', '已连接']);
+    expect(
+      ['idle', 'syncing', 'offline', 'error', 'signed-out'].map((state) => connectionLabel(state as never).label),
+    ).toEqual(['已连接', '正在同步', '离线', '同步出错', '已连接']);
     act(() => useSyncStore.getState().update({ state: 'offline', lastSyncAt: null, pending: false, message: '' }));
     paint('/media/video');
     expect(root.querySelector('.app-nav-user small')?.textContent).toBe('离线');

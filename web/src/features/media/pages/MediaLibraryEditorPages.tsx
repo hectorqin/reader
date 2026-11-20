@@ -11,15 +11,21 @@ import { MediaPermissions } from '../components/permissions.tsx';
 import type { Library } from '../api/media-api.ts';
 
 const channels = ['video', 'music', 'audiobook'] as const;
-function channelOf(value: string | undefined): typeof channels[number] {
-  return value && channels.includes(value as typeof channels[number])
-    ? value as typeof channels[number]
+function channelOf(value: string | undefined): (typeof channels)[number] {
+  return value && channels.includes(value as (typeof channels)[number])
+    ? (value as (typeof channels)[number])
     : 'video';
 }
 
 function AdminOnly({ children, title }: { children: ReactNode; title: string }) {
-  const role = useAuthStore(state => state.verifiedUser?.role);
-  return role === 'admin' ? <>{children}</> : <MediaPageFrame title={title}><Callout tone="error">需要管理员权限。</Callout></MediaPageFrame>;
+  const role = useAuthStore((state) => state.verifiedUser?.role);
+  return role === 'admin' ? (
+    <>{children}</>
+  ) : (
+    <MediaPageFrame title={title}>
+      <Callout tone="error">需要管理员权限。</Callout>
+    </MediaPageFrame>
+  );
 }
 
 export function MediaLibraryEditPage() {
@@ -29,9 +35,41 @@ export function MediaLibraryEditPage() {
   const { channel: routeChannel, libraryId = '' } = useParams();
   const channel = channelOf(routeChannel);
   const query = useQuery(librariesQuery(runtime));
-  const library = query.data?.items.find(item => item.id === libraryId);
+  const library = query.data?.items.find((item) => item.id === libraryId);
   const back = `/media/${channel}/settings/libraries`;
-  return <AdminOnly title="编辑媒体库"><MediaPageFrame className="media-manager-workspace" title="编辑媒体库" backTo={back} backLabel="返回媒体库管理" hideHeader={Boolean(library)}><QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />{library && <MediaLibraryEditor api={runtime.mediaApi} library={library} onSaved={updated => { queryClient.setQueryData(librariesQuery(runtime).queryKey, (value: { items: Library[] } | undefined) => value ? { items: value.items.map(item => item.id === updated.id ? updated : item) } : value); navigate(back); }} onCancel={() => navigate(back)} />}{!query.isPending && !query.error && !library && <Callout tone="error">媒体库不存在。</Callout>}</MediaPageFrame></AdminOnly>;
+  return (
+    <AdminOnly title="编辑媒体库">
+      <MediaPageFrame
+        className="media-manager-workspace"
+        title="编辑媒体库"
+        backTo={back}
+        backLabel="返回媒体库管理"
+        hideHeader={Boolean(library)}
+      >
+        <QueryFeedback
+          pending={query.isPending}
+          error={query.error}
+          retry={() => {
+            void query.refetch();
+          }}
+        />
+        {library && (
+          <MediaLibraryEditor
+            api={runtime.mediaApi}
+            library={library}
+            onSaved={(updated) => {
+              queryClient.setQueryData(librariesQuery(runtime).queryKey, (value: { items: Library[] } | undefined) =>
+                value ? { items: value.items.map((item) => (item.id === updated.id ? updated : item)) } : value,
+              );
+              navigate(back);
+            }}
+            onCancel={() => navigate(back)}
+          />
+        )}
+        {!query.isPending && !query.error && !library && <Callout tone="error">媒体库不存在。</Callout>}
+      </MediaPageFrame>
+    </AdminOnly>
+  );
 }
 
 export function MediaLibraryPermissionsPage() {
@@ -41,9 +79,41 @@ export function MediaLibraryPermissionsPage() {
   const { channel: routeChannel, libraryId = '' } = useParams();
   const channel = channelOf(routeChannel);
   const query = useQuery(librariesQuery(runtime));
-  const library = query.data?.items.find(item => item.id === libraryId);
+  const library = query.data?.items.find((item) => item.id === libraryId);
   const back = `/media/${channel}/settings/libraries`;
-  return <AdminOnly title="访问权限"><MediaPageFrame className="media-manager-workspace" title="访问权限" backTo={back} backLabel="返回媒体库管理" hideHeader={Boolean(library)}><QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />{library && <MediaPermissions api={runtime.mediaApi} library={library} onSaved={access => { queryClient.setQueryData(librariesQuery(runtime).queryKey, (value: { items: Library[] } | undefined) => value ? { items: value.items.map(item => item.id === library.id ? { ...item, access } : item) } : value); navigate(back); }} onCancel={() => navigate(back)} />}{!query.isPending && !query.error && !library && <Callout tone="error">媒体库不存在。</Callout>}</MediaPageFrame></AdminOnly>;
+  return (
+    <AdminOnly title="访问权限">
+      <MediaPageFrame
+        className="media-manager-workspace"
+        title="访问权限"
+        backTo={back}
+        backLabel="返回媒体库管理"
+        hideHeader={Boolean(library)}
+      >
+        <QueryFeedback
+          pending={query.isPending}
+          error={query.error}
+          retry={() => {
+            void query.refetch();
+          }}
+        />
+        {library && (
+          <MediaPermissions
+            api={runtime.mediaApi}
+            library={library}
+            onSaved={(access) => {
+              queryClient.setQueryData(librariesQuery(runtime).queryKey, (value: { items: Library[] } | undefined) =>
+                value
+                  ? { items: value.items.map((item) => (item.id === library.id ? { ...item, access } : item)) }
+                  : value,
+              );
+              navigate(back);
+            }}
+            onCancel={() => navigate(back)}
+          />
+        )}
+        {!query.isPending && !query.error && !library && <Callout tone="error">媒体库不存在。</Callout>}
+      </MediaPageFrame>
+    </AdminOnly>
+  );
 }
-
-

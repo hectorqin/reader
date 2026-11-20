@@ -35,8 +35,11 @@ describe('splitTextParagraphs', () => {
   it('starts a new paragraph at a sentence-final line with no blank line', () => {
     // The other common shape: every paragraph on its own line, no blank lines at
     // all. Without this rule the book is one slab.
-    expect(splitTextParagraphs('他走了。\n她留下了。\n天亮了。').map((p) => p.text))
-      .toEqual(['他走了。', '她留下了。', '天亮了。']);
+    expect(splitTextParagraphs('他走了。\n她留下了。\n天亮了。').map((p) => p.text)).toEqual([
+      '他走了。',
+      '她留下了。',
+      '天亮了。',
+    ]);
   });
 
   it('does not split a continuation line that merely starts with punctuation', () => {
@@ -66,8 +69,10 @@ describe('splitTextParagraphs', () => {
     // spaces, ASCII spaces, and the ideographic space mixed with a tab. All three
     // mean the same thing and none of them is a continuation.
     for (const indent of ['　　', '    ', '\t']) {
-      expect(splitTextParagraphs([`${indent}他走了。`, `${indent}她留下了。`].join('\n')).map((p) => p.text))
-        .toEqual(['他走了。', '她留下了。']);
+      expect(splitTextParagraphs([`${indent}他走了。`, `${indent}她留下了。`].join('\n')).map((p) => p.text)).toEqual([
+        '他走了。',
+        '她留下了。',
+      ]);
     }
   });
 
@@ -77,16 +82,16 @@ describe('splitTextParagraphs', () => {
     // that carry the same indentation, so "indented" cannot by itself mean "new
     // paragraph" — it is the sentence-final lookahead that decides, and the indent
     // is only *not allowed to veto* it.
-    expect(splitTextParagraphs(['　　他走了，', '　　没有回头，', '　　也没有说话。'].join('\n'))[0]!.text)
-      .toBe('他走了，没有回头，也没有说话。');
+    expect(splitTextParagraphs(['　　他走了，', '　　没有回头，', '　　也没有说话。'].join('\n'))[0]!.text).toBe(
+      '他走了，没有回头，也没有说话。',
+    );
   });
 
   it('does not let the indent be counted as the continuation punctuation', () => {
     // A line that begins with the closing quote *of the sentence above* is a
     // continuation, indented or not: the punctuation test has to see the content,
     // not the whitespace before it.
-    expect(splitTextParagraphs(['　　他走了。', '　　」她接着说。'].join('\n'))[0]!.text)
-      .toBe('他走了。」她接着说。');
+    expect(splitTextParagraphs(['　　他走了。', '　　」她接着说。'].join('\n'))[0]!.text).toBe('他走了。」她接着说。');
   });
 
   it('normalises CRLF and a lone CR, so a Windows file is not one paragraph', () => {
@@ -204,7 +209,8 @@ describe('splitChapterHeading', () => {
  * paragraphs are inferred.
  */
 describe('web-page markup in a TXT', () => {
-  const scraped = '<div>\n    天斗星作为第一颗被人类发现并且移民成功的行政星，距今已经有数千年的历史了。<br/>\n    <br/>\n    <br/>\n    <br/>\n    这颗星球大约有原本斗罗星二分之一大。<br/>\n</div>';
+  const scraped =
+    '<div>\n    天斗星作为第一颗被人类发现并且移民成功的行政星，距今已经有数千年的历史了。<br/>\n    <br/>\n    <br/>\n    <br/>\n    这颗星球大约有原本斗罗星二分之一大。<br/>\n</div>';
 
   it('turns the scraped block into clean paragraphs with no tags or gaps', () => {
     expect(splitTextParagraphs(scraped).map((p) => p.text)).toEqual([
@@ -224,7 +230,9 @@ describe('web-page markup in a TXT', () => {
   });
 
   it('drops inline tags, decodes entities and leaves prose angle brackets alone', () => {
-    expect(cleanTextMarkup('<p>他说&ldquo;<span style="x">好</span>&rdquo;&nbsp;a&lt;b&#65281;</p>')).toBe('\n他说“好” a<b！\n');
+    expect(cleanTextMarkup('<p>他说&ldquo;<span style="x">好</span>&rdquo;&nbsp;a&lt;b&#65281;</p>')).toBe(
+      '\n他说“好” a<b！\n',
+    );
     expect(cleanTextMarkup('如果 a<b 且 <书名> 未知')).toBe('如果 a<b 且 <书名> 未知');
     expect(cleanTextMarkup(cleanTextMarkup(scraped))).toBe(cleanTextMarkup(scraped));
   });
@@ -232,14 +240,20 @@ describe('web-page markup in a TXT', () => {
 
 /** A book source's chapter is a scraped HTML fragment; legado-E reads it as text. */
 describe('book-source HTML chapters', () => {
-  const fragment = '<div>    天斗星作为第一颗行政星。<br /><br /><br /><br />    星球表面本来是没有生物的。<br /><br /></div>';
+  const fragment =
+    '<div>    天斗星作为第一颗行政星。<br /><br /><br /><br />    星球表面本来是没有生物的。<br /><br /></div>';
 
   it('reads a text-only fragment back into the paragraphs it meant', () => {
-    expect(splitTextParagraphs(htmlToText(fragment)).map((p) => p.text)).toEqual(['天斗星作为第一颗行政星。', '星球表面本来是没有生物的。']);
+    expect(splitTextParagraphs(htmlToText(fragment)).map((p) => p.text)).toEqual([
+      '天斗星作为第一颗行政星。',
+      '星球表面本来是没有生物的。',
+    ]);
   });
 
   it('strips every tag but keeps escaped angle brackets as text', () => {
-    expect(htmlToText('<p>a&lt;b&gt;<custom-tag x>c</custom-tag><!-- ad --><script>bad()</script></p>')).toBe('\na<b>c\n');
+    expect(htmlToText('<p>a&lt;b&gt;<custom-tag x>c</custom-tag><!-- ad --><script>bad()</script></p>')).toBe(
+      '\na<b>c\n',
+    );
   });
 
   it('keeps chapters with images or tables as markup', () => {

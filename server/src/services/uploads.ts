@@ -388,10 +388,7 @@ export class UploadService {
     // question that produces a clean 403 on a `:ro` bind mount instead of an
     // `EROFS` from six layers down.
     if (!(await this.browse.writable(abs))) {
-      throw forbidden(
-        'the library mount is read-only; remount it without `:ro` to upload into it',
-        'READ_ONLY_MOUNT',
-      );
+      throw forbidden('the library mount is read-only; remount it without `:ro` to upload into it', 'READ_ONLY_MOUNT');
     }
   }
 
@@ -482,11 +479,11 @@ export class UploadService {
       // fault is still a 500 rather than being dressed up as the client's.
       const code = (err as NodeJS.ErrnoException).code;
       if (
-        code === 'ECONNRESET'
-        || code === 'ERR_STREAM_PREMATURE_CLOSE'
-        || code === 'EPIPE'
-        || code === 'ERR_STREAM_DESTROYED'
-        || !code
+        code === 'ECONNRESET' ||
+        code === 'ERR_STREAM_PREMATURE_CLOSE' ||
+        code === 'EPIPE' ||
+        code === 'ERR_STREAM_DESTROYED' ||
+        !code
       ) {
         throw badRequest(
           `the upload was interrupted before it finished: ${err instanceof Error ? err.message : String(err)}`,
@@ -586,15 +583,7 @@ export class UploadService {
       // path it really took — renaming within that directory when the name was
       // taken. Reporting `target/leaf` instead is what turned the second volume
       // of an archive into a file beside the first one.
-      const item = await this.place(
-        destination,
-        target,
-        leaf,
-        entry.name,
-        policy,
-        'archive-entry',
-        subdir,
-      );
+      const item = await this.place(destination, target, leaf, entry.name, policy, 'archive-entry', subdir);
       if (!item) {
         skipped.push({ name: entry.name, reason: '同名文件已存在' });
         continue;
@@ -643,7 +632,6 @@ export class UploadService {
       }
     }
   }
-
 }
 
 // ---- name handling ----
@@ -662,7 +650,10 @@ function isBookFile(name: string): boolean {
 }
 
 function segmentsOf(entryName: string): string[] {
-  return entryName.replace(/\\/g, '/').split('/').filter((segment) => segment.length > 0);
+  return entryName
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter((segment) => segment.length > 0);
 }
 
 /**

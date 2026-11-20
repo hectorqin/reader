@@ -85,11 +85,7 @@ export function registerWebRoutes(app: FastifyInstance, ctx: AppContext): void {
       // The Android-compatible build uses fixed names (client.js, sw.js, etc.).
       // Only explicitly fingerprinted assets can safely be cached forever.
       const immutable = raw.startsWith('assets/') && /-[a-zA-Z0-9_-]{6,}\.[^.]+$/.test(raw);
-      return sendFile(
-        candidate,
-        reply,
-        immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
-      );
+      return sendFile(candidate, reply, immutable ? 'public, max-age=31536000, immutable' : 'no-cache');
     }
 
     // SPA fallback: the client routes by hash, but serving index.html for an

@@ -17,11 +17,23 @@ test('PDF metadata and ranges do not read the file prefix or buffer the complete
   const app = Fastify();
   const ranges: Array<[number, number]> = [];
   let fullReads = 0;
-  app.get('/pdf', (request, reply) => sendAssetPayload(request, reply, {
-    stream: new Readable({ read() { fullReads += 1; this.push(null); } }),
-    openRange: (start, end) => { ranges.push([start, end]); return createReadStream(path, { start, end }); },
-    contentType: 'application/pdf', size: bytes.length, seekable: true,
-  }));
+  app.get('/pdf', (request, reply) =>
+    sendAssetPayload(request, reply, {
+      stream: new Readable({
+        read() {
+          fullReads += 1;
+          this.push(null);
+        },
+      }),
+      openRange: (start, end) => {
+        ranges.push([start, end]);
+        return createReadStream(path, { start, end });
+      },
+      contentType: 'application/pdf',
+      size: bytes.length,
+      seekable: true,
+    }),
+  );
   try {
     const head = await app.inject({ method: 'HEAD', url: '/pdf' });
     assert.equal(head.statusCode, 200);
@@ -36,7 +48,10 @@ test('PDF metadata and ranges do not read the file prefix or buffer the complete
       assert.equal(response.headers['content-range'], `bytes ${bytes.length - 8}-${bytes.length - 1}/${bytes.length}`);
       assert.equal(response.headers['content-length'], '8');
     }
-    assert.deepEqual(ranges, Array.from({ length: 2 }, () => [bytes.length - 8, bytes.length - 1]));
+    assert.deepEqual(
+      ranges,
+      Array.from({ length: 2 }, () => [bytes.length - 8, bytes.length - 1]),
+    );
     const invalid = await app.inject({ url: '/pdf', headers: { range: `bytes=${bytes.length}-` } });
     assert.equal(invalid.statusCode, 416);
     assert.equal(invalid.headers['content-range'], `bytes */${bytes.length}`);

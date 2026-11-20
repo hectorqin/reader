@@ -11,11 +11,33 @@ import { useAuthStore } from '../../../shared/stores/auth.store.ts';
  */
 export function ChannelMenu({ channel }: { channel: MediaChannel }) {
   const navigate = useNavigate();
-  const admin = useAuthStore(state => state.verifiedUser?.role === 'admin');
-  return <ActionMenu className="media-icon-button" label="更多操作" items={[
-    { label: '收藏', icon: <Icon name="star" size={16} />, onSelect: () => navigate('/media/favorites') },
-    { label: '历史', icon: <Icon name="history" size={16} />, onSelect: () => navigate(`/media/${channel}/history`) },
-    { label: '队列', icon: <Icon name="episodes" size={16} />, onSelect: () => navigate(`/media/${channel}/queue`) },
-    ...(admin ? [{ label: '媒体库管理', icon: <Icon name="library" size={16} />, onSelect: () => navigate(`/media/${channel}/settings/libraries`) }] : []),
-  ]} />;
+  const admin = useAuthStore((state) => state.verifiedUser?.role === 'admin');
+  return (
+    <ActionMenu
+      className="media-icon-button"
+      label="更多操作"
+      items={[
+        { label: '收藏', icon: <Icon name="star" size={16} />, onSelect: () => navigate('/media/favorites') },
+        {
+          label: '历史',
+          icon: <Icon name="history" size={16} />,
+          onSelect: () => navigate(`/media/${channel}/history`),
+        },
+        {
+          label: '队列',
+          icon: <Icon name="episodes" size={16} />,
+          onSelect: () => navigate(`/media/${channel}/queue`),
+        },
+        ...(admin
+          ? [
+              {
+                label: '媒体库管理',
+                icon: <Icon name="library" size={16} />,
+                onSelect: () => navigate(`/media/${channel}/settings/libraries`),
+              },
+            ]
+          : []),
+      ]}
+    />
+  );
 }

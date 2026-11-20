@@ -17,8 +17,19 @@ export const STAT_KINDS: ReadonlyArray<{ kind: StatKind; label: string; icon: Ic
   { kind: 'music', label: '音乐', icon: 'music' },
 ];
 
-export interface Period { key: string; label: string; tick: string; from: number; to: number }
-export interface StatsRange { from: number; to: number; label: string; anchor: string }
+export interface Period {
+  key: string;
+  label: string;
+  tick: string;
+  from: number;
+  to: number;
+}
+export interface StatsRange {
+  from: number;
+  to: number;
+  label: string;
+  anchor: string;
+}
 
 /** The viewer's offset from UTC in minutes east, as the server expects it. */
 export function statsTz(at = new Date()): number {
@@ -34,15 +45,31 @@ const pad = (value: number) => String(value).padStart(2, '0');
 export function periodRange(group: TimeStatsGroup, anchor: string, now = new Date()): StatsRange {
   if (group === 'day') {
     const match = /^(\d{4})-(\d{2})$/.exec(anchor);
-    const year = match ? Number(match[1]) : now.getFullYear(), month = match ? Number(match[2]) - 1 : now.getMonth();
-    return { from: new Date(year, month, 1).getTime(), to: new Date(year, month + 1, 1).getTime(), label: `${year}年${month + 1}月`, anchor: `${year}-${pad(month + 1)}` };
+    const year = match ? Number(match[1]) : now.getFullYear(),
+      month = match ? Number(match[2]) - 1 : now.getMonth();
+    return {
+      from: new Date(year, month, 1).getTime(),
+      to: new Date(year, month + 1, 1).getTime(),
+      label: `${year}年${month + 1}月`,
+      anchor: `${year}-${pad(month + 1)}`,
+    };
   }
   if (group === 'month') {
     const year = /^\d{4}$/.test(anchor) ? Number(anchor) : now.getFullYear();
-    return { from: new Date(year, 0, 1).getTime(), to: new Date(year + 1, 0, 1).getTime(), label: `${year}年`, anchor: String(year) };
+    return {
+      from: new Date(year, 0, 1).getTime(),
+      to: new Date(year + 1, 0, 1).getTime(),
+      label: `${year}年`,
+      anchor: String(year),
+    };
   }
   const year = now.getFullYear();
-  return { from: new Date(year - 5, 0, 1).getTime(), to: new Date(year + 1, 0, 1).getTime(), label: '近六年', anchor: '' };
+  return {
+    from: new Date(year - 5, 0, 1).getTime(),
+    to: new Date(year + 1, 0, 1).getTime(),
+    label: '近六年',
+    anchor: '',
+  };
 }
 
 /** The anchor one span earlier (-1) or later (+1). */
@@ -60,43 +87,87 @@ export function buildPeriods(group: TimeStatsGroup, range: Pick<StatsRange, 'fro
   const periods: Period[] = [];
   const start = new Date(range.from);
   for (let index = 0; ; index += 1) {
-    const from = group === 'day' ? new Date(start.getFullYear(), start.getMonth(), start.getDate() + index)
-      : group === 'month' ? new Date(start.getFullYear(), start.getMonth() + index, 1)
-        : new Date(start.getFullYear() + index, 0, 1);
+    const from =
+      group === 'day'
+        ? new Date(start.getFullYear(), start.getMonth(), start.getDate() + index)
+        : group === 'month'
+          ? new Date(start.getFullYear(), start.getMonth() + index, 1)
+          : new Date(start.getFullYear() + index, 0, 1);
     if (from.getTime() >= range.to) break;
-    const to = group === 'day' ? new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1)
-      : group === 'month' ? new Date(from.getFullYear(), from.getMonth() + 1, 1)
-        : new Date(from.getFullYear() + 1, 0, 1);
-    const y = from.getFullYear(), m = from.getMonth() + 1, d = from.getDate();
-    periods.push(group === 'day'
-      ? { key: `${y}-${pad(m)}-${pad(d)}`, label: `${m}月${d}日`, tick: d === 1 || d % 5 === 0 ? String(d) : '', from: from.getTime(), to: to.getTime() }
-      : group === 'month'
-        ? { key: `${y}-${pad(m)}`, label: `${y}年${m}月`, tick: String(m), from: from.getTime(), to: to.getTime() }
-        : { key: String(y), label: `${y}年`, tick: String(y), from: from.getTime(), to: to.getTime() });
+    const to =
+      group === 'day'
+        ? new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1)
+        : group === 'month'
+          ? new Date(from.getFullYear(), from.getMonth() + 1, 1)
+          : new Date(from.getFullYear() + 1, 0, 1);
+    const y = from.getFullYear(),
+      m = from.getMonth() + 1,
+      d = from.getDate();
+    periods.push(
+      group === 'day'
+        ? {
+            key: `${y}-${pad(m)}-${pad(d)}`,
+            label: `${m}月${d}日`,
+            tick: d === 1 || d % 5 === 0 ? String(d) : '',
+            from: from.getTime(),
+            to: to.getTime(),
+          }
+        : group === 'month'
+          ? { key: `${y}-${pad(m)}`, label: `${y}年${m}月`, tick: String(m), from: from.getTime(), to: to.getTime() }
+          : { key: String(y), label: `${y}年`, tick: String(y), from: from.getTime(), to: to.getTime() },
+    );
   }
   return periods;
 }
 
 export function periodLabel(periods: Period[], key: string): string {
-  return periods.find(period => period.key === key)?.label ?? key;
+  return periods.find((period) => period.key === key)?.label ?? key;
 }
 
 export type SeriesPoint = Period & { byKind: Record<StatKind, number> };
 
 export function mergeSeries(periods: Period[], reading?: ReadingStats, media?: MediaTimeStats): SeriesPoint[] {
-  const byKey = new Map(periods.map(period => [period.key, { ...period, byKind: { reading: 0, video: 0, audiobook: 0, music: 0 } }]));
-  for (const point of reading?.series ?? []) { const row = byKey.get(point.key); if (row) row.byKind.reading += point.seconds; }
-  for (const point of media?.series ?? []) { const row = byKey.get(point.key); if (row) row.byKind[point.channel] += point.seconds; }
+  const byKey = new Map(
+    periods.map((period) => [period.key, { ...period, byKind: { reading: 0, video: 0, audiobook: 0, music: 0 } }]),
+  );
+  for (const point of reading?.series ?? []) {
+    const row = byKey.get(point.key);
+    if (row) row.byKind.reading += point.seconds;
+  }
+  for (const point of media?.series ?? []) {
+    const row = byKey.get(point.key);
+    if (row) row.byKind[point.channel] += point.seconds;
+  }
   return [...byKey.values()];
 }
 
-export interface StatWork { kind: StatKind; id: string; title: string; subtitle: string; seconds: number }
+export interface StatWork {
+  kind: StatKind;
+  id: string;
+  title: string;
+  subtitle: string;
+  seconds: number;
+}
 
 export function mergeWorks(reading?: ReadingStats, media?: MediaTimeStats): StatWork[] {
   return [
-    ...(reading?.works ?? []).map(work => ({ kind: 'reading' as const, id: work.id, title: work.title, subtitle: work.author, seconds: work.seconds })),
-    ...(media?.works ?? []).map(work => ({ kind: work.channel, id: work.id, title: work.title, subtitle: '', seconds: work.seconds })),
-  ].filter(work => work.seconds > 0).sort((a, b) => b.seconds - a.seconds);
+    ...(reading?.works ?? []).map((work) => ({
+      kind: 'reading' as const,
+      id: work.id,
+      title: work.title,
+      subtitle: work.author,
+      seconds: work.seconds,
+    })),
+    ...(media?.works ?? []).map((work) => ({
+      kind: work.channel,
+      id: work.id,
+      title: work.title,
+      subtitle: '',
+      seconds: work.seconds,
+    })),
+  ]
+    .filter((work) => work.seconds > 0)
+    .sort((a, b) => b.seconds - a.seconds);
 }
 
 /** 2小时5分 · 12分 · 不足1分 — minutes are the unit; seconds would be noise. */
@@ -104,7 +175,8 @@ export function formatDuration(seconds: number): string {
   const minutes = Math.floor(seconds / 60);
   if (seconds <= 0) return '0分';
   if (minutes < 1) return '不足1分';
-  const hours = Math.floor(minutes / 60), rest = minutes % 60;
+  const hours = Math.floor(minutes / 60),
+    rest = minutes % 60;
   return hours ? (rest ? `${hours}小时${rest}分` : `${hours}小时`) : `${rest}分`;
 }
 
@@ -133,44 +205,81 @@ export const HEAT_STEPS: ReadonlyArray<{ min: number; label: string }> = [
 ];
 export function heatLevel(seconds: number): number {
   let level = 0;
-  HEAT_STEPS.forEach((step, index) => { if (seconds >= step.min) level = index + 1; });
+  HEAT_STEPS.forEach((step, index) => {
+    if (seconds >= step.min) level = index + 1;
+  });
   return level;
 }
 
-export interface HeatCell { key: string; label: string; seconds: number; level: number; future: boolean }
-export interface HeatWeek { cells: HeatCell[]; month: string }
+export interface HeatCell {
+  key: string;
+  label: string;
+  seconds: number;
+  level: number;
+  future: boolean;
+}
+export interface HeatWeek {
+  cells: HeatCell[];
+  month: string;
+}
 
 /**
  * Days as weeks (columns of Monday..Sunday). A week whose first days open a month is
  * labelled with it, so the month names sit where the months start.
  */
-export function heatWeeks(points: ReadonlyArray<{ key: string; label: string; from: number; seconds: number }>, now = new Date()): HeatWeek[] {
+export function heatWeeks(
+  points: ReadonlyArray<{ key: string; label: string; from: number; seconds: number }>,
+  now = new Date(),
+): HeatWeek[] {
   const weeks: HeatWeek[] = [];
   points.forEach((point, index) => {
     if (index % 7 === 0) weeks.push({ cells: [], month: '' });
     const week = weeks[weeks.length - 1]!;
-    week.cells.push({ key: point.key, label: point.label, seconds: point.seconds, level: heatLevel(point.seconds), future: point.from > now.getTime() });
+    week.cells.push({
+      key: point.key,
+      label: point.label,
+      seconds: point.seconds,
+      level: heatLevel(point.seconds),
+      future: point.from > now.getTime(),
+    });
     const date = new Date(point.from);
     if (date.getDate() <= 7 && index % 7 === 0) week.month = `${date.getMonth() + 1}月`;
   });
   return weeks;
 }
 
-export interface HeatSummary { days: number; total: number; current: number; longest: number }
+export interface HeatSummary {
+  days: number;
+  total: number;
+  current: number;
+  longest: number;
+}
 
 /**
  * Days with any time, the total, and streaks of consecutive days. Today without
  * reading yet does not break the current streak: the day is not over.
  */
-export function heatSummary(points: ReadonlyArray<{ key: string; seconds: number; from: number }>, now = new Date()): HeatSummary {
-  const past = points.filter(point => point.from <= now.getTime());
-  let longest = 0, run = 0;
-  for (const point of past) { run = point.seconds > 0 ? run + 1 : 0; longest = Math.max(longest, run); }
+export function heatSummary(
+  points: ReadonlyArray<{ key: string; seconds: number; from: number }>,
+  now = new Date(),
+): HeatSummary {
+  const past = points.filter((point) => point.from <= now.getTime());
+  let longest = 0,
+    run = 0;
+  for (const point of past) {
+    run = point.seconds > 0 ? run + 1 : 0;
+    longest = Math.max(longest, run);
+  }
   let current = 0;
   for (let index = past.length - 1; index >= 0; index -= 1) {
     if (past[index]!.seconds > 0) current += 1;
     else if (index === past.length - 1) continue;
     else break;
   }
-  return { days: past.filter(point => point.seconds > 0).length, total: past.reduce((sum, point) => sum + point.seconds, 0), current, longest };
+  return {
+    days: past.filter((point) => point.seconds > 0).length,
+    total: past.reduce((sum, point) => sum + point.seconds, 0),
+    current,
+    longest,
+  };
 }

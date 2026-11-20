@@ -343,17 +343,11 @@ describe('library file management', () => {
     // The row stays live until a scan notices, on purpose: the deletion itself is
     // the risky half, and coupling it to a full rescan would make the UI wait
     // minutes to report success.
-    const row = ctx.db.get<{ missing: number }>(
-      'SELECT missing FROM book_files WHERE rel_path = ?',
-      relPath,
-    );
+    const row = ctx.db.get<{ missing: number }>('SELECT missing FROM book_files WHERE rel_path = ?', relPath);
     assert.equal(row?.missing, 0, 'a delete does not rewrite the index');
 
     await ctx.scanner.scan();
-    const after = ctx.db.get<{ missing: number }>(
-      'SELECT missing FROM book_files WHERE rel_path = ?',
-      relPath,
-    );
+    const after = ctx.db.get<{ missing: number }>('SELECT missing FROM book_files WHERE rel_path = ?', relPath);
     assert.equal(after?.missing, 1, 'a scan marks the file missing rather than dropping the book');
     // And the book is remembered: a book on an unmounted share must not vanish
     // from the reader's shelf the moment its file goes away.
@@ -460,7 +454,8 @@ describe('the shelf add/remove pair', () => {
      * about the other suites' files.
      */
     const created = await app.inject({
-      method: 'POST', url: '/api/v1/auth/login',
+      method: 'POST',
+      url: '/api/v1/auth/login',
       payload: { username: 'owner', password: 'password123' },
     });
     assert.equal(created.statusCode, 200, created.body);
@@ -478,19 +473,23 @@ describe('the shelf add/remove pair', () => {
   async function shelfStateOf(path: string): Promise<string | null> {
     const folder = path.slice(0, path.lastIndexOf('/'));
     const res = await app.inject({
-      method: 'GET', url: `/api/v1/library/browse?path=${encodeURIComponent(folder)}&pageSize=1000`,
+      method: 'GET',
+      url: `/api/v1/library/browse?path=${encodeURIComponent(folder)}&pageSize=1000`,
       headers: auth(),
     });
     assert.equal(res.statusCode, 200, res.body);
-    const entry = (res.json() as { entries: Array<{ path: string; shelfState: string | null }> })
-      .entries.find((candidate) => candidate.path === path);
+    const entry = (res.json() as { entries: Array<{ path: string; shelfState: string | null }> }).entries.find(
+      (candidate) => candidate.path === path,
+    );
     assert.ok(entry, `the listing must contain ${path}`);
     return entry.shelfState;
   }
 
   async function act(path: string, action: string): Promise<{ applied: number; books: string[] }> {
     const res = await app.inject({
-      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      method: 'POST',
+      url: '/api/v1/library/browse/shelf',
+      headers: auth(),
       payload: { paths: [path], action },
     });
     assert.equal(res.statusCode, 200, res.body);
@@ -552,7 +551,9 @@ describe('the shelf add/remove pair', () => {
     await act(`${DIR}/改日期.epub`, 'remove');
     await act(`${DIR}/改日期.epub`, 'add');
     const readded = ctx.db.get<{ added_at: number }>(
-      'SELECT added_at FROM user_books WHERE book_id = ? AND user_id = ?', book.id, userId,
+      'SELECT added_at FROM user_books WHERE book_id = ? AND user_id = ?',
+      book.id,
+      userId,
     )!;
     assert.ok(readded.added_at > 0, '重新加入必须刷新 added_at');
   });
@@ -585,7 +586,9 @@ describe('the shelf add/remove pair', () => {
     await ctx.scanner.scan();
     assert.equal(
       ctx.db.get<{ hidden: number }>(
-        'SELECT hidden FROM user_books WHERE book_id = ? AND user_id = ?', before.id, userId,
+        'SELECT hidden FROM user_books WHERE book_id = ? AND user_id = ?',
+        before.id,
+        userId,
       )?.hidden,
       0,
       'the row is still there and still not hidden',
@@ -603,7 +606,9 @@ describe('the shelf add/remove pair', () => {
      */
     await writeFile(join(booksDir, `${DIR}/说明文件.txt`), 'plain text');
     const res = await app.inject({
-      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      method: 'POST',
+      url: '/api/v1/library/browse/shelf',
+      headers: auth(),
       payload: { paths: [BOOK, `${DIR}/说明文件.txt`, `${DIR}/根本不存在.epub`], action: 'remove' },
     });
     assert.equal(res.statusCode, 200, res.body);
@@ -614,7 +619,9 @@ describe('the shelf add/remove pair', () => {
     // A folder stands for the books inside it, which is what makes fixing a series
     // one action instead of forty.
     const folder = await app.inject({
-      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      method: 'POST',
+      url: '/api/v1/library/browse/shelf',
+      headers: auth(),
       payload: { paths: [DIR], action: 'add' },
     });
     assert.equal(folder.statusCode, 200, folder.body);
@@ -660,7 +667,9 @@ describe('naming a shelf write by book id', () => {
     );
 
     const res = await app.inject({
-      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      method: 'POST',
+      url: '/api/v1/library/browse/shelf',
+      headers: auth(),
       payload: { bookIds: [row.id], action: 'remove' },
     });
     assert.equal(res.statusCode, 200, res.body);
@@ -690,7 +699,9 @@ describe('naming a shelf write by book id', () => {
     const row = ctx.db.get<{ id: string }>("SELECT id FROM books WHERE title = '深处'")!;
 
     const res = await app.inject({
-      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      method: 'POST',
+      url: '/api/v1/library/browse/shelf',
+      headers: auth(),
       payload: { bookIds: [row.id], action: 'remove' },
     });
     assert.equal(res.statusCode, 200, res.body);
@@ -705,13 +716,18 @@ describe('naming a shelf write by book id', () => {
      * shelf's own predicate already says such a book is not on the shelf.
      */
     const res = await app.inject({
-      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      method: 'POST',
+      url: '/api/v1/library/browse/shelf',
+      headers: auth(),
       payload: { bookIds: ['no-such-book-id'], action: 'remove' },
     });
     assert.equal(res.statusCode, 200, res.body);
     const result = res.json() as { applied: number; failed: Array<{ reason: string }> };
     assert.equal(result.applied, 0);
-    assert.deepEqual(result.failed.map((f) => f.reason), ['NO_LIVE_FILE']);
+    assert.deepEqual(
+      result.failed.map((f) => f.reason),
+      ['NO_LIVE_FILE'],
+    );
   });
 
   test('refuses a body that names the same write two ways', async () => {
@@ -721,12 +737,16 @@ describe('naming a shelf write by book id', () => {
      * action twice to a book named both ways and *count* it twice.
      */
     const both = await app.inject({
-      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      method: 'POST',
+      url: '/api/v1/library/browse/shelf',
+      headers: auth(),
       payload: { paths: ['x.epub'], bookIds: ['b1'], action: 'remove' },
     });
     assert.equal(both.statusCode, 400, both.body);
     const neither = await app.inject({
-      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      method: 'POST',
+      url: '/api/v1/library/browse/shelf',
+      headers: auth(),
       payload: { action: 'remove' },
     });
     assert.equal(neither.statusCode, 400, neither.body);
@@ -751,7 +771,9 @@ describe('the library scope of the book list', () => {
 
     const off = ctx.db.get<{ id: string }>("SELECT id FROM books WHERE title = '范围离架'")!;
     const remove = await app.inject({
-      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      method: 'POST',
+      url: '/api/v1/library/browse/shelf',
+      headers: auth(),
       payload: { bookIds: [off.id], action: 'remove' },
     });
     assert.equal(remove.statusCode, 200, remove.body);
@@ -789,9 +811,7 @@ describe('the library scope of the book list', () => {
      * empty for a new account", which is the opposite of the page's purpose and is
      * invisible in a suite where everybody already has everything.
      */
-    const newcomer = ctx.db.get<{ id: string }>(
-      "SELECT id FROM users WHERE username = '范围新人'",
-    ) ?? null;
+    const newcomer = ctx.db.get<{ id: string }>("SELECT id FROM users WHERE username = '范围新人'") ?? null;
     if (!newcomer) {
       ctx.db.run(
         `INSERT INTO users (id, username, display_name, password_hash, role, disabled, created_at, updated_at)
@@ -822,7 +842,9 @@ describe('the library scope of the book list', () => {
     const shelved = ctx.db.get<{ id: string }>("SELECT id FROM books WHERE title = '范围在架'")!;
     ctx.db.run(
       'INSERT OR IGNORE INTO user_books (user_id, book_id, added_at, hidden) VALUES (?,?,?,0)',
-      reader, shelved.id, Date.now(),
+      reader,
+      shelved.id,
+      Date.now(),
     );
     const recent = ctx.shelf.list(reader, { scope: 'library', path: DIR, pageSize: 100, sort: 'added' });
     assert.equal(recent.items[0]?.id, shelved.id, '上架过的那本在从没上架过的书前面');

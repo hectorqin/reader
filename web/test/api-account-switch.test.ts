@@ -8,64 +8,99 @@ import { FakeTransport, makePlatform } from './helpers/env.ts';
 function session(id: string): Session {
   return {
     user: { id, username: id, displayName: id, role: 'member', createdAt: 0 },
-    accessToken: `access-${id}`, refreshToken: `refresh-${id}`,
-    accessTokenExpiresAt: 9e15, refreshTokenExpiresAt: 9e15,
+    accessToken: `access-${id}`,
+    refreshToken: `refresh-${id}`,
+    accessTokenExpiresAt: 9e15,
+    refreshTokenExpiresAt: 9e15,
   };
 }
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((accept) => { resolve = accept; });
+  const promise = new Promise<T>((accept) => {
+    resolve = accept;
+  });
   return { promise, resolve };
 }
 
-const expired: HttpResponse = { status: 401, headers: {}, json: { error: { code: 'TOKEN_EXPIRED', message: 'expired' } } };
+const expired: HttpResponse = {
+  status: 401,
+  headers: {},
+  json: { error: { code: 'TOKEN_EXPIRED', message: 'expired' } },
+};
 const ok = (json: unknown): HttpResponse => ({ status: 200, headers: {}, json });
 
 async function setup() {
   const transport = new FakeTransport();
   let stored: Session | null = session('a');
   const api = new ReaderApi(makePlatform(transport), {
-    async load() { return stored; },
-    async save(value) { stored = value; },
-    async clear() { stored = null; },
+    async load() {
+      return stored;
+    },
+    async save(value) {
+      stored = value;
+    },
+    async clear() {
+      stored = null;
+    },
   });
   await api.restore();
   return { api, transport, stored: () => stored };
 }
 
 describe('requests across an account change', () => {
-  it.each([503, 0])('preserves the session when renewal temporarily fails (%s)', async status => {
+  it.each([503, 0])('preserves the session when renewal temporarily fails (%s)', async (status) => {
     const env = await setup();
-    env.transport.respondWith(request => {
+    env.transport.respondWith((request) => {
       if (!request.url.endsWith('/refresh')) return expired;
-      if (!status) throw new ApiError('offline','network unavailable');
-      return {status,headers:{},json:{error:{code:'UNAVAILABLE',message:'temporary failure'}}};
+      if (!status) throw new ApiError('offline', 'network unavailable');
+      return { status, headers: {}, json: { error: { code: 'UNAVAILABLE', message: 'temporary failure' } } };
     });
     await expect(env.api.listBooks()).rejects.toBeDefined();
     expect(env.stored()?.user.id).toBe('a');
   });
   it('renews near expiry once for concurrent requests and persists the rotation', async () => {
-    const env = await setup(); env.api.currentSession()!.accessTokenExpiresAt = Date.now()+60_000;
-    env.transport.respondWith(request => request.url.endsWith('/refresh') ? ok({...session('a'),accessToken:'renewed',refreshToken:'rotated'}) : ok({items:[]}));
-    await Promise.all([env.api.listBooks(),env.api.listBooks()]);
-    expect(env.transport.requests.filter(request=>request.url.endsWith('/refresh'))).toHaveLength(1);
-    expect(env.transport.requests.filter(request=>request.url.endsWith('/books')).every(request=>request.headers.authorization==='Bearer renewed')).toBe(true);
+    const env = await setup();
+    env.api.currentSession()!.accessTokenExpiresAt = Date.now() + 60_000;
+    env.transport.respondWith((request) =>
+      request.url.endsWith('/refresh')
+        ? ok({ ...session('a'), accessToken: 'renewed', refreshToken: 'rotated' })
+        : ok({ items: [] }),
+    );
+    await Promise.all([env.api.listBooks(), env.api.listBooks()]);
+    expect(env.transport.requests.filter((request) => request.url.endsWith('/refresh'))).toHaveLength(1);
+    expect(
+      env.transport.requests
+        .filter((request) => request.url.endsWith('/books'))
+        .every((request) => request.headers.authorization === 'Bearer renewed'),
+    ).toBe(true);
     expect(env.stored()?.refreshToken).toBe('rotated');
   });
   it('clears the session only when the refresh credential is rejected', async () => {
-    const env = await setup(); env.api.currentSession()!.accessTokenExpiresAt = Date.now()-1;
-    env.transport.respondWith(()=>({status:401,headers:{},json:{error:{code:'REFRESH_EXPIRED',message:'expired'}}}));
-    await expect(env.api.renewSessionIfNeeded()).rejects.toMatchObject({code:'REFRESH_EXPIRED'});
+    const env = await setup();
+    env.api.currentSession()!.accessTokenExpiresAt = Date.now() - 1;
+    env.transport.respondWith(() => ({
+      status: 401,
+      headers: {},
+      json: { error: { code: 'REFRESH_EXPIRED', message: 'expired' } },
+    }));
+    await expect(env.api.renewSessionIfNeeded()).rejects.toMatchObject({ code: 'REFRESH_EXPIRED' });
     expect(env.stored()).toBeNull();
   });
-  it.each(['AUTH_REQUIRED', 'AUTH_EXPIRED', 'VERIFICATION_REQUIRED'])('keeps the Reader session for source error %s', async code => {
-    const env = await setup();
-    env.transport.respondWith(() => ({ status: 401, headers: {}, json: { error: { code, message: '站点需要验证' } } }));
-    await expect(env.api.sourceCatalog('private')).rejects.toMatchObject({ code, isAuthFailure: false });
-    expect(env.api.currentSession()?.user.id).toBe('a');
-    expect(env.transport.requests).toHaveLength(1);
-  });
+  it.each(['AUTH_REQUIRED', 'AUTH_EXPIRED', 'VERIFICATION_REQUIRED'])(
+    'keeps the Reader session for source error %s',
+    async (code) => {
+      const env = await setup();
+      env.transport.respondWith(() => ({
+        status: 401,
+        headers: {},
+        json: { error: { code, message: '站点需要验证' } },
+      }));
+      await expect(env.api.sourceCatalog('private')).rejects.toMatchObject({ code, isAuthFailure: false });
+      expect(env.api.currentSession()?.user.id).toBe('a');
+      expect(env.transport.requests).toHaveLength(1);
+    },
+  );
   it('rotates an expired token before loading chapter bytes through the same guarded request path', async () => {
     const env = await setup();
     env.transport.respondWith((request) => {
@@ -80,7 +115,7 @@ describe('requests across an account change', () => {
   it('does not refresh, retry with B credentials, or clear B when A receives a delayed 401', async () => {
     const env = await setup();
     const delayed = deferred<HttpResponse>();
-    env.transport.respondWith((request) => request.url.endsWith('/login') ? ok(session('b')) : delayed.promise);
+    env.transport.respondWith((request) => (request.url.endsWith('/login') ? ok(session('b')) : delayed.promise));
     const old = env.api.listBooks().catch((error: unknown) => error);
     await env.api.login('b', 'password');
     delayed.resolve(expired);
@@ -91,32 +126,35 @@ describe('requests across an account change', () => {
     expect(env.transport.requests.some((request) => request.url.endsWith('/refresh'))).toBe(false);
   });
 
-  it.each([false, true])('does not adopt or reject B based on an old in-flight token refresh (failed=%s)', async (failed) => {
-    const env = await setup();
-    const started = deferred<void>();
-    const delayed = deferred<HttpResponse>();
-    env.transport.respondWith((request) => {
-      if (request.url.endsWith('/login')) return ok(session('b'));
-      if (request.url.endsWith('/refresh')) {
-        started.resolve();
-        return delayed.promise;
-      }
-      return expired;
-    });
-    const old = env.api.listBooks().catch((error: unknown) => error);
-    await started.promise;
-    await env.api.login('b', 'password');
-    delayed.resolve(failed ? expired : ok({ ...session('a'), accessToken: 'access-a-rotated' }));
-    expect(await old).toMatchObject({ kind: 'aborted', code: 'ACCOUNT_CHANGED' });
-    expect(env.api.currentSession()?.user.id).toBe('b');
-    expect(env.stored()?.user.id).toBe('b');
-    expect(env.transport.requests.filter((request) => request.url.endsWith('/books'))).toHaveLength(1);
-  });
+  it.each([false, true])(
+    'does not adopt or reject B based on an old in-flight token refresh (failed=%s)',
+    async (failed) => {
+      const env = await setup();
+      const started = deferred<void>();
+      const delayed = deferred<HttpResponse>();
+      env.transport.respondWith((request) => {
+        if (request.url.endsWith('/login')) return ok(session('b'));
+        if (request.url.endsWith('/refresh')) {
+          started.resolve();
+          return delayed.promise;
+        }
+        return expired;
+      });
+      const old = env.api.listBooks().catch((error: unknown) => error);
+      await started.promise;
+      await env.api.login('b', 'password');
+      delayed.resolve(failed ? expired : ok({ ...session('a'), accessToken: 'access-a-rotated' }));
+      expect(await old).toMatchObject({ kind: 'aborted', code: 'ACCOUNT_CHANGED' });
+      expect(env.api.currentSession()?.user.id).toBe('b');
+      expect(env.stored()?.user.id).toBe('b');
+      expect(env.transport.requests.filter((request) => request.url.endsWith('/books'))).toHaveLength(1);
+    },
+  );
 
   it('rejects a successful stale response so callers cannot put A data into B caches', async () => {
     const env = await setup();
     const delayed = deferred<HttpResponse>();
-    env.transport.respondWith((request) => request.url.endsWith('/login') ? ok(session('b')) : delayed.promise);
+    env.transport.respondWith((request) => (request.url.endsWith('/login') ? ok(session('b')) : delayed.promise));
     const old = env.api.listBooks().catch((error: unknown) => error);
     await env.api.login('b', 'password');
     delayed.resolve(ok({ items: ['a-private-book'] }));
@@ -125,11 +163,17 @@ describe('requests across an account change', () => {
 });
 
 it('extracts and persists the nested registration session for authenticated requests and reload', async () => {
-  const env = await setup(), registered = session('new-admin');
+  const env = await setup(),
+    registered = session('new-admin');
   registered.user.role = 'admin';
-  env.transport.respondWith(request => request.url.endsWith('/register') ? ok({ user: registered.user, session: registered }) : ok({ user: registered.user }));
+  env.transport.respondWith((request) =>
+    request.url.endsWith('/register')
+      ? ok({ user: registered.user, session: registered })
+      : ok({ user: registered.user }),
+  );
   expect(await env.api.register('new-admin', 'password123')).toEqual(registered);
   expect(env.stored()).toEqual(registered);
-  await env.api.restore(); await env.api.me();
+  await env.api.restore();
+  await env.api.me();
   expect(env.transport.requests.at(-1)?.headers.authorization).toBe('Bearer access-new-admin');
 });

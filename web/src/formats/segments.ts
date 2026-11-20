@@ -50,11 +50,28 @@
  * HTML tags a scraped page leaves in a TXT. Only real tag names are matched, so a
  * `<` in prose (`a<b`, a quoted `<书名>`) is text and stays text.
  */
-const BLOCK_TAG = /<\/?(?:br|p|div|h[1-6]|li|ul|ol|tr|table|tbody|section|article|blockquote|center|pre|hr|dd|dt|dl)\b[^<>]*>/gi;
-const INLINE_TAG = /<\/?(?:span|font|b|i|u|em|strong|small|big|a|img|sup|sub|ins|del|s|strike|tt|code|mark|abbr|cite|q|wbr|o:p)\b[^<>]*>/gi;
+const BLOCK_TAG =
+  /<\/?(?:br|p|div|h[1-6]|li|ul|ol|tr|table|tbody|section|article|blockquote|center|pre|hr|dd|dt|dl)\b[^<>]*>/gi;
+const INLINE_TAG =
+  /<\/?(?:span|font|b|i|u|em|strong|small|big|a|img|sup|sub|ins|del|s|strike|tt|code|mark|abbr|cite|q|wbr|o:p)\b[^<>]*>/gi;
 const NAMED_ENTITIES: Record<string, string> = {
-  nbsp: ' ', ensp: ' ', emsp: '\u3000', thinsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
-  ldquo: '“', rdquo: '”', lsquo: '‘', rsquo: '’', hellip: '…', mdash: '—', ndash: '–', middot: '·',
+  nbsp: ' ',
+  ensp: ' ',
+  emsp: '\u3000',
+  thinsp: ' ',
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  ldquo: '“',
+  rdquo: '”',
+  lsquo: '‘',
+  rsquo: '’',
+  hellip: '…',
+  mdash: '—',
+  ndash: '–',
+  middot: '·',
 };
 const ENTITY = /&(?:#(\d{1,7})|#x([0-9a-f]{1,6})|([a-z]{2,8}));/gi;
 /** A line holding only whitespace is a blank line: a reader cannot tell them apart. */
@@ -71,8 +88,10 @@ const WHITESPACE_LINE = /^[ \t\u3000\u00a0]+$/gm;
  * consumer escapes it, so nothing here can turn into markup.
  */
 export function cleanTextMarkup(text: string): string {
-  return decodeEntities(text.replace(LINE_ENDINGS, '\n').replace(BLOCK_TAG, '\n').replace(INLINE_TAG, ''))
-    .replace(WHITESPACE_LINE, '');
+  return decodeEntities(text.replace(LINE_ENDINGS, '\n').replace(BLOCK_TAG, '\n').replace(INLINE_TAG, '')).replace(
+    WHITESPACE_LINE,
+    '',
+  );
 }
 
 function decodeEntities(text: string): string {
@@ -105,8 +124,12 @@ export function isTextOnlyMarkup(html: string): boolean {
  * in the prose becomes the characters `<b>` rather than being stripped.
  */
 export function htmlToText(html: string): string {
-  const stripped = html.replace(LINE_ENDINGS, '\n').replace(COMMENT, '').replace(HIDDEN_BLOCK, '')
-    .replace(BLOCK_TAG, '\n').replace(ANY_TAG, '');
+  const stripped = html
+    .replace(LINE_ENDINGS, '\n')
+    .replace(COMMENT, '')
+    .replace(HIDDEN_BLOCK, '')
+    .replace(BLOCK_TAG, '\n')
+    .replace(ANY_TAG, '');
   return decodeEntities(stripped).replace(WHITESPACE_LINE, '');
 }
 

@@ -17,7 +17,6 @@
  * font stacks, which is the exact failure mode this product exists to avoid.
  */
 
-
 import { BOOK_RESOURCE_MARKER } from '../formats/book-resource.ts';
 
 /**

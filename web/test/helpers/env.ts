@@ -144,9 +144,7 @@ export class FakeTransport {
    */
   respondWithBoth(payload: unknown, status = 200): void {
     this.respondWith((request) => {
-      const json = request.url.startsWith('/api/v1/books')
-        ? { items: [], total: 0, page: 1, pageSize: 60 }
-        : payload;
+      const json = request.url.startsWith('/api/v1/books') ? { items: [], total: 0, page: 1, pageSize: 60 } : payload;
       return { status, headers: {}, json };
     });
   }
@@ -158,11 +156,7 @@ export interface TestPlatform extends Platform {
   setOnline(next: boolean): void;
 }
 
-export function makePlatform(
-  transport: FakeTransport,
-  kv = new MemoryKv(),
-  blobs = new MemoryBlobs(),
-): TestPlatform {
+export function makePlatform(transport: FakeTransport, kv = new MemoryKv(), blobs = new MemoryBlobs()): TestPlatform {
   const listeners = new Set<(state: 'online' | 'offline') => void>();
   let online = true;
   return {

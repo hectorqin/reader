@@ -77,14 +77,20 @@ export async function loadEpub(ctx: LoadContext): Promise<BookDoc> {
   }
 
   const sections: Section[] = [];
-  const spinePaths = pkg.spine.length > 0
-    ? pkg.spine.map((id) => {
-        const item = pkg.manifest.find((candidate) => candidate.id === id);
-        return item ? resolveHref(pkg.baseDir, item.href) : null;
-      }).filter((path): path is string => path !== null)
-    // No usable spine: fall back to every XHTML document in archive order. It
-    // is a guess at reading order, but it is strictly better than an empty book.
-    : archive.names().filter((name) => /\.x?html?$/i.test(name)).sort();
+  const spinePaths =
+    pkg.spine.length > 0
+      ? pkg.spine
+          .map((id) => {
+            const item = pkg.manifest.find((candidate) => candidate.id === id);
+            return item ? resolveHref(pkg.baseDir, item.href) : null;
+          })
+          .filter((path): path is string => path !== null)
+      : // No usable spine: fall back to every XHTML document in archive order. It
+        // is a guess at reading order, but it is strictly better than an empty book.
+        archive
+          .names()
+          .filter((name) => /\.x?html?$/i.test(name))
+          .sort();
 
   for (const path of spinePaths) {
     const raw = await archive.text(path);
@@ -125,16 +131,26 @@ export async function loadEpub(ctx: LoadContext): Promise<BookDoc> {
  */
 export function rewriteDocument(html: string, baseDir: string): string {
   return html
-    .replace(/(\ssrc\s*=\s*")([^"]*)(")/gi, (_m, pre: string, value: string, post: string) =>
-      `${pre}${rewriteUrl(value, baseDir)}${post}`)
-    .replace(/(\ssrc\s*=\s*')([^']*)(')/gi, (_m, pre: string, value: string, post: string) =>
-      `${pre}${rewriteUrl(value, baseDir)}${post}`)
-    .replace(/(\shref\s*=\s*")([^"]*)(")/gi, (_m, pre: string, value: string, post: string) =>
-      `${pre}${rewriteUrl(value, baseDir)}${post}`)
-    .replace(/(\shref\s*=\s*')([^']*)(')/gi, (_m, pre: string, value: string, post: string) =>
-      `${pre}${rewriteUrl(value, baseDir)}${post}`)
-    .replace(/(\s*srcset\s*=\s*")([^"]*)(")/gi, (_m, pre: string, value: string, post: string) =>
-      `${pre}${rewriteSrcset(value, baseDir)}${post}`);
+    .replace(
+      /(\ssrc\s*=\s*")([^"]*)(")/gi,
+      (_m, pre: string, value: string, post: string) => `${pre}${rewriteUrl(value, baseDir)}${post}`,
+    )
+    .replace(
+      /(\ssrc\s*=\s*')([^']*)(')/gi,
+      (_m, pre: string, value: string, post: string) => `${pre}${rewriteUrl(value, baseDir)}${post}`,
+    )
+    .replace(
+      /(\shref\s*=\s*")([^"]*)(")/gi,
+      (_m, pre: string, value: string, post: string) => `${pre}${rewriteUrl(value, baseDir)}${post}`,
+    )
+    .replace(
+      /(\shref\s*=\s*')([^']*)(')/gi,
+      (_m, pre: string, value: string, post: string) => `${pre}${rewriteUrl(value, baseDir)}${post}`,
+    )
+    .replace(
+      /(\s*srcset\s*=\s*")([^"]*)(")/gi,
+      (_m, pre: string, value: string, post: string) => `${pre}${rewriteSrcset(value, baseDir)}${post}`,
+    );
 }
 
 function rewriteSrcset(value: string, baseDir: string): string {
@@ -271,8 +287,9 @@ async function readToc(archive: BookArchive, pkg: Package, sections: Section[]):
     }
   }
 
-  const ncxItem = pkg.manifest.find((item) => item.mediaType === 'application/x-dtbncx+xml')
-    ?? pkg.manifest.find((item) => extensionOf(item.href) === 'ncx');
+  const ncxItem =
+    pkg.manifest.find((item) => item.mediaType === 'application/x-dtbncx+xml') ??
+    pkg.manifest.find((item) => extensionOf(item.href) === 'ncx');
   if (ncxItem) {
     const ncxPath = resolveHref(pkg.baseDir, ncxItem.href);
     const ncxXml = await archive.text(ncxPath);
@@ -286,15 +303,19 @@ async function readToc(archive: BookArchive, pkg: Package, sections: Section[]):
 }
 
 function navigationEntries(xml: string, kind: 'nav' | 'ncx', baseDir: string, sections: Section[]): TocEntry[] {
-  return parseNavigation(xml, kind).flatMap(entry => {
+  return parseNavigation(xml, kind).flatMap((entry) => {
     const resolved = resolveHref(baseDir, entry.href);
     const id = matchSectionId(resolved, sections);
     const fragment = entry.href.includes('#') ? entry.href.slice(entry.href.indexOf('#')) : '';
     return id ? [{ id: id + fragment, label: entry.title, depth: entry.depth }] : [];
   });
 }
-function parseNav(html: string, baseDir: string, sections: Section[]): TocEntry[] { return navigationEntries(html, 'nav', baseDir, sections); }
-function parseNcx(xml: string, baseDir: string, sections: Section[]): TocEntry[] { return navigationEntries(xml, 'ncx', baseDir, sections); }
+function parseNav(html: string, baseDir: string, sections: Section[]): TocEntry[] {
+  return navigationEntries(html, 'nav', baseDir, sections);
+}
+function parseNcx(xml: string, baseDir: string, sections: Section[]): TocEntry[] {
+  return navigationEntries(xml, 'ncx', baseDir, sections);
+}
 
 /** Matches a TOC href to a section, tolerating fragment-only links. */
 function matchSectionId(resolved: string, sections: Section[]): string | null {

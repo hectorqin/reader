@@ -41,8 +41,14 @@ export function combineAbortSignals(signals: readonly AbortSignal[]): { signal: 
     listeners.clear();
   };
   for (const signal of new Set(signals)) {
-    const abort = () => { controller.abort(signal.reason); dispose(); };
-    if (signal.aborted) { abort(); break; }
+    const abort = () => {
+      controller.abort(signal.reason);
+      dispose();
+    };
+    if (signal.aborted) {
+      abort();
+      break;
+    }
     listeners.set(signal, abort);
     signal.addEventListener('abort', abort, { once: true });
   }

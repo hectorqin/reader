@@ -4,63 +4,107 @@ import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import type { Detail, Item, MediaChannel, ScanJob, AiScanJob } from '../api/media-api.ts';
 
 export interface Activity {
-  id: string; itemId: string; partId: string; assetId: string; libraryId: string; kind: string;
-  title: string; partTitle: string; editionLabel?: string; start: number; end: number | null;
-  available: number; position?: number; updatedAt?: number; completed?: boolean;
+  id: string;
+  itemId: string;
+  partId: string;
+  assetId: string;
+  libraryId: string;
+  kind: string;
+  title: string;
+  partTitle: string;
+  editionLabel?: string;
+  start: number;
+  end: number | null;
+  available: number;
+  position?: number;
+  updatedAt?: number;
+  completed?: boolean;
 }
-function scope(runtime: AppRuntime) { return ['media', runtime.mediaApi.preferenceScope()] as const; }
+function scope(runtime: AppRuntime) {
+  return ['media', runtime.mediaApi.preferenceScope()] as const;
+}
 export const mediaKeys = {
   root: scope,
   detail: (runtime: AppRuntime, id: string) => [...scope(runtime), 'detail', id] as const,
 };
 export function librariesQuery(runtime: AppRuntime) {
-  return queryOptions({ queryKey: [...scope(runtime), 'libraries'], queryFn: ({ signal }) => runtime.mediaApi.libraries(signal) });
+  return queryOptions({
+    queryKey: [...scope(runtime), 'libraries'],
+    queryFn: ({ signal }) => runtime.mediaApi.libraries(signal),
+  });
 }
 export function detailQuery(runtime: AppRuntime, id: string) {
-  return queryOptions({ queryKey: mediaKeys.detail(runtime, id), queryFn: ({ signal }) => runtime.mediaApi.detail(id, signal) });
+  return queryOptions({
+    queryKey: mediaKeys.detail(runtime, id),
+    queryFn: ({ signal }) => runtime.mediaApi.detail(id, signal),
+  });
 }
 export const useMediaLibraries = () => useQuery(librariesQuery(useRuntime()));
 export function catalogQuery(runtime: AppRuntime, channel: MediaChannel, kind: string, params: URLSearchParams) {
-  const library = params.get('library') ?? '', offset = Math.max(0, Number(params.get('offset')) || 0);
-  const search = params.get('q') ?? '', sort = params.get('sort') ?? 'default';
+  const library = params.get('library') ?? '',
+    offset = Math.max(0, Number(params.get('offset')) || 0);
+  const search = params.get('q') ?? '',
+    sort = params.get('sort') ?? 'default';
   const filters = { artist: params.get('artist') ?? '', album: params.get('album') ?? '' };
   return queryOptions({
     queryKey: [...scope(runtime), 'catalog', channel, kind, library, offset, search, sort, filters],
-    queryFn: ({ signal }) => library
-      ? runtime.mediaApi.items(library, kind, search, offset, signal, sort, filters)
-      : runtime.mediaApi.browse(channel, kind, offset, signal, sort, filters),
+    queryFn: ({ signal }) =>
+      library
+        ? runtime.mediaApi.items(library, kind, search, offset, signal, sort, filters)
+        : runtime.mediaApi.browse(channel, kind, offset, signal, sort, filters),
   });
 }
 export function favoritesQuery(runtime: AppRuntime, params: URLSearchParams) {
-  const channel = params.get('scope') ?? 'all', offset = Math.max(0, Number(params.get('offset')) || 0);
+  const channel = params.get('scope') ?? 'all',
+    offset = Math.max(0, Number(params.get('offset')) || 0);
   const query = new URLSearchParams({ offset: String(offset), limit: '60' });
   if (channel !== 'all') query.set('channel', channel);
-  return queryOptions({ queryKey: [...scope(runtime), 'favorites', channel, offset], queryFn: ({ signal }) => runtime.mediaApi.request<{ items: Item[]; total: number }>('favorites?' + query, 'GET', undefined, signal) });
+  return queryOptions({
+    queryKey: [...scope(runtime), 'favorites', channel, offset],
+    queryFn: ({ signal }) =>
+      runtime.mediaApi.request<{ items: Item[]; total: number }>('favorites?' + query, 'GET', undefined, signal),
+  });
 }
 export function historyQuery(runtime: AppRuntime, channel: MediaChannel, params: URLSearchParams) {
   const offset = Math.max(0, Number(params.get('offset')) || 0);
-  return queryOptions({ queryKey: [...scope(runtime), 'history', channel, offset], queryFn: ({ signal }) => runtime.mediaApi.request<{ items: Activity[]; total: number }>(`history?channel=${channel}&offset=${offset}&limit=60`, 'GET', undefined, signal) });
+  return queryOptions({
+    queryKey: [...scope(runtime), 'history', channel, offset],
+    queryFn: ({ signal }) =>
+      runtime.mediaApi.request<{ items: Activity[]; total: number }>(
+        `history?channel=${channel}&offset=${offset}&limit=60`,
+        'GET',
+        undefined,
+        signal,
+      ),
+  });
 }
 export function queueQuery(runtime: AppRuntime) {
-  return queryOptions({ queryKey: [...scope(runtime), 'queue'], queryFn: ({ signal }) => runtime.mediaApi.request<{ items: Activity[] }>('queue', 'GET', undefined, signal) });
+  return queryOptions({
+    queryKey: [...scope(runtime), 'queue'],
+    queryFn: ({ signal }) => runtime.mediaApi.request<{ items: Activity[] }>('queue', 'GET', undefined, signal),
+  });
 }
 export function jobsQuery(runtime: AppRuntime, libraryId = '') {
-  const path = libraryId
-    ? `libraries/${encodeURIComponent(libraryId)}/jobs`
-    : 'scan-jobs';
+  const path = libraryId ? `libraries/${encodeURIComponent(libraryId)}/jobs` : 'scan-jobs';
   return queryOptions({
     queryKey: [...scope(runtime), 'jobs', libraryId],
     queryFn: ({ signal }) => runtime.mediaApi.request<{ items: ScanJob[] }>(path, 'GET', undefined, signal),
     // Every 5 s while something is moving; a settled list only needs to notice a scan
     // started elsewhere (another tab, a scheduled scan), which 30 s is enough for.
-    refetchInterval: query => query.state.data?.items.some(job => job.state === 'running' || job.state === 'queued') === false ? 30_000 : 5000,
+    refetchInterval: (query) =>
+      query.state.data?.items.some((job) => job.state === 'running' || job.state === 'queued') === false
+        ? 30_000
+        : 5000,
   });
 }
 export function aiJobsQuery(runtime: AppRuntime, libraryId = '') {
   return queryOptions({
     queryKey: [...scope(runtime), 'ai-jobs', libraryId],
     queryFn: () => runtime.mediaApi.aiScanJobs(libraryId || undefined),
-    refetchInterval: query => query.state.data?.items.some(job => job.state === 'running' || job.state === 'queued') === false ? 30_000 : 5000,
+    refetchInterval: (query) =>
+      query.state.data?.items.some((job) => job.state === 'running' || job.state === 'queued') === false
+        ? 30_000
+        : 5000,
   });
 }
 export type { Detail, AiScanJob };

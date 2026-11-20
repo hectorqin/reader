@@ -1,6 +1,9 @@
 /* 我的: reuses the media aliases of the theme tokens, so it follows the chosen theme.
  * The page column is the shared one (app/shell.css). */
-.mine-page .media-back-button { color: inherit; text-decoration: none; }
+.mine-page .media-back-button {
+  color: inherit;
+  text-decoration: none;
+}
 
 .mine-profile {
   display: flex;
@@ -28,26 +31,91 @@
   box-shadow: 0 0 0 3px var(--color-surface);
 }
 
-.mine-profile-text { min-width: 0; }
-.mine-profile-text strong { display: flex; align-items: center; gap: 8px; font-size: var(--text-title); font-weight: 600; overflow-wrap: anywhere; }
-.mine-role { flex: none; height: 20px; padding: 0 8px; border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-brand-text); font-size: var(--text-meta); font-weight: 600; line-height: 20px; }
-.mine-profile-text small { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: var(--text-meta); color: var(--color-muted); overflow-wrap: anywhere; }
-.mine-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--color-brand-text); }
-.mine-dot[data-state='offline'] { background: var(--color-muted); }
-.mine-dot[data-state='error'] { background: var(--color-danger); }
+.mine-profile-text {
+  min-width: 0;
+}
+.mine-profile-text strong {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-title);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.mine-role {
+  flex: none;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-brand-text);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  line-height: 20px;
+}
+.mine-profile-text small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: var(--text-meta);
+  color: var(--color-muted);
+  overflow-wrap: anywhere;
+}
+.mine-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-brand-text);
+}
+.mine-dot[data-state="offline"] {
+  background: var(--color-muted);
+}
+.mine-dot[data-state="error"] {
+  background: var(--color-danger);
+}
 /* The padding is hit area only: the line stays one line of meta text (ui.md §3.3). */
-.mine-status-link { margin: -10px 0 -10px 4px; padding: 10px 4px; color: var(--color-brand-text); text-decoration: underline; text-underline-offset: 2px; }
-
-/* Narrow: one list in reading order. Wide: two independent columns. */
-.mine-groups { display: flex; flex-direction: column; }
-.mine-column { display: contents; }
-@media (min-width: 64rem) {
-  .mine-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; align-items: start; }
-  .mine-column { display: flex; flex-direction: column; min-width: 0; }
+.mine-status-link {
+  margin: -10px 0 -10px 4px;
+  padding: 10px 4px;
+  color: var(--color-brand-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-.mine-group { margin: 24px 0 0; }
-.mine-group > h2 { margin: 0 0 8px 6px; font-size: var(--text-meta); font-weight: 600; letter-spacing: 0.08em; color: var(--color-muted); }
+/* Narrow: one list in reading order. Wide: two independent columns. */
+.mine-groups {
+  display: flex;
+  flex-direction: column;
+}
+.mine-column {
+  display: contents;
+}
+@media (min-width: 64rem) {
+  .mine-groups {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 24px;
+    align-items: start;
+  }
+  .mine-column {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+}
+
+.mine-group {
+  margin: 24px 0 0;
+}
+.mine-group > h2 {
+  margin: 0 0 8px 6px;
+  font-size: var(--text-meta);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+}
 
 .mine-card {
   overflow: hidden;
@@ -77,15 +145,23 @@
 
 /* Separators start after the icon, so the icons read as one column. */
 .mine-page .mine-row + .mine-row::before {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   left: 60px;
   right: 0;
   border-top: 1px solid var(--color-line);
 }
-@media (hover: hover) and (pointer: fine) { .mine-page .mine-row:hover { background: var(--color-surface-2); }}
-.mine-page .mine-row:focus-visible { outline: 2px solid var(--color-brand-text); outline-offset: -2px; border-radius: var(--radius-lg); }
+@media (hover: hover) and (pointer: fine) {
+  .mine-page .mine-row:hover {
+    background: var(--color-surface-2);
+  }
+}
+.mine-page .mine-row:focus-visible {
+  outline: 2px solid var(--color-brand-text);
+  outline-offset: -2px;
+  border-radius: var(--radius-lg);
+}
 
 .mine-row-icon {
   display: grid;
@@ -98,20 +174,50 @@
   color: var(--color-brand-text);
 }
 
-.mine-row-label { flex: 1; min-width: 0; font-size: var(--text-body); font-weight: 500; }
-.mine-row-value { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-label); color: var(--color-muted); }
-.mine-row-chevron { flex: none; color: var(--color-muted); opacity: .7; }
+.mine-row-label {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-body);
+  font-weight: 500;
+}
+.mine-row-value {
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-label);
+  color: var(--color-muted);
+}
+.mine-row-chevron {
+  flex: none;
+  color: var(--color-muted);
+  opacity: 0.7;
+}
 
-.mine-page .mine-row.is-danger { color: var(--media-error-ink); }
-.mine-page .mine-row.is-danger .mine-row-icon { background: var(--media-error-background); color: var(--media-error-ink); }
+.mine-page .mine-row.is-danger {
+  color: var(--media-error-ink);
+}
+.mine-page .mine-row.is-danger .mine-row-icon {
+  background: var(--media-error-background);
+  color: var(--media-error-ink);
+}
 
 /* 偏好设置 (/me/settings): one column of sections, each opened by its own heading.
  * The sections bring their own controls (theme cards, the shelf's toolkit rows, the
  * media fields); this only lays them out as one page. */
-.settings-body { max-width: 640px; margin: 0 auto; padding-bottom: 40px; }
-.settings-tabs { display: flex; margin: 8px 0 0; border-bottom: 1px solid var(--color-line); }
+.settings-body {
+  max-width: 640px;
+  margin: 0 auto;
+  padding-bottom: 40px;
+}
+.settings-tabs {
+  display: flex;
+  margin: 8px 0 0;
+  border-bottom: 1px solid var(--color-line);
+}
 /* Equal tabs that share the row, like the 书源 hub's: underlined, not chips. */
-.settings-page .settings-tabs [role='tab'] {
+.settings-page .settings-tabs [role="tab"] {
   flex: 1 1 0;
   min-width: 0;
   min-height: 48px;
@@ -128,26 +234,72 @@
   white-space: nowrap;
   cursor: pointer;
 }
-.settings-page .settings-tabs [aria-selected='true'] { border-bottom-color: var(--color-brand); color: var(--color-ink); font-weight: 650; }
-.settings-page .settings-tabs [role='tab']:focus-visible { outline: 2px solid var(--color-brand-text); outline-offset: -2px; }
-@media (hover: hover) and (pointer: fine) { .settings-page .settings-tabs [role='tab']:hover { color: var(--color-ink); } }
+.settings-page .settings-tabs [aria-selected="true"] {
+  border-bottom-color: var(--color-brand);
+  color: var(--color-ink);
+  font-weight: 650;
+}
+.settings-page .settings-tabs [role="tab"]:focus-visible {
+  outline: 2px solid var(--color-brand-text);
+  outline-offset: -2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .settings-page .settings-tabs [role="tab"]:hover {
+    color: var(--color-ink);
+  }
+}
 
 /* The selected tab's panel; its sub-headings are the quiet labels the panels already use. */
-.settings-section { margin: 16px 0 0; }
-.settings-section h2 { margin: 22px 0 10px; font-size: var(--text-label); font-weight: 600; color: var(--color-muted); }
-.settings-note { margin: 10px 0 0; font-size: var(--text-label); color: var(--color-muted); }
-.settings-page .theme-settings { margin: 0; max-width: none; }
-.settings-page .media-settings { max-width: none; }
-.settings-page .media-settings .media-settings-panel { margin: 4px 0 0; }
+.settings-section {
+  margin: 16px 0 0;
+}
+.settings-section h2 {
+  margin: 22px 0 10px;
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--color-muted);
+}
+.settings-note {
+  margin: 10px 0 0;
+  font-size: var(--text-label);
+  color: var(--color-muted);
+}
+.settings-page .theme-settings {
+  margin: 0;
+  max-width: none;
+}
+.settings-page .media-settings {
+  max-width: none;
+}
+.settings-page .media-settings .media-settings-panel {
+  margin: 4px 0 0;
+}
 
 /* The shelf's toolkit rows were drawn for a sheet: on the page their headings are
  * plain sub-labels, not sticky bars. */
-.settings-page .shelf-settings .section-title { position: static; margin: 22px 0 10px; padding: 0; border: 0; background: none; color: var(--color-muted); }
-.settings-page .shelf-settings .segmented { width: 100%; }
+.settings-page .shelf-settings .section-title {
+  position: static;
+  margin: 22px 0 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-muted);
+}
+.settings-page .shelf-settings .segmented {
+  width: 100%;
+}
 /* The page's generic button rule (min-height, padding, a square radius, no background)
  * outranks the toolkit switch; give the switch back its pill (ui.md: one on/off control). */
-.settings-page .shelf-settings .switch { min-height: 0; padding: 0; border: 0; border-radius: var(--radius-pill); background: var(--reader-line); }
-.settings-page .shelf-settings .switch[aria-pressed='true'] { background: var(--reader-fill); }
+.settings-page .shelf-settings .switch {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--reader-line);
+}
+.settings-page .shelf-settings .switch[aria-pressed="true"] {
+  background: var(--reader-fill);
+}
 
 .settings-page .settings-link {
   display: flex;
@@ -161,11 +313,34 @@
   color: var(--color-ink);
   text-decoration: none;
 }
-.settings-link > span { flex: 1; min-width: 0; }
-.settings-link strong { display: block; font-size: var(--text-body); font-weight: 500; }
-.settings-link small { display: block; margin-top: 2px; font-size: var(--text-meta); color: var(--color-muted); }
-.settings-link svg { flex: none; color: var(--color-muted); }
-@media (hover: hover) and (pointer: fine) { .settings-page .settings-link:hover { background: var(--color-surface-2); } }
+.settings-link > span {
+  flex: 1;
+  min-width: 0;
+}
+.settings-link strong {
+  display: block;
+  font-size: var(--text-body);
+  font-weight: 500;
+}
+.settings-link small {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--text-meta);
+  color: var(--color-muted);
+}
+.settings-link svg {
+  flex: none;
+  color: var(--color-muted);
+}
+@media (hover: hover) and (pointer: fine) {
+  .settings-page .settings-link:hover {
+    background: var(--color-surface-2);
+  }
+}
 
 /* 外部阅读器 and the 管理 pages: sheet-sized forms, given the same column. */
-.opds-page .opds-access, .admin-page .user-management { max-width: 640px; margin: 16px auto 40px; }
+.opds-page .opds-access,
+.admin-page .user-management {
+  max-width: 640px;
+  margin: 16px auto 40px;
+}

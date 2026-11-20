@@ -9,14 +9,26 @@ import { AnnotationPopover } from '../src/ui/annotation-popover.tsx';
 
 describe('AiAssistSheet', () => {
   let host: HTMLElement, root: Root;
-  beforeEach(() => { host = document.createElement('div'); document.body.append(host); root = createRoot(host); });
-  afterEach(() => { act(() => root.unmount()); host.remove(); });
+  beforeEach(() => {
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
 
-  const button = (name: string) => [...host.querySelectorAll('button')].find(candidate => candidate.textContent === name)!;
-  const flush = () => act(async () => { await Promise.resolve(); await Promise.resolve(); });
+  const button = (name: string) =>
+    [...host.querySelectorAll('button')].find((candidate) => candidate.textContent === name)!;
+  const flush = () =>
+    act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
 
   it('translates and explains the passage, showing one answer at a time', async () => {
-    const ask = vi.fn(async (action: AssistAction) => action === 'translate' ? '译文' : '解释');
+    const ask = vi.fn(async (action: AssistAction) => (action === 'translate' ? '译文' : '解释'));
     act(() => root.render(<AiAssistSheet quote="To be, or not to be" ask={ask} onClose={() => undefined} />));
     expect(host.querySelector('blockquote')?.textContent).toBe('To be, or not to be');
     act(() => button('翻译').click());
@@ -28,12 +40,19 @@ describe('AiAssistSheet', () => {
     expect(host.querySelector('.ai-assist-answer')).toBeNull();
     await flush();
     expect(host.querySelector('.ai-assist-answer')?.textContent).toBe('解释');
-    expect(ask.mock.calls).toEqual([['translate', ''], ['explain', '']]);
+    expect(ask.mock.calls).toEqual([
+      ['translate', ''],
+      ['explain', ''],
+    ]);
   });
 
   it('keeps an answer as an annotation that says what was asked, once', async () => {
     const keep = vi.fn(async () => undefined);
-    act(() => root.render(<AiAssistSheet quote="To be" ask={async () => ' 生存还是毁灭 '} keep={keep} onClose={() => undefined} />));
+    act(() =>
+      root.render(
+        <AiAssistSheet quote="To be" ask={async () => ' 生存还是毁灭 '} keep={keep} onClose={() => undefined} />,
+      ),
+    );
     expect(button('存为批注')).toBeUndefined();
     act(() => button('翻译').click());
     await flush();
@@ -57,7 +76,7 @@ describe('AiAssistSheet', () => {
     expect(button('存为批注')).toBeUndefined();
   });
 
-  it('asks the reader\'s own question, and only when there is one', async () => {
+  it("asks the reader's own question, and only when there is one", async () => {
     const ask = vi.fn(async () => '是哈姆雷特');
     act(() => root.render(<AiAssistSheet quote="To be" ask={ask} onClose={() => undefined} />));
     expect(button('提问').disabled).toBe(true);
@@ -75,15 +94,22 @@ describe('AiAssistSheet', () => {
 
   it('says why a request failed, and lets a slow answer lose to the one asked after it', async () => {
     let finishSlow!: (value: string) => void;
-    const ask = vi.fn((action: AssistAction) => action === 'translate'
-      ? new Promise<string>(resolve => { finishSlow = resolve; })
-      : Promise.reject(new Error('AI 功能未启用')));
+    const ask = vi.fn((action: AssistAction) =>
+      action === 'translate'
+        ? new Promise<string>((resolve) => {
+            finishSlow = resolve;
+          })
+        : Promise.reject(new Error('AI 功能未启用')),
+    );
     act(() => root.render(<AiAssistSheet quote="文" ask={ask} onClose={() => undefined} />));
     act(() => button('翻译').click());
     act(() => button('解释').click());
     await flush();
     expect(host.querySelector('[role=alert]')?.textContent).toBe('AI 功能未启用');
-    await act(async () => { finishSlow('迟到的译文'); await Promise.resolve(); });
+    await act(async () => {
+      finishSlow('迟到的译文');
+      await Promise.resolve();
+    });
     expect(host.querySelector('.ai-assist-answer')).toBeNull();
     expect(host.querySelector('[role=alert]')?.textContent).toBe('AI 功能未启用');
   });
@@ -91,11 +117,22 @@ describe('AiAssistSheet', () => {
 
 describe('AnnotationPopover 问AI', () => {
   let host: HTMLElement, root: Root;
-  beforeEach(() => { host = document.createElement('div'); document.body.append(host); root = createRoot(host); });
-  afterEach(() => { act(() => root.unmount()); host.remove(); });
-  const target = { anchor: { sectionId: 's', start: 0, end: 2, quote: '选区', prefix: '', suffix: '' }, rect: new DOMRect(10, 10, 40, 20) };
+  beforeEach(() => {
+    host = document.createElement('div');
+    document.body.append(host);
+    root = createRoot(host);
+  });
+  afterEach(() => {
+    act(() => root.unmount());
+    host.remove();
+  });
+  const target = {
+    anchor: { sectionId: 's', start: 0, end: 2, quote: '选区', prefix: '', suffix: '' },
+    rect: new DOMRect(10, 10, 40, 20),
+  };
   const props = { target, save: async () => undefined, remove: async () => undefined, close: () => undefined };
-  const labels = () => [...host.querySelectorAll('.annotation-actions button')].map(candidate => candidate.textContent);
+  const labels = () =>
+    [...host.querySelectorAll('.annotation-actions button')].map((candidate) => candidate.textContent);
 
   it('is offered on a selection only when the server has it', () => {
     act(() => root.render(<AnnotationPopover {...props} />));
@@ -103,7 +140,11 @@ describe('AnnotationPopover 问AI', () => {
     const askAi = vi.fn();
     act(() => root.render(<AnnotationPopover {...props} askAi={askAi} />));
     expect(labels()).toContain('问AI');
-    act(() => [...host.querySelectorAll<HTMLButtonElement>('.annotation-actions button')].find(candidate => candidate.textContent === '问AI')!.click());
+    act(() =>
+      [...host.querySelectorAll<HTMLButtonElement>('.annotation-actions button')]
+        .find((candidate) => candidate.textContent === '问AI')!
+        .click(),
+    );
     expect(askAi).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,9 +3,7 @@
     "target": "ES2023",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": [
-      "ES2023"
-    ],
+    "lib": ["ES2023"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
@@ -14,14 +12,10 @@
     "resolveJsonModule": true,
     "declaration": false,
     "sourceMap": true,
-    "types": [
-      "node"
-    ],
+    "types": ["node"],
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "verbatimModuleSyntax": true
   },
-  "include": [
-    "src/**/*.ts"
-  ]
+  "include": ["src/**/*.ts"]
 }

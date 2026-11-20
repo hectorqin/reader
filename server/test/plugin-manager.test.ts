@@ -19,13 +19,18 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 
 const builtin: SourceProvider = {
   descriptor: { id: 'local', label: 'Local', version: '1', capabilities: ['detail'] },
-  async detail() { return { ref: 'book', title: 'Local book' }; },
-  async acquire() { return { kind: 'ready', publicationId: 'book' }; },
+  async detail() {
+    return { ref: 'book', title: 'Local book' };
+  },
+  async acquire() {
+    return { kind: 'ready', publicationId: 'book' };
+  },
 };
 
 function context(): SourceContext {
   return {
-    userId: 'reader', signal: new AbortController().signal,
+    userId: 'reader',
+    signal: new AbortController().signal,
     instance: { id: 'test', pluginId: 'test.plugin', sourceType: 'test', name: 'Test', config: {}, enabled: true },
   };
 }
@@ -39,13 +44,30 @@ async function fixture() {
   registry.registerBuiltin('reader.local', builtin);
   const managers = [new PluginManager(db, dataDir, registry)];
   return {
-    root, dataDir, db, registry, manager: managers[0]!,
-    async package(folder = 'example', pluginId = 'test.plugin', sourceTypes: unknown[] = [{ id: 'test', label: 'Test', capabilities: ['detail'] }]) {
+    root,
+    dataDir,
+    db,
+    registry,
+    manager: managers[0]!,
+    async package(
+      folder = 'example',
+      pluginId = 'test.plugin',
+      sourceTypes: unknown[] = [{ id: 'test', label: 'Test', capabilities: ['detail'] }],
+    ) {
       const directory = join(dataDir, 'plugins', folder);
       await mkdir(directory, { recursive: true });
-      await writeFile(join(directory, 'plugin.json'), JSON.stringify({
-        id: pluginId, name: 'Test plugin', version: '1.0.0', apiVersion: 1, runtime: 'node', entry: 'main.mjs', sourceTypes,
-      }));
+      await writeFile(
+        join(directory, 'plugin.json'),
+        JSON.stringify({
+          id: pluginId,
+          name: 'Test plugin',
+          version: '1.0.0',
+          apiVersion: 1,
+          runtime: 'node',
+          entry: 'main.mjs',
+          sourceTypes,
+        }),
+      );
       await writeFile(join(directory, 'main.mjs'), WORKER);
       return directory;
     },
@@ -76,20 +98,37 @@ test('installation registers a real provider and lists builtins alongside the pe
     const plugins = f.manager.list();
     assert.equal(plugins.find((plugin) => plugin.pluginId === 'reader.local')?.builtin, true);
     assert.equal(plugins.find((plugin) => plugin.pluginId === 'test.plugin')?.runtime?.state, 'running');
-    assert.equal(f.db.get<{ enabled: number }>('SELECT enabled FROM installed_plugins WHERE plugin_id = ?', 'test.plugin')?.enabled, 1);
-  } finally { await f.dispose(); }
+    assert.equal(
+      f.db.get<{ enabled: number }>('SELECT enabled FROM installed_plugins WHERE plugin_id = ?', 'test.plugin')
+        ?.enabled,
+      1,
+    );
+  } finally {
+    await f.dispose();
+  }
 });
 
 test('generic extension pages and durable scheduled tasks work without provider-specific host code', async () => {
   const f = await fixture();
   try {
     const directory = await f.package();
-    await writeFile(join(directory, 'plugin.json'), JSON.stringify({
-      id: 'test.plugin', name: 'Generic', version: '1', apiVersion: 1, runtime: 'node', entry: 'main.mjs',
-      permissions: { storage: true }, sourceTypes: [{ id: 'test', label: 'Test', capabilities: ['detail'] }],
-      extensions: { pages: [{ id: 'settings', title: 'Settings' }], tasks: [{ id: 'poll', intervalMinutes: 5 }] },
-    }));
-    await writeFile(join(directory, 'main.mjs'), `
+    await writeFile(
+      join(directory, 'plugin.json'),
+      JSON.stringify({
+        id: 'test.plugin',
+        name: 'Generic',
+        version: '1',
+        apiVersion: 1,
+        runtime: 'node',
+        entry: 'main.mjs',
+        permissions: { storage: true },
+        sourceTypes: [{ id: 'test', label: 'Test', capabilities: ['detail'] }],
+        extensions: { pages: [{ id: 'settings', title: 'Settings' }], tasks: [{ id: 'poll', intervalMinutes: 5 }] },
+      }),
+    );
+    await writeFile(
+      join(directory, 'main.mjs'),
+      `
       import { createInterface } from 'node:readline';
       import { readFile, writeFile } from 'node:fs/promises';
       import { join } from 'node:path';
@@ -101,20 +140,32 @@ test('generic extension pages and durable scheduled tasks work without provider-
         const result = method === 'extension.task' ? {} : { title: String(n), forms: [], sections: [] };
         process.stdout.write(JSON.stringify({jsonrpc:'2.0', id, result}) + '\\n');
       }
-    `);
-    const info = await f.manager.install('example'); assert.equal(info.extensions?.pages?.[0]?.id, 'settings');
+    `,
+    );
+    const info = await f.manager.install('example');
+    assert.equal(info.extensions?.pages?.[0]?.id, 'settings');
     assert.equal((await f.manager.page('test.plugin', 'settings', 'admin')).title, '0');
     await f.manager.page('test.plugin', 'settings', 'admin', 'set', { count: 4 });
     await Promise.all([f.manager.runTasks(1000), f.manager.runTasks(1000)]);
     assert.equal((await f.manager.page('test.plugin', 'settings', 'admin')).title, '5');
     await f.manager.close();
-    const restarted = f.restart(); await restarted.loadInstalled(); await restarted.runTasks(1001);
-    assert.equal((await restarted.page('test.plugin', 'settings', 'admin')).title, '5', 'task deadline and plugin data survive restart');
-    await restarted.runTasks(301001); assert.equal((await restarted.page('test.plugin', 'settings', 'admin')).title, '6');
+    const restarted = f.restart();
+    await restarted.loadInstalled();
+    await restarted.runTasks(1001);
+    assert.equal(
+      (await restarted.page('test.plugin', 'settings', 'admin')).title,
+      '5',
+      'task deadline and plugin data survive restart',
+    );
+    await restarted.runTasks(301001);
+    assert.equal((await restarted.page('test.plugin', 'settings', 'admin')).title, '6');
     await assert.rejects(restarted.page('test.plugin', 'missing', 'admin'), { code: 'PAGE_NOT_FOUND' });
-    await restarted.setEnabled('test.plugin', false); await restarted.runTasks(700000);
+    await restarted.setEnabled('test.plugin', false);
+    await restarted.runTasks(700000);
     await assert.rejects(restarted.page('test.plugin', 'settings', 'admin'), { code: 'PLUGIN_UNAVAILABLE' });
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });
 
 test('npm packages support scopes, restart and reject traversal or outside links', async () => {
@@ -124,15 +175,29 @@ test('npm packages support scopes, restart and reject traversal or outside links
     await f.manager.install('npm:@reader/source');
     assert.equal((await f.registry.require('test.plugin', 'test').provider.detail(context(), 'book')).title, 'Book');
     await f.manager.close();
-    const restarted = f.restart(); await restarted.loadInstalled();
-    assert.equal(restarted.list().find(p => p.pluginId === 'test.plugin')?.folder, 'npm:@reader/source');
-    for (const input of ['npm:../outside', 'npm:@reader/../../outside', 'npm:source@latest', 'npm:C:\\outside', 'npm:']) {
+    const restarted = f.restart();
+    await restarted.loadInstalled();
+    assert.equal(restarted.list().find((p) => p.pluginId === 'test.plugin')?.folder, 'npm:@reader/source');
+    for (const input of [
+      'npm:../outside',
+      'npm:@reader/../../outside',
+      'npm:source@latest',
+      'npm:C:\\outside',
+      'npm:',
+    ]) {
       await assert.rejects(restarted.install(input), { code: 'PLUGIN_INVALID_FOLDER' });
     }
-    const outside = join(f.root, 'outside'); await mkdir(outside);
-    await symlink(outside, join(f.dataDir, 'plugins', 'node_modules', 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
+    const outside = join(f.root, 'outside');
+    await mkdir(outside);
+    await symlink(
+      outside,
+      join(f.dataDir, 'plugins', 'node_modules', 'escape'),
+      process.platform === 'win32' ? 'junction' : 'dir',
+    );
     await assert.rejects(restarted.install('npm:escape'), { code: 'PLUGIN_PATH_ESCAPE' });
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });
 
 test('disable stops in-flight work, rejects retained providers, and persists across restart', async () => {
@@ -155,7 +220,9 @@ test('disable stops in-flight work, rejects retained providers, and persists acr
     assert.equal(f.registry.get('test.plugin', 'test'), undefined);
     await restarted.setEnabled('test.plugin', true);
     assert.equal((await f.registry.require('test.plugin', 'test').provider.detail(context(), 'book')).title, 'Book');
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });
 
 test('enabled packages reload after shutdown and failed package loads do not block healthy packages', async () => {
@@ -169,10 +236,15 @@ test('enabled packages reload after shutdown and failed package loads do not blo
     await restarted.loadInstalled();
     await restarted.loadInstalled();
     assert.ok(f.registry.get('test.plugin', 'test'));
-    assert.equal(restarted.list().find((plugin) => plugin.pluginId === 'broken.plugin')?.error?.code, 'PLUGIN_PACKAGE_NOT_FOUND');
+    assert.equal(
+      restarted.list().find((plugin) => plugin.pluginId === 'broken.plugin')?.error?.code,
+      'PLUGIN_PACKAGE_NOT_FOUND',
+    );
     assert.equal(f.registry.list().length, 2, 'reloading is idempotent');
     assert.equal((await f.registry.require('test.plugin', 'test').provider.detail(context(), 'book')).title, 'Book');
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });
 
 test('a crashed worker remains isolated and can be reloaded through enable', async () => {
@@ -182,12 +254,16 @@ test('a crashed worker remains isolated and can be reloaded through enable', asy
     await f.package('healthy', 'healthy.plugin');
     await f.manager.install('example');
     await f.manager.install('healthy');
-    await assert.rejects(f.registry.require('test.plugin', 'test').provider.detail(context(), 'crash'), { code: 'PLUGIN_UNAVAILABLE' });
+    await assert.rejects(f.registry.require('test.plugin', 'test').provider.detail(context(), 'crash'), {
+      code: 'PLUGIN_UNAVAILABLE',
+    });
     assert.equal(f.manager.list().find((plugin) => plugin.pluginId === 'test.plugin')?.runtime?.state, 'failed');
     assert.equal((await f.registry.require('healthy.plugin', 'test').provider.detail(context(), 'book')).title, 'Book');
     await f.manager.setEnabled('test.plugin', true);
     assert.equal((await f.registry.require('test.plugin', 'test').provider.detail(context(), 'book')).title, 'Book');
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });
 
 test('uninstall retains package files and source data while removing registrations and install records', async () => {
@@ -195,7 +271,9 @@ test('uninstall retains package files and source data while removing registratio
   try {
     const directory = await f.package();
     await f.manager.install('example');
-    f.db.run("INSERT INTO source_instances (id, plugin_id, source_type, name, config_json, enabled, created_at) VALUES ('keep', 'test.plugin', 'test', 'Keep', '{}', 1, 0)");
+    f.db.run(
+      "INSERT INTO source_instances (id, plugin_id, source_type, name, config_json, enabled, created_at) VALUES ('keep', 'test.plugin', 'test', 'Keep', '{}', 1, 0)",
+    );
     f.db.run("INSERT INTO plugin_storage (key, value) VALUES ('keep', 'data')");
     await f.manager.uninstall('test.plugin');
     assert.equal(f.registry.get('test.plugin', 'test'), undefined);
@@ -205,7 +283,9 @@ test('uninstall retains package files and source data while removing registratio
     await access(join(directory, 'main.mjs'));
     await f.manager.install('example');
     assert.ok(f.registry.get('test.plugin', 'test'));
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });
 
 test('builtins, duplicate installations and source conflicts cannot be replaced', async () => {
@@ -223,7 +303,9 @@ test('builtins, duplicate installations and source conflicts cannot be replaced'
     await f.manager.install('example');
     await assert.rejects(f.manager.install('example'), { code: 'PLUGIN_ALREADY_INSTALLED' });
     assert.equal(f.registry.require('reader.local', 'local').provider, builtin);
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });
 
 test('invalid multi-source packages leave no partially registered providers or persisted installation', async () => {
@@ -236,7 +318,9 @@ test('invalid multi-source packages leave no partially registered providers or p
     await assert.rejects(f.manager.install('invalid'), { code: 'PLUGIN_INCOMPATIBLE', statusCode: 400 });
     assert.equal(f.registry.list().length, 1);
     assert.equal(f.db.all('SELECT plugin_id FROM installed_plugins').length, 0);
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });
 
 test('missing packages, invalid JSON and invalid manifests return stable client errors', async () => {
@@ -253,14 +337,25 @@ test('missing packages, invalid JSON and invalid manifests return stable client 
     await assert.rejects(f.manager.install('example'), { code: 'PLUGIN_PACKAGE_NOT_FOUND', statusCode: 404 });
     assert.equal(f.db.all('SELECT plugin_id FROM installed_plugins').length, 0);
     assert.equal(f.registry.list().length, 1);
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });
 
 test('install accepts only one package folder and rejects symlink escapes', async () => {
   const f = await fixture();
   try {
     const directory = await f.package();
-    for (const folder of ['../example', './example', '/example', 'example/child', 'example\\child', '.', '', 'example.']) {
+    for (const folder of [
+      '../example',
+      './example',
+      '/example',
+      'example/child',
+      'example\\child',
+      '.',
+      '',
+      'example.',
+    ]) {
       await assert.rejects(f.manager.install(folder), { code: 'PLUGIN_INVALID_FOLDER' });
     }
     const outside = join(f.root, 'outside');
@@ -269,7 +364,9 @@ test('install accepts only one package folder and rejects symlink escapes', asyn
     await symlink(outside, join(f.dataDir, 'plugins', 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
     await assert.rejects(f.manager.install('escape'), { code: 'PLUGIN_PATH_ESCAPE' });
     await access(join(directory, 'plugin.json'));
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });
 
 test('changed package identity is refused on restart and lifecycle mutations remain ordered', async () => {
@@ -286,24 +383,48 @@ test('changed package identity is refused on restart and lifecycle mutations rem
     await f.package('example', 'changed.plugin');
     const restarted = f.restart();
     await restarted.loadInstalled();
-    assert.equal(restarted.list().find((plugin) => plugin.pluginId === 'test.plugin')?.error?.code, 'PLUGIN_ID_CHANGED');
+    assert.equal(
+      restarted.list().find((plugin) => plugin.pluginId === 'test.plugin')?.error?.code,
+      'PLUGIN_ID_CHANGED',
+    );
     assert.equal(f.registry.get('changed.plugin', 'test'), undefined);
     await restarted.close();
     await assert.rejects(restarted.setEnabled('test.plugin', true), { code: 'PLUGIN_MANAGER_CLOSED' });
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });
 
 test('source extension pages and schedules isolate instances, persist and skip paused/deleted sources', async () => {
   const f = await fixture();
   try {
     const directory = await f.package();
-    await writeFile(join(directory, 'plugin.json'), JSON.stringify({
-      id: 'test.plugin', name: 'Generic', version: '1', apiVersion: 1, runtime: 'node', entry: 'main.mjs', permissions: { storage: true },
-      sourceTypes: [{ id: 'test', label: 'Test', capabilities: ['detail'], extensions: {
-        pages: [{ id: 'settings', title: 'Settings' }], tasks: [{ id: 'poll', intervalMinutes: 5 }],
-      } }],
-    }));
-    await writeFile(join(directory, 'main.mjs'), `
+    await writeFile(
+      join(directory, 'plugin.json'),
+      JSON.stringify({
+        id: 'test.plugin',
+        name: 'Generic',
+        version: '1',
+        apiVersion: 1,
+        runtime: 'node',
+        entry: 'main.mjs',
+        permissions: { storage: true },
+        sourceTypes: [
+          {
+            id: 'test',
+            label: 'Test',
+            capabilities: ['detail'],
+            extensions: {
+              pages: [{ id: 'settings', title: 'Settings' }],
+              tasks: [{ id: 'poll', intervalMinutes: 5 }],
+            },
+          },
+        ],
+      }),
+    );
+    await writeFile(
+      join(directory, 'main.mjs'),
+      `
       import { createInterface } from 'node:readline';
       import { mkdir, readFile, writeFile } from 'node:fs/promises';
       import { join } from 'node:path';
@@ -318,9 +439,18 @@ test('source extension pages and schedules isolate instances, persist and skip p
         const result = { title: params.context.instance.name, description: String(n), forms: [] };
         process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\\n');
       }
-    `);
+    `,
+    );
     await f.manager.install('example');
-    for (const id of ['a', 'b']) f.db.run('INSERT INTO source_instances (id, plugin_id, source_type, name, config_json, enabled, created_at) VALUES (?, ?, ?, ?, ?, 1, 0)', id, 'test.plugin', 'test', id, '{}');
+    for (const id of ['a', 'b'])
+      f.db.run(
+        'INSERT INTO source_instances (id, plugin_id, source_type, name, config_json, enabled, created_at) VALUES (?, ?, ?, ?, ?, 1, 0)',
+        id,
+        'test.plugin',
+        'test',
+        id,
+        '{}',
+      );
     await f.manager.sourcePage('a', 'settings', 'admin', 'save', { count: 10 });
     assert.equal((await f.manager.sourcePage('b', 'settings', 'admin')).description, '0');
     await assert.rejects(f.manager.page('test.plugin', 'settings', 'admin'), { code: 'PAGE_NOT_FOUND' });
@@ -328,7 +458,9 @@ test('source extension pages and schedules isolate instances, persist and skip p
     await Promise.all([f.manager.runTasks(1000), f.manager.runTasks(1000)]);
     assert.equal((await f.manager.sourcePage('a', 'settings', 'admin')).description, '11');
     assert.equal((await f.manager.sourcePage('b', 'settings', 'admin')).description, '1');
-    await f.manager.close(); const restarted = f.restart(); await restarted.loadInstalled();
+    await f.manager.close();
+    const restarted = f.restart();
+    await restarted.loadInstalled();
     await restarted.runTasks(2000);
     assert.equal((await restarted.sourcePage('a', 'settings', 'admin')).description, '11');
     f.db.run('UPDATE source_instances SET enabled = 0 WHERE id = ?', 'a');
@@ -339,62 +471,101 @@ test('source extension pages and schedules isolate instances, persist and skip p
     await restarted.runTasks(800000);
     await assert.rejects(restarted.sourcePage('b', 'settings', 'admin'), { code: 'SOURCE_NOT_FOUND' });
     assert.equal(f.db.all('SELECT key FROM plugin_storage WHERE key LIKE ?', 'source-task:%').length, 2);
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });
 
-for (const failure of ['runtime', 'configuration', 'capabilities', 'database'] as const) test(`failed ${failure} validation or switch preserves the installed plugin`, async () => {
-  const f = await fixture();
-  try {
-    await f.package(); await f.manager.install('example');
-    f.db.run("INSERT INTO source_instances (id, plugin_id, source_type, name, config_json, enabled, created_at) VALUES ('keep', 'test.plugin', 'test', 'Keep', '{}', 1, 0)");
-    const old = f.registry.require('test.plugin', 'test').provider;
-    assert.equal((await old.detail(context(), 'book')).title, 'Book');
-    const directory = await f.package('update');
-    const path = join(directory, 'plugin.json'), manifest = JSON.parse(await readFile(path, 'utf8'));
-    manifest.version = '2.0.0';
-    if (failure === 'capabilities') manifest.sourceTypes[0].id = 'other';
-    await writeFile(path, JSON.stringify(manifest));
-    if (failure === 'runtime') await writeFile(join(directory, 'main.mjs'), 'process.exit(1)');
-    if (failure === 'configuration') await writeFile(join(directory, 'main.mjs'), WORKER.replace("const result =", "if(request.method === 'validateConfig') { process.stdout.write(JSON.stringify({jsonrpc:'2.0', id:request.id, error:{code:'INVALID_CONFIG',message:'saved configuration rejected'}})+'\\n'); return; } const result ="));
-    if (failure === 'database') f.db.run("CREATE TRIGGER reject_upgrade BEFORE UPDATE ON installed_plugins BEGIN SELECT RAISE(ABORT, 'test upgrade write failure'); END");
-    await assert.rejects(f.manager.install('update', { replace: true }));
-    assert.equal(f.manager.list().find(plugin => plugin.pluginId === 'test.plugin')?.version, '1.0.0');
-    assert.equal(f.db.get<{folder: string}>("SELECT folder FROM installed_plugins WHERE plugin_id = 'test.plugin'")?.folder, 'example');
-    assert.equal(f.registry.require('test.plugin', 'test').provider, old);
-    assert.equal((await old.detail(context(), 'book')).title, 'Book');
-  } finally { await f.dispose(); }
-});
+for (const failure of ['runtime', 'configuration', 'capabilities', 'database'] as const)
+  test(`failed ${failure} validation or switch preserves the installed plugin`, async () => {
+    const f = await fixture();
+    try {
+      await f.package();
+      await f.manager.install('example');
+      f.db.run(
+        "INSERT INTO source_instances (id, plugin_id, source_type, name, config_json, enabled, created_at) VALUES ('keep', 'test.plugin', 'test', 'Keep', '{}', 1, 0)",
+      );
+      const old = f.registry.require('test.plugin', 'test').provider;
+      assert.equal((await old.detail(context(), 'book')).title, 'Book');
+      const directory = await f.package('update');
+      const path = join(directory, 'plugin.json'),
+        manifest = JSON.parse(await readFile(path, 'utf8'));
+      manifest.version = '2.0.0';
+      if (failure === 'capabilities') manifest.sourceTypes[0].id = 'other';
+      await writeFile(path, JSON.stringify(manifest));
+      if (failure === 'runtime') await writeFile(join(directory, 'main.mjs'), 'process.exit(1)');
+      if (failure === 'configuration')
+        await writeFile(
+          join(directory, 'main.mjs'),
+          WORKER.replace(
+            'const result =',
+            "if(request.method === 'validateConfig') { process.stdout.write(JSON.stringify({jsonrpc:'2.0', id:request.id, error:{code:'INVALID_CONFIG',message:'saved configuration rejected'}})+'\\n'); return; } const result =",
+          ),
+        );
+      if (failure === 'database')
+        f.db.run(
+          "CREATE TRIGGER reject_upgrade BEFORE UPDATE ON installed_plugins BEGIN SELECT RAISE(ABORT, 'test upgrade write failure'); END",
+        );
+      await assert.rejects(f.manager.install('update', { replace: true }));
+      assert.equal(f.manager.list().find((plugin) => plugin.pluginId === 'test.plugin')?.version, '1.0.0');
+      assert.equal(
+        f.db.get<{ folder: string }>("SELECT folder FROM installed_plugins WHERE plugin_id = 'test.plugin'")?.folder,
+        'example',
+      );
+      assert.equal(f.registry.require('test.plugin', 'test').provider, old);
+      assert.equal((await old.detail(context(), 'book')).title, 'Book');
+    } finally {
+      await f.dispose();
+    }
+  });
 
 test('upgrade refuses in-flight operations and invalidates old provider references after a successful switch', async () => {
   const f = await fixture();
   try {
-    await f.package(); await f.manager.install('example');
+    await f.package();
+    await f.manager.install('example');
     const directory = await f.package('update');
-    const path = join(directory, 'plugin.json'), manifest = JSON.parse(await readFile(path, 'utf8'));
-    manifest.version = '2.0.0'; await writeFile(path, JSON.stringify(manifest));
+    const path = join(directory, 'plugin.json'),
+      manifest = JSON.parse(await readFile(path, 'utf8'));
+    manifest.version = '2.0.0';
+    await writeFile(path, JSON.stringify(manifest));
     const provider = f.registry.require('test.plugin', 'test').provider;
     const controller = new AbortController();
-    const pending = assert.rejects(provider.detail({ ...context(), signal: controller.signal }, 'hang'), { code: 'PLUGIN_CANCELLED' });
+    const pending = assert.rejects(provider.detail({ ...context(), signal: controller.signal }, 'hang'), {
+      code: 'PLUGIN_CANCELLED',
+    });
     await assert.rejects(f.manager.install('update', { replace: true }), { code: 'PLUGIN_BUSY' });
-    assert.equal(f.manager.list().find(plugin => plugin.pluginId === 'test.plugin')?.runtime?.state, 'running');
-    controller.abort(); await pending;
+    assert.equal(f.manager.list().find((plugin) => plugin.pluginId === 'test.plugin')?.runtime?.state, 'running');
+    controller.abort();
+    await pending;
     const result = await f.manager.install('update', { replace: true });
     assert.equal(result.version, '2.0.0');
     await assert.rejects(provider.detail(context(), 'book'), { code: 'PLUGIN_UNAVAILABLE' });
     assert.equal((await f.registry.require('test.plugin', 'test').provider.detail(context(), 'book')).title, 'Book');
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });
 
 test('a disabled plugin can be upgraded and enabled after restarting the manager', async () => {
   const f = await fixture();
   try {
-    await f.package(); await f.manager.install('example'); await f.manager.setEnabled('test.plugin', false);
-    await f.manager.close(); const manager = f.restart(); await manager.loadInstalled();
+    await f.package();
+    await f.manager.install('example');
+    await f.manager.setEnabled('test.plugin', false);
+    await f.manager.close();
+    const manager = f.restart();
+    await manager.loadInstalled();
     const directory = await f.package('update');
-    const path = join(directory, 'plugin.json'), manifest = JSON.parse(await readFile(path, 'utf8'));
-    manifest.version = '2.0.0'; await writeFile(path, JSON.stringify(manifest));
+    const path = join(directory, 'plugin.json'),
+      manifest = JSON.parse(await readFile(path, 'utf8'));
+    manifest.version = '2.0.0';
+    await writeFile(path, JSON.stringify(manifest));
     const result = await manager.install('update', { replace: true });
-    assert.equal(result.version, '2.0.0'); assert.equal(result.enabled, true);
+    assert.equal(result.version, '2.0.0');
+    assert.equal(result.enabled, true);
     assert.equal((await f.registry.require('test.plugin', 'test').provider.detail(context(), 'book')).title, 'Book');
-  } finally { await f.dispose(); }
+  } finally {
+    await f.dispose();
+  }
 });

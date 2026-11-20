@@ -4,7 +4,10 @@ export class AuthRateLimiter {
   private readonly buckets = new Map<string, { count: number; expiresAt: number }>();
   private nextSweep = 0;
 
-  constructor(private readonly now = Date.now, private readonly capacity = 10_000) {}
+  constructor(
+    private readonly now = Date.now,
+    private readonly capacity = 10_000,
+  ) {}
 
   consume(key: string, limit: number, windowMs: number): void {
     const now = this.now();
@@ -35,7 +38,10 @@ export class AuthWorkLimiter {
   async run<Result>(work: () => Promise<Result>): Promise<Result> {
     if (this.active >= this.capacity) throw new RateLimitError(1, 'AUTH_BUSY');
     this.active += 1;
-    try { return await work(); }
-    finally { this.active -= 1; }
+    try {
+      return await work();
+    } finally {
+      this.active -= 1;
+    }
   }
 }

@@ -6,33 +6,47 @@ import type { PdfRenderer, PdfSource } from './types.ts';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
-export async function openPdf(source: Uint8Array | PdfSource, signal?: AbortSignal): Promise<{ document: PDFDocumentProxy; renderer: PdfRenderer }> {
+export async function openPdf(
+  source: Uint8Array | PdfSource,
+  signal?: AbortSignal,
+): Promise<{ document: PDFDocumentProxy; renderer: PdfRenderer }> {
   signal?.throwIfAborted();
   const controller = new AbortController();
   let failRange: (error: unknown) => void = () => undefined;
-  const rangeFailure = new Promise<never>((_resolve, reject) => { failRange = reject; });
+  const rangeFailure = new Promise<never>((_resolve, reject) => {
+    failRange = reject;
+  });
   class RangeTransport extends PDFDataRangeTransport {
     override requestDataRange(begin: number, end: number): void {
       if (source instanceof Uint8Array) return;
-      void source.readRange(begin, end, controller.signal).then(bytes => {
-        if (!controller.signal.aborted) this.onDataRange(begin, bytes);
-      }).catch(error => {
-        if (controller.signal.aborted) return;
-        failRange(error);
-        abort();
-      });
+      void source
+        .readRange(begin, end, controller.signal)
+        .then((bytes) => {
+          if (!controller.signal.aborted) this.onDataRange(begin, bytes);
+        })
+        .catch((error) => {
+          if (controller.signal.aborted) return;
+          failRange(error);
+          abort();
+        });
     }
-    override abort(): void { controller.abort(); }
+    override abort(): void {
+      controller.abort();
+    }
   }
   const assets = new URL(`${import.meta.env.BASE_URL}pdfjs/`, document.baseURI).href;
   const task = getDocument({
-    ...(source instanceof Uint8Array ? { data: source.slice() } : { range: new RangeTransport(source.length, new Uint8Array(), true) }),
+    ...(source instanceof Uint8Array
+      ? { data: source.slice() }
+      : { range: new RangeTransport(source.length, new Uint8Array(), true) }),
     rangeChunkSize: 64 * 1024,
     disableStream: true,
     disableAutoFetch: true,
-    cMapUrl: `${assets}cmaps/`, cMapPacked: true,
+    cMapUrl: `${assets}cmaps/`,
+    cMapPacked: true,
     standardFontDataUrl: `${assets}standard_fonts/`,
-    wasmUrl: `${assets}wasm/`, enableXfa: false,
+    wasmUrl: `${assets}wasm/`,
+    enableXfa: false,
   });
   const abort = () => {
     if (controller.signal.aborted) return;
@@ -66,9 +80,13 @@ export async function openPdf(source: Uint8Array | PdfSource, signal?: AbortSign
     const previousTask = renderTask;
     const previousPage = currentPage;
     previousTask?.cancel();
-    if (previousTask && previousPage) void previousTask.promise.catch(() => undefined).then(() => previousPage.cleanup());
+    if (previousTask && previousPage)
+      void previousTask.promise.catch(() => undefined).then(() => previousPage.cleanup());
     textLayer?.cancel();
-    if (canvas) { canvas.width = 0; canvas.height = 0; }
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
     currentPage?.cleanup();
     currentPage = undefined;
   };
@@ -77,7 +95,10 @@ export async function openPdf(source: Uint8Array | PdfSource, signal?: AbortSign
       cancel();
       const active = generation;
       const page = await pdf.getPage(pageNumber);
-      if (active !== generation || controller.signal.aborted) { page.cleanup(); return; }
+      if (active !== generation || controller.signal.aborted) {
+        page.cleanup();
+        return;
+      }
       currentPage = page;
       container.classList.add('pdf-page');
       const style = document.createElement('style');
@@ -97,8 +118,15 @@ export async function openPdf(source: Uint8Array | PdfSource, signal?: AbortSign
         const height = Math.max(1, container.clientHeight);
         const scale = fit === 'width' ? width / base.width : Math.min(width / base.width, height / base.height);
         const viewport = page.getViewport({ scale });
-        const outputScale = Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(16_000_000 / (viewport.width * viewport.height)));
-        if (canvas) { canvas.width = 0; canvas.height = 0; }
+        const outputScale = Math.min(
+          window.devicePixelRatio || 1,
+          2,
+          Math.sqrt(16_000_000 / (viewport.width * viewport.height)),
+        );
+        if (canvas) {
+          canvas.width = 0;
+          canvas.height = 0;
+        }
         canvas = document.createElement('canvas');
         canvas.setAttribute('aria-label', `第 ${pageNumber} 页`);
         canvas.width = Math.ceil(viewport.width * outputScale);
@@ -117,7 +145,7 @@ export async function openPdf(source: Uint8Array | PdfSource, signal?: AbortSign
         textLayer = new TextLayer({ textContentSource: page.streamTextContent(), container: text, viewport });
         await textLayer.render();
       };
-      await draw().catch(error => {
+      await draw().catch((error) => {
         if (active === generation && error?.name !== 'RenderingCancelledException') throw error;
       });
       if (active !== generation) return;
@@ -128,8 +156,9 @@ export async function openPdf(source: Uint8Array | PdfSource, signal?: AbortSign
         lastSize = nextSize;
         if (frame !== undefined) cancelAnimationFrame(frame);
         frame = requestAnimationFrame(() => {
-          void draw().catch(error => {
-            if (active === generation && error?.name !== 'RenderingCancelledException') container.textContent = 'PDF 页面渲染失败，请重新打开';
+          void draw().catch((error) => {
+            if (active === generation && error?.name !== 'RenderingCancelledException')
+              container.textContent = 'PDF 页面渲染失败，请重新打开';
           });
         });
       });

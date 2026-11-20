@@ -12,7 +12,12 @@ import { saveCover } from '../indexer/metadata.ts';
 import { AppError, badRequest } from '../lib/errors.ts';
 import { resolveInside } from '../lib/paths.ts';
 import type {
-  Acquisition, AcquireRequest, CatalogEntry, ResourceResponse, SourceContext, SourceProvider,
+  Acquisition,
+  AcquireRequest,
+  CatalogEntry,
+  ResourceResponse,
+  SourceContext,
+  SourceProvider,
 } from './types.ts';
 
 export const MAX_ACQUISITION_BYTES = 256 * 1024 * 1024;
@@ -69,11 +74,15 @@ export class FileAcquisitions {
     // Serialize instead of sharing promises: one caller's cancellation must not
     // cancel another caller's download. The successor reuses a committed file.
     const previous = this.queues.get(key) ?? Promise.resolve();
-    const result = previous.catch(() => undefined).then(() => this.importFile(provider, context, request, acquisition, entry));
+    const result = previous
+      .catch(() => undefined)
+      .then(() => this.importFile(provider, context, request, acquisition, entry));
     this.queues.set(key, result);
-    void result.finally(() => {
-      if (this.queues.get(key) === result) this.queues.delete(key);
-    }).catch(() => undefined);
+    void result
+      .finally(() => {
+        if (this.queues.get(key) === result) this.queues.delete(key);
+      })
+      .catch(() => undefined);
     return result;
   }
 
@@ -90,7 +99,10 @@ export class FileAcquisitions {
       `SELECT a.book_id, f.rel_path FROM source_acquisitions a
        JOIN acquired_files f ON f.book_id = a.book_id
        WHERE a.source_id = ? AND a.user_id = ? AND a.entry_ref = ? AND a.option_id = ?`,
-      context.instance.id, context.userId, request.entryRef, request.optionId ?? '',
+      context.instance.id,
+      context.userId,
+      request.entryRef,
+      request.optionId ?? '',
     );
     if (existing && existsSync(resolveInside(this.config.dataDir, existing.rel_path))) {
       this.addToShelf(context.userId, existing.book_id, Date.now());
@@ -119,18 +131,24 @@ export class FileAcquisitions {
         throw badRequest('download media type does not match its acquisition', 'INVALID_RESOURCE');
       }
       if (resource.size !== undefined && resource.size > this.maxBytes) throw tooLarge();
-      const bodies = Number(resource.data !== undefined) + Number(resource.text !== undefined) + Number(resource.stream !== undefined);
+      const bodies =
+        Number(resource.data !== undefined) +
+        Number(resource.text !== undefined) +
+        Number(resource.stream !== undefined);
       if (bodies !== 1) throw badRequest('download must contain exactly one body', 'INVALID_RESOURCE');
-      const input = resource.stream ?? Readable.from([
-        resource.data !== undefined ? resource.data : Buffer.from(resource.text!, 'utf8'),
-      ]);
+      const input =
+        resource.stream ??
+        Readable.from([resource.data !== undefined ? resource.data : Buffer.from(resource.text!, 'utf8')]);
       let size = 0;
       const hash = createHash('sha256');
       const maximum = this.maxBytes;
       const limit = new Transform({
         transform(chunk: Buffer, _encoding, callback) {
           size += chunk.byteLength;
-          if (size > maximum) { callback(tooLarge()); return; }
+          if (size > maximum) {
+            callback(tooLarge());
+            return;
+          }
           hash.update(chunk);
           callback(null, chunk);
         },
@@ -139,13 +157,15 @@ export class FileAcquisitions {
       signal.throwIfAborted();
       if (size === 0) throw badRequest('download is empty', 'INVALID_RESOURCE');
       const bytes = await readFile(temporaryPath);
-      const filename = basename((acquisition.filename ?? resource.filename ?? `${entry.title}.${extension}`).replaceAll('\\', '/'));
+      const filename = basename(
+        (acquisition.filename ?? resource.filename ?? `${entry.title}.${extension}`).replaceAll('\\', '/'),
+      );
       const displayName = `${filename.slice(0, filename.length - extname(filename).length)}.${extension}`;
       const parseContext = { relPath: displayName, absPath: temporaryPath };
       if (type === 'application/pdf' && !bytes.subarray(0, 1024).includes(Buffer.from('%PDF-'))) {
         throw badRequest('download is not a PDF', 'INVALID_RESOURCE');
       }
-      if (handler.matches && !await handler.matches(parseContext, bytes.subarray(0, 4096))) {
+      if (handler.matches && !(await handler.matches(parseContext, bytes.subarray(0, 4096)))) {
         throw badRequest('download does not match its format', 'INVALID_RESOURCE');
       }
       const parsed = await handler.parse(parseContext, bytes);
@@ -173,18 +193,29 @@ export class FileAcquisitions {
           this.db.run(
             `INSERT INTO acquired_files (book_id, rel_path, size) VALUES (?, ?, ?)
              ON CONFLICT(book_id) DO UPDATE SET rel_path = excluded.rel_path, size = excluded.size`,
-            bookId, relPath, size,
+            bookId,
+            relPath,
+            size,
           );
         }
         this.db.run(
           `INSERT INTO source_acquisitions (source_id, user_id, entry_ref, option_id, book_id) VALUES (?, ?, ?, ?, ?)
            ON CONFLICT(source_id, user_id, entry_ref, option_id) DO UPDATE SET book_id = excluded.book_id`,
-          context.instance.id, context.userId, request.entryRef, request.optionId ?? '', bookId,
+          context.instance.id,
+          context.userId,
+          request.entryRef,
+          request.optionId ?? '',
+          bookId,
         );
         this.addToShelf(context.userId, bookId, now);
       });
-      keepFile = this.db.get<{ rel_path: string }>('SELECT rel_path FROM acquired_files WHERE book_id = ?', bookId)?.rel_path === relPath;
-      keepCover = coverPath !== undefined && this.db.get<{ cover_path: string | null }>('SELECT cover_path FROM books WHERE id = ?', bookId)?.cover_path === coverPath;
+      keepFile =
+        this.db.get<{ rel_path: string }>('SELECT rel_path FROM acquired_files WHERE book_id = ?', bookId)?.rel_path ===
+        relPath;
+      keepCover =
+        coverPath !== undefined &&
+        this.db.get<{ cover_path: string | null }>('SELECT cover_path FROM books WHERE id = ?', bookId)?.cover_path ===
+          coverPath;
       return bookId;
     } finally {
       resource?.stream?.destroy();
@@ -198,13 +229,21 @@ export class FileAcquisitions {
     this.db.run(
       `INSERT INTO user_books (user_id, book_id, added_at, hidden) VALUES (?, ?, ?, 0)
        ON CONFLICT(user_id, book_id) DO UPDATE SET hidden = 0`,
-      userId, bookId, now,
+      userId,
+      bookId,
+      now,
     );
   }
 
   private insertBook(
-    bookId: string, parsed: ParsedSource, contentHash: string, size: number,
-    coverPath: string | undefined, entry: CatalogEntry, context: SourceContext, now: number,
+    bookId: string,
+    parsed: ParsedSource,
+    contentHash: string,
+    size: number,
+    coverPath: string | undefined,
+    entry: CatalogEntry,
+    context: SourceContext,
+    now: number,
   ): void {
     const m = parsed.metadata;
     const embedded = m.source === 'embedded';
@@ -213,13 +252,27 @@ export class FileAcquisitions {
       `INSERT OR IGNORE INTO books (id, identifier, content_hash, format, title, author, publisher, language,
        isbn, description, series, series_index, tags, pubdate, cover_path, file_size, page_count, meta_json,
        source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      bookId, m.identifier, contentHash, parsed.format,
+      bookId,
+      m.identifier,
+      contentHash,
+      parsed.format,
       (embedded ? m.title : entry.title) || m.title || entry.title,
-      m.author || entry.authors?.join(', ') || '', m.publisher, m.language || entry.language || '',
-      m.isbn, m.description || entry.description || '', m.series, m.seriesIndex,
-      JSON.stringify(m.tags), m.pubdate || entry.publishedAt || '', coverPath ?? null, size,
-      parsed.pageCount, JSON.stringify({ ...m.raw, kind: parsed.kind }),
-      embedded ? m.source : `provider:${context.instance.pluginId}`, now, now,
+      m.author || entry.authors?.join(', ') || '',
+      m.publisher,
+      m.language || entry.language || '',
+      m.isbn,
+      m.description || entry.description || '',
+      m.series,
+      m.seriesIndex,
+      JSON.stringify(m.tags),
+      m.pubdate || entry.publishedAt || '',
+      coverPath ?? null,
+      size,
+      parsed.pageCount,
+      JSON.stringify({ ...m.raw, kind: parsed.kind }),
+      embedded ? m.source : `provider:${context.instance.pluginId}`,
+      now,
+      now,
     );
   }
 }

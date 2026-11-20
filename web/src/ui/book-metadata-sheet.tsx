@@ -43,17 +43,34 @@ export function fieldText(book: Book, key: BookMetadataField): string {
 }
 
 /** Only what changed is sent, so saving one field does not pin every other one as manual. */
-export function metadataPatch(book: Book, values: Partial<Record<BookMetadataField, string>>): Partial<Record<BookMetadataField, string | string[]>> {
+export function metadataPatch(
+  book: Book,
+  values: Partial<Record<BookMetadataField, string>>,
+): Partial<Record<BookMetadataField, string | string[]>> {
   const patch: Partial<Record<BookMetadataField, string | string[]>> = {};
   for (const [key, raw] of Object.entries(values) as Array<[BookMetadataField, string]>) {
     const value = raw.trim();
     if (value === fieldText(book, key).trim()) continue;
-    patch[key] = key === 'tags' ? value.split(/[,，、]/).map(tag => tag.trim()).filter(Boolean) : value;
+    patch[key] =
+      key === 'tags'
+        ? value
+            .split(/[,，、]/)
+            .map((tag) => tag.trim())
+            .filter(Boolean)
+        : value;
   }
   return patch;
 }
 
-export function BookMetadataSheet({ bookId, onClose, onSaved }: { bookId: string; onClose(): void; onSaved?(book: Book): void }): JSX.Element {
+export function BookMetadataSheet({
+  bookId,
+  onClose,
+  onSaved,
+}: {
+  bookId: string;
+  onClose(): void;
+  onSaved?(book: Book): void;
+}): JSX.Element {
   const { api } = useRuntime();
   const [book, setBook] = useState<Book | null>(null);
   const [values, setValues] = useState<Partial<Record<BookMetadataField, string>>>({});
@@ -62,9 +79,15 @@ export function BookMetadataSheet({ bookId, onClose, onSaved }: { bookId: string
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
-    api.getBook(bookId, { signal: controller.signal })
-      .then(({ book }) => { setBook(book); setValues({}); })
-      .catch(reason => { if (!controller.signal.aborted) setLoadError(reason); });
+    api
+      .getBook(bookId, { signal: controller.signal })
+      .then(({ book }) => {
+        setBook(book);
+        setValues({});
+      })
+      .catch((reason) => {
+        if (!controller.signal.aborted) setLoadError(reason);
+      });
     return () => controller.abort();
   }, [api, bookId]);
 
@@ -72,54 +95,149 @@ export function BookMetadataSheet({ bookId, onClose, onSaved }: { bookId: string
   const dirty = Object.keys(patch).length > 0;
   const titleBlank = !!book && (values.title ?? book.title).trim() === '';
   const indexInvalid = !!book && !!values.seriesIndex?.trim() && !Number.isFinite(Number(values.seriesIndex.trim()));
-  const applied = (next: Book, message: string) => { setBook(next); setValues({}); onSaved?.(next); notify(message, { kind: 'success' }); };
+  const applied = (next: Book, message: string) => {
+    setBook(next);
+    setValues({});
+    onSaved?.(next);
+    notify(message, { kind: 'success' });
+  };
 
   const save = async () => {
     if (!book || !dirty || titleBlank || indexInvalid) return;
-    setBusy(true); setError('');
+    setBusy(true);
+    setError('');
     try {
       applied(await api.updateBookMetadata(book.id, patch), '书籍信息已保存');
       onClose();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '保存失败，请重试'); }
-    finally { setBusy(false); }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '保存失败，请重试');
+    } finally {
+      setBusy(false);
+    }
   };
   const restore = async (key: BookMetadataField, label: string) => {
     if (!book) return;
-    setBusy(true); setError('');
+    setBusy(true);
+    setError('');
     try {
       const next = await api.clearBookMetadata(book.id, key);
       // The input follows the restored value; other unsaved edits stay as typed.
-      setValues(current => { const rest = { ...current }; delete rest[key]; return rest; });
-      setBook(next); onSaved?.(next); notify(`已恢复${label}为文件中的值`, { kind: 'success' });
-    } catch (reason) { setError(reason instanceof Error ? reason.message : '恢复失败，请重试'); }
-    finally { setBusy(false); }
+      setValues((current) => {
+        const rest = { ...current };
+        delete rest[key];
+        return rest;
+      });
+      setBook(next);
+      onSaved?.(next);
+      notify(`已恢复${label}为文件中的值`, { kind: 'success' });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '恢复失败，请重试');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  return <Sheet title="编辑信息" subtitle={book ? `《${book.title}》` : undefined} busy={busy} onClose={onClose}
-    footer={<><Button onClick={onClose} disabled={busy}>取消</Button><Button className="primary" type="submit" form="book-metadata-form" disabled={!dirty || busy || titleBlank || indexInvalid}>{busy ? '正在保存…' : '保存'}</Button></>}>
-    {!book && !loadError && <p className="muted" role="status">正在读取书籍信息…</p>}
-    {loadError != null && <Callout tone="error">{describeError(loadError)}</Callout>}
-    {book && <form id="book-metadata-form" className="sheet-form book-metadata-form" onSubmit={event => { event.preventDefault(); void save(); }}>
-      <p className="muted">{book.format === 'chapters' ? '保存为手动值，之后的更新不会覆盖。' : '保存后对所有读者生效，重新扫描不会覆盖。'}</p>
-      {FIELDS.map(({ key, label, wide, hint, numeric }) => {
-        const manual = book.manualFields.includes(key);
-        const value = values[key] ?? fieldText(book, key);
-        const set = (next: string) => setValues(current => ({ ...current, [key]: next }));
-        return <label className={'sheet-field' + (wide ? ' is-wide' : '')} key={key}>
-          <span className="book-metadata-label">{label}{manual && <>
-            <span className="manager-badge">已手动修改</span>
-            <button type="button" className="book-metadata-restore" disabled={busy} onClick={event => { event.preventDefault(); void restore(key, label); }}>恢复</button>
-          </>}</span>
-          {wide
-            ? <textarea rows={5} value={value} disabled={busy} maxLength={32000} onChange={event => set(event.currentTarget.value)} />
-            : <input type="text" value={value} disabled={busy} maxLength={key === 'title' ? 500 : 2000} inputMode={numeric ? 'decimal' : undefined}
-              aria-invalid={(key === 'title' && titleBlank) || (key === 'seriesIndex' && indexInvalid) || undefined} onChange={event => set(event.currentTarget.value)} />}
-          {key === 'title' && titleBlank ? <small role="alert">书名不能为空</small>
-            : key === 'seriesIndex' && indexInvalid ? <small role="alert">请输入数字，例如 1 或 2.5</small>
-            : hint && <small>{hint}</small>}
-        </label>;
-      })}
-      {error && <Callout tone="error">{error}</Callout>}
-    </form>}
-  </Sheet>;
+  return (
+    <Sheet
+      title="编辑信息"
+      subtitle={book ? `《${book.title}》` : undefined}
+      busy={busy}
+      onClose={onClose}
+      footer={
+        <>
+          <Button onClick={onClose} disabled={busy}>
+            取消
+          </Button>
+          <Button
+            className="primary"
+            type="submit"
+            form="book-metadata-form"
+            disabled={!dirty || busy || titleBlank || indexInvalid}
+          >
+            {busy ? '正在保存…' : '保存'}
+          </Button>
+        </>
+      }
+    >
+      {!book && !loadError && (
+        <p className="muted" role="status">
+          正在读取书籍信息…
+        </p>
+      )}
+      {loadError != null && <Callout tone="error">{describeError(loadError)}</Callout>}
+      {book && (
+        <form
+          id="book-metadata-form"
+          className="sheet-form book-metadata-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+        >
+          <p className="muted">
+            {book.format === 'chapters'
+              ? '保存为手动值，之后的更新不会覆盖。'
+              : '保存后对所有读者生效，重新扫描不会覆盖。'}
+          </p>
+          {FIELDS.map(({ key, label, wide, hint, numeric }) => {
+            const manual = book.manualFields.includes(key);
+            const value = values[key] ?? fieldText(book, key);
+            const set = (next: string) => setValues((current) => ({ ...current, [key]: next }));
+            return (
+              <label className={'sheet-field' + (wide ? ' is-wide' : '')} key={key}>
+                <span className="book-metadata-label">
+                  {label}
+                  {manual && (
+                    <>
+                      <span className="manager-badge">已手动修改</span>
+                      <button
+                        type="button"
+                        className="book-metadata-restore"
+                        disabled={busy}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          void restore(key, label);
+                        }}
+                      >
+                        恢复
+                      </button>
+                    </>
+                  )}
+                </span>
+                {wide ? (
+                  <textarea
+                    rows={5}
+                    value={value}
+                    disabled={busy}
+                    maxLength={32000}
+                    onChange={(event) => set(event.currentTarget.value)}
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    value={value}
+                    disabled={busy}
+                    maxLength={key === 'title' ? 500 : 2000}
+                    inputMode={numeric ? 'decimal' : undefined}
+                    aria-invalid={
+                      (key === 'title' && titleBlank) || (key === 'seriesIndex' && indexInvalid) || undefined
+                    }
+                    onChange={(event) => set(event.currentTarget.value)}
+                  />
+                )}
+                {key === 'title' && titleBlank ? (
+                  <small role="alert">书名不能为空</small>
+                ) : key === 'seriesIndex' && indexInvalid ? (
+                  <small role="alert">请输入数字，例如 1 或 2.5</small>
+                ) : (
+                  hint && <small>{hint}</small>
+                )}
+              </label>
+            );
+          })}
+          {error && <Callout tone="error">{error}</Callout>}
+        </form>
+      )}
+    </Sheet>
+  );
 }

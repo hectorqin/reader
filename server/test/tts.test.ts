@@ -32,7 +32,7 @@ import { UserService } from '../src/services/users.ts';
 import { ShelfService } from '../src/services/shelf.ts';
 import { SyncService } from '../src/services/sync.ts';
 import { TtsService } from '../src/services/tts.ts';
-import {BusinessSettings} from '../src/services/business-settings.ts';
+import { BusinessSettings } from '../src/services/business-settings.ts';
 import { BrowseService } from '../src/services/browse.ts';
 import { buildApp } from '../src/http/app.ts';
 import type { AppContext } from '../src/http/context.ts';
@@ -58,9 +58,22 @@ function startUpstream(): Promise<void> {
         res.end(JSON.stringify([{ id: 'zh-CN-XiaoxiaoNeural', name: '晓晓', lang: 'zh-CN' }]));
         return;
       }
-      if (upstreamBehaviour === 'empty') { res.writeHead(200, { 'content-type': 'audio/mpeg' }); res.end(); return; }
-      if (upstreamBehaviour === 'auth') { res.writeHead(401); res.end(); return; }
-      if (upstreamBehaviour === 'slow') { res.writeHead(200, { 'content-type': 'audio/mpeg' }); res.flushHeaders(); setTimeout(() => res.end('audio'), 200); return; }
+      if (upstreamBehaviour === 'empty') {
+        res.writeHead(200, { 'content-type': 'audio/mpeg' });
+        res.end();
+        return;
+      }
+      if (upstreamBehaviour === 'auth') {
+        res.writeHead(401);
+        res.end();
+        return;
+      }
+      if (upstreamBehaviour === 'slow') {
+        res.writeHead(200, { 'content-type': 'audio/mpeg' });
+        res.flushHeaders();
+        setTimeout(() => res.end('audio'), 200);
+        return;
+      }
       if (upstreamBehaviour === 'html') {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
         res.end('<html><body>not audio</body></html>');
@@ -93,8 +106,17 @@ async function buildInstance(): Promise<void> {
   const config = loadConfig();
   const db = openDatabase(config);
   // Each case supplies its desired fixture explicitly; production imports env only once.
-  const settings=new BusinessSettings(db,config);
-  settings.save('tts',{enabled:!!process.env.TTS_URL,url:process.env.TTS_URL||'',voicesUrl:process.env.TTS_VOICES_URL||'',cacheMaxBytes:0},settings.view('tts').revision);
+  const settings = new BusinessSettings(db, config);
+  settings.save(
+    'tts',
+    {
+      enabled: !!process.env.TTS_URL,
+      url: process.env.TTS_URL || '',
+      voicesUrl: process.env.TTS_VOICES_URL || '',
+      cacheMaxBytes: 0,
+    },
+    settings.view('tts').revision,
+  );
   ctx = {
     config,
     db,
@@ -291,15 +313,38 @@ function auth(): Record<string, string> {
 }
 
 test('diagnostic endpoint synthesizes audio and requires header authentication', async () => {
- const unauth = await app.inject({method:'POST',url:'/api/v1/tts/test',payload:{}}); assert.equal(unauth.statusCode,401);
- const result = await app.inject({method:'POST',url:'/api/v1/tts/test',headers:{authorization:'Bearer '+token},payload:{}});
- assert.equal(result.statusCode,200,result.body); assert.ok(result.json().bytes > 0);
+  const unauth = await app.inject({ method: 'POST', url: '/api/v1/tts/test', payload: {} });
+  assert.equal(unauth.statusCode, 401);
+  const result = await app.inject({
+    method: 'POST',
+    url: '/api/v1/tts/test',
+    headers: { authorization: 'Bearer ' + token },
+    payload: {},
+  });
+  assert.equal(result.statusCode, 200, result.body);
+  assert.ok(result.json().bytes > 0);
 });
-for (const [behaviour,code] of [['empty','TTS_EMPTY'],['auth','TTS_AUTH'],['slow','TTS_TIMEOUT']] as const) {
- test('diagnosis classifies ' + behaviour, async () => {
-  upstreamBehaviour = behaviour;
-  if (behaviour === 'slow') { ctx.tts = new TtsService(ctx.config,{...ctx.settings!.read('tts'),timeoutMs:30}); }
-  try { const result = await app.inject({method:'POST',url:'/api/v1/tts/test',headers:{authorization:'Bearer '+token},payload:{}}); assert.equal(result.statusCode,400,result.body); assert.equal(result.json().error.code,code); }
-  finally { delete process.env.TTS_TIMEOUT_MS; }
- });
+for (const [behaviour, code] of [
+  ['empty', 'TTS_EMPTY'],
+  ['auth', 'TTS_AUTH'],
+  ['slow', 'TTS_TIMEOUT'],
+] as const) {
+  test('diagnosis classifies ' + behaviour, async () => {
+    upstreamBehaviour = behaviour;
+    if (behaviour === 'slow') {
+      ctx.tts = new TtsService(ctx.config, { ...ctx.settings!.read('tts'), timeoutMs: 30 });
+    }
+    try {
+      const result = await app.inject({
+        method: 'POST',
+        url: '/api/v1/tts/test',
+        headers: { authorization: 'Bearer ' + token },
+        payload: {},
+      });
+      assert.equal(result.statusCode, 400, result.body);
+      assert.equal(result.json().error.code, code);
+    } finally {
+      delete process.env.TTS_TIMEOUT_MS;
+    }
+  });
 }

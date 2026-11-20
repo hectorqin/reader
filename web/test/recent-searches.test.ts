@@ -6,7 +6,9 @@ describe('最近搜索', () => {
   beforeEach(() => localStorage.clear());
 
   it('keeps the latest first and a repeated query once', () => {
-    rememberSearch('s', '剑来'); rememberSearch('s', ' 雪中 '); rememberSearch('s', '剑来');
+    rememberSearch('s', '剑来');
+    rememberSearch('s', ' 雪中 ');
+    rememberSearch('s', '剑来');
     expect(readRecentSearches('s')).toEqual(['剑来', '雪中']);
   });
 
@@ -21,7 +23,8 @@ describe('最近搜索', () => {
   });
 
   it('clears', () => {
-    rememberSearch('s', '剑来'); clearRecentSearches('s');
+    rememberSearch('s', '剑来');
+    clearRecentSearches('s');
     expect(readRecentSearches('s')).toEqual([]);
   });
 });

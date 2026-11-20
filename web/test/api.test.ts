@@ -52,7 +52,8 @@ function client(): ApiClient {
 describe('api client', () => {
   test('cover URLs prefer resource credentials and fall back after resource expiry', async () => {
     const api = client();
-    responder = () => json({ accessToken: 'access', resourceToken: 'resource', resourceTokenExpiresAt: Date.now() + 60_000 });
+    responder = () =>
+      json({ accessToken: 'access', resourceToken: 'resource', resourceTokenExpiresAt: Date.now() + 60_000 });
     await api.login('reader', 'password');
     assert.equal(new URL(api.coverUrl('book')).searchParams.get('resource_token'), 'resource');
     responder = () => json({ accessToken: 'access', resourceToken: 'expired', resourceTokenExpiresAt: Date.now() - 1 });
@@ -64,15 +65,22 @@ describe('api client', () => {
 
   test('refreshes resource credentials proactively while the access token is valid', async () => {
     const api = client();
-    responder = url => {
-      if (url.includes('/auth/login')) return json({ accessToken: 'access', resourceToken: 'old', resourceTokenExpiresAt: 0, refreshToken: 'refresh' });
-      if (url.includes('/auth/refresh')) return json({ accessToken: 'renewed', resourceToken: 'new', resourceTokenExpiresAt: Date.now() + 900_000 });
+    responder = (url) => {
+      if (url.includes('/auth/login'))
+        return json({
+          accessToken: 'access',
+          resourceToken: 'old',
+          resourceTokenExpiresAt: 0,
+          refreshToken: 'refresh',
+        });
+      if (url.includes('/auth/refresh'))
+        return json({ accessToken: 'renewed', resourceToken: 'new', resourceTokenExpiresAt: Date.now() + 900_000 });
       return json({ items: [] });
     };
     await api.login('reader', 'password');
     await api.shelf();
     assert.equal(api.currentSession?.resourceToken, 'new');
-    assert.equal(calls.filter(call => call.url.includes('/auth/refresh')).length, 1);
+    assert.equal(calls.filter((call) => call.url.includes('/auth/refresh')).length, 1);
     assert.equal((calls.at(-1)!.init.headers as Record<string, string>).authorization, 'Bearer renewed');
   });
 
@@ -86,7 +94,9 @@ describe('api client', () => {
         return json({ accessToken: 'new', refreshToken: 'r2', accessTokenExpiresAt: 1, refreshTokenExpiresAt: 1 });
       }
       const auth = (calls.at(-1)!.init.headers as Record<string, string>)['authorization'];
-      return auth === 'Bearer new' ? json({ items: [] }) : json({ error: { code: 'TOKEN_EXPIRED', message: 'x' } }, 401);
+      return auth === 'Bearer new'
+        ? json({ items: [] })
+        : json({ error: { code: 'TOKEN_EXPIRED', message: 'x' } }, 401);
     };
 
     await api.login('reader', 'password');
@@ -109,10 +119,17 @@ describe('api client', () => {
       }
       if (url.includes('/auth/refresh')) {
         refreshes += 1;
-        return json({ accessToken: 'new', refreshToken: `r${refreshes + 1}`, accessTokenExpiresAt: 1, refreshTokenExpiresAt: 1 });
+        return json({
+          accessToken: 'new',
+          refreshToken: `r${refreshes + 1}`,
+          accessTokenExpiresAt: 1,
+          refreshTokenExpiresAt: 1,
+        });
       }
       const auth = (calls.at(-1)!.init.headers as Record<string, string>)['authorization'];
-      return auth === 'Bearer new' ? new Response('page', { status: 200 }) : json({ error: { code: 'TOKEN_EXPIRED', message: 'x' } }, 401);
+      return auth === 'Bearer new'
+        ? new Response('page', { status: 200 })
+        : json({ error: { code: 'TOKEN_EXPIRED', message: 'x' } }, 401);
     };
 
     await api.login('reader', 'password');
@@ -139,7 +156,10 @@ describe('api client', () => {
     });
     responder = () => json({ error: { code: 'REFRESH_INVALID', message: 'x' } }, 401);
 
-    await assert.rejects(() => auth.shelf(), (error: unknown) => error instanceof ApiError);
+    await assert.rejects(
+      () => auth.shelf(),
+      (error: unknown) => error instanceof ApiError,
+    );
     assert.equal(signedOut, true);
     void api;
   });

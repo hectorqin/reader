@@ -55,12 +55,12 @@ describe('React Router route tree', () => {
 
   it('keeps channel navigation inside the media layout', () => {
     const matches = matchRoutes(routes, '/media/music/albums');
-    expect(matches?.map(match => match.route.path)).toEqual(['/', 'media', ':channel/:category?']);
+    expect(matches?.map((match) => match.route.path)).toEqual(['/', 'media', ':channel/:category?']);
   });
 
   it('does not route reader pages through the media screen or legacy router', () => {
     const matches = matchRoutes(routes, '/book/book-1');
     expect(matches?.at(-1)?.route.element?.type?.name).toBe('ReaderPage');
-    expect(matches?.some(match => match.route.element?.type?.name === 'MediaScreen')).toBe(false);
+    expect(matches?.some((match) => match.route.element?.type?.name === 'MediaScreen')).toBe(false);
   });
 });

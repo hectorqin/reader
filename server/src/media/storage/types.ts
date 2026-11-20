@@ -19,12 +19,16 @@ export interface ByteRange {
 export interface MediaStorage {
   list(signal?: AbortSignal): AsyncIterable<StorageEntry>;
   stat(ref: string): Promise<StorageEntry>;
-  directUrl?(ref:string):Promise<string>;
+  directUrl?(ref: string): Promise<string>;
   siblingNames(ref: string): Promise<Set<string> | undefined>;
   siblings(ref: string): Promise<StorageEntry[]>;
   /** Only local adapters expose a path to trusted local probing tools. */
   filePath?(ref: string): Promise<string>;
-  open(ref: string, range?: ByteRange, signal?: AbortSignal): Promise<{
+  open(
+    ref: string,
+    range?: ByteRange,
+    signal?: AbortSignal,
+  ): Promise<{
     stream: Readable;
     entry: StorageEntry;
     start: number;
@@ -33,7 +37,10 @@ export interface MediaStorage {
 }
 
 export class StorageError extends Error {
-  constructor(readonly code: 'invalid-ref' | 'unsafe-path' | 'not-file' | 'invalid-range', message: string) {
+  constructor(
+    readonly code: 'invalid-ref' | 'unsafe-path' | 'not-file' | 'invalid-range',
+    message: string,
+  ) {
     super(message);
     this.name = 'StorageError';
   }
@@ -41,5 +48,11 @@ export class StorageError extends Error {
 
 /** An interrupted remote snapshot must not replace previously published metadata. */
 export function isRemoteStorageFailure(error: unknown): boolean {
-  return !!error && typeof error === 'object' && 'code' in error && typeof error.code === 'string' && error.code.startsWith('MEDIA_OPENLIST_');
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    typeof error.code === 'string' &&
+    error.code.startsWith('MEDIA_OPENLIST_')
+  );
 }

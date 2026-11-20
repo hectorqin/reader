@@ -20,21 +20,33 @@ import { expect, it } from 'vitest';
  * by its absence, so it need not exist.
  */
 const src = join(import.meta.dirname, '..', 'src');
-const files = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
-  entry.isDirectory() ? files(join(dir, entry.name)) : [join(dir, entry.name)]);
+const files = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory() ? files(join(dir, entry.name)) : [join(dir, entry.name)],
+  );
 
 it('styles only classes that the source renders', () => {
-  const code = files(src).filter(file => /\.tsx?$/.test(file)).map(file => readFileSync(file, 'utf8')).join('\n');
-  const builtSuffixes = new Set([...code.matchAll(/\$\{[\w.]+\}-([a-z][\w-]*)/g)].map(match => match[1]!));
-  const builtPrefixes = new Set([...code.matchAll(/[`'" ]([a-z][\w-]*-)\$\{/g)].map(match => match[1]!));
+  const code = files(src)
+    .filter((file) => /\.tsx?$/.test(file))
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n');
+  const builtSuffixes = new Set([...code.matchAll(/\$\{[\w.]+\}-([a-z][\w-]*)/g)].map((match) => match[1]!));
+  const builtPrefixes = new Set([...code.matchAll(/[`'" ]([a-z][\w-]*-)\$\{/g)].map((match) => match[1]!));
   const literal = (text: string) => new RegExp(`['"\`]${text}['"\`]`).test(code);
-  const used = (cls: string) => code.includes(cls)
-    || [...builtPrefixes].some(prefix => cls.startsWith(prefix))
-    || [...builtSuffixes].some(suffix => cls.endsWith('-' + suffix) && literal(cls.slice(0, -suffix.length - 1)));
-  const unused = files(src).filter(file => file.endsWith('.css')).flatMap(file => {
-    const css = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/:not\([^)]*\)/g, '');
-    const names = new Set([...css.matchAll(/\.(-?[a-zA-Z_][\w-]*)/g)].map(match => match[1]!));
-    return [...names].filter(cls => !/^(dplayer|notyf)/.test(cls) && !used(cls)).map(cls => `${relative(src, file)}: .${cls}`);
-  });
+  const used = (cls: string) =>
+    code.includes(cls) ||
+    [...builtPrefixes].some((prefix) => cls.startsWith(prefix)) ||
+    [...builtSuffixes].some((suffix) => cls.endsWith('-' + suffix) && literal(cls.slice(0, -suffix.length - 1)));
+  const unused = files(src)
+    .filter((file) => file.endsWith('.css'))
+    .flatMap((file) => {
+      const css = readFileSync(file, 'utf8')
+        .replace(/\/\*[\s\S]*?\*\//g, '')
+        .replace(/:not\([^)]*\)/g, '');
+      const names = new Set([...css.matchAll(/\.(-?[a-zA-Z_][\w-]*)/g)].map((match) => match[1]!));
+      return [...names]
+        .filter((cls) => !/^(dplayer|notyf)/.test(cls) && !used(cls))
+        .map((cls) => `${relative(src, file)}: .${cls}`);
+    });
   expect(unused).toEqual([]);
 });

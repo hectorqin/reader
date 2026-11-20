@@ -17,20 +17,23 @@ import { loadConfig } from '../src/config/index.ts';
 
 const SECRET_ENV = ['READER_TOKEN_SECRET', 'JWT_SECRET'] as const;
 
-test('proxy trust defaults to off and accepts only an explicit allowlist', async t => {
+test('proxy trust defaults to off and accepts only an explicit allowlist', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'reader-proxy-config-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   const vars = { DATA_DIR: join(root, 'data'), BOOKS_DIR: join(root, 'books') };
   await withEnv(vars, () => assert.equal(loadConfig().trustProxy, false));
-  await withEnv({ ...vars, TRUST_PROXY: 'loopback, 192.0.2.10' }, () => assert.deepEqual(loadConfig().trustProxy, ['loopback', '192.0.2.10']));
+  await withEnv({ ...vars, TRUST_PROXY: 'loopback, 192.0.2.10' }, () =>
+    assert.deepEqual(loadConfig().trustProxy, ['loopback', '192.0.2.10']),
+  );
   await withEnv({ ...vars, TRUST_PROXY: 'true' }, () => assert.throws(() => loadConfig(), /TRUST_PROXY/));
 });
 
-test('refuses to start from a backup or incomplete restore directory', async t => {
+test('refuses to start from a backup or incomplete restore directory', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'reader-config-backup-'));
   t.after(() => rm(root, { recursive: true, force: true }));
   for (const marker of ['reader-backup.json', '.reader-backup-incomplete']) {
-    const data = join(root, marker + '-data'); await mkdir(data);
+    const data = join(root, marker + '-data');
+    await mkdir(data);
     await writeFile(join(data, marker), 'marker');
     await withEnv({ DATA_DIR: data, BOOKS_DIR: join(root, 'books') }, () => {
       assert.throws(() => loadConfig(), /backup directory/);
@@ -38,10 +41,7 @@ test('refuses to start from a backup or incomplete restore directory', async t =
   }
 });
 
-async function withEnv(
-  vars: Record<string, string | undefined>,
-  fn: () => Promise<void> | void,
-): Promise<void> {
+async function withEnv(vars: Record<string, string | undefined>, fn: () => Promise<void> | void): Promise<void> {
   const saved = new Map<string, string | undefined>();
   for (const key of [...SECRET_ENV, 'DATA_DIR', 'BOOKS_DIR', 'TRUST_PROXY']) {
     saved.set(key, process.env[key]);

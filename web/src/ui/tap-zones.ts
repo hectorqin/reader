@@ -25,7 +25,7 @@ export const TAP_ACTIONS: ReadonlyArray<{ value: TapAction; label: string; icon:
   { value: 'none', label: '无操作', icon: 'close' },
 ];
 
-const VALID = new Set<string>(TAP_ACTIONS.map(action => action.value));
+const VALID = new Set<string>(TAP_ACTIONS.map((action) => action.value));
 export const TAP_CELLS = 9;
 const CENTER = 4;
 
@@ -43,7 +43,7 @@ export function tapZonePreset(layout: TapZone): TapZoneGrid {
  * their layout across the upgrade.
  */
 export function normalizeTapZones(value: unknown, legacy: TapZone = 'standard'): TapZoneGrid {
-  if (!Array.isArray(value) || value.length !== TAP_CELLS || !value.every(item => VALID.has(item as string))) {
+  if (!Array.isArray(value) || value.length !== TAP_CELLS || !value.every((item) => VALID.has(item as string))) {
     return tapZonePreset(legacy === 'reversed' ? 'reversed' : 'standard');
   }
   const grid = [...value] as TapZoneGrid;
@@ -59,9 +59,9 @@ export function tapActionAt(grid: TapZoneGrid, column: number, row: number, rtl:
 
 /** Whether `index` is the grid's last 菜单, which must not be changed to anything else. */
 export function isLastMenuCell(grid: TapZoneGrid, index: number): boolean {
-  return grid[index] === 'menu' && grid.filter(action => action === 'menu').length === 1;
+  return grid[index] === 'menu' && grid.filter((action) => action === 'menu').length === 1;
 }
 
 export function tapActionLabel(action: TapAction): string {
-  return TAP_ACTIONS.find(item => item.value === action)?.label ?? '无操作';
+  return TAP_ACTIONS.find((item) => item.value === action)?.label ?? '无操作';
 }

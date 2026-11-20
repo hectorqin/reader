@@ -5,22 +5,29 @@ import { RuntimeContext } from './runtime-context.tsx';
 import { useMediaEnabled } from '../../shared/stores/features.ts';
 
 export function AppProviders({ runtime, children }: { runtime: AppRuntime; children: ReactNode }) {
-  const media=useMediaEnabled();
+  const media = useMediaEnabled();
   useEffect(() => {
-    if(!media)return;
+    if (!media) return;
     const host = runtime.player.element;
     document.body.append(host);
     runtime.playback.start();
-    return () => { runtime.playback.stop(); host.remove(); };
-  }, [runtime,media]);
+    return () => {
+      runtime.playback.stop();
+      host.remove();
+    };
+  }, [runtime, media]);
   useEffect(() => runtime.connect(), [runtime]);
   useEffect(() => {
     const visibility = () => {
       if (document.visibilityState === 'hidden') void runtime.flush();
       else void runtime.api.renewSessionIfNeeded().catch(() => undefined);
     };
-    const flush = () => { void runtime.flush(); };
-    const online = () => { void runtime.api.renewSessionIfNeeded().catch(() => undefined); };
+    const flush = () => {
+      void runtime.flush();
+    };
+    const online = () => {
+      void runtime.api.renewSessionIfNeeded().catch(() => undefined);
+    };
     document.addEventListener('visibilitychange', visibility);
     window.addEventListener('pagehide', flush);
     window.addEventListener('online', online);
@@ -30,7 +37,9 @@ export function AppProviders({ runtime, children }: { runtime: AppRuntime; child
       window.removeEventListener('online', online);
     };
   }, [runtime]);
-  return <RuntimeContext value={runtime}>
-    <QueryClientProvider client={runtime.queryClient}>{children}</QueryClientProvider>
-  </RuntimeContext>;
+  return (
+    <RuntimeContext value={runtime}>
+      <QueryClientProvider client={runtime.queryClient}>{children}</QueryClientProvider>
+    </RuntimeContext>
+  );
 }

@@ -215,9 +215,7 @@ export const textHandler = registerFileHandler({
     return {
       kind: 'text',
       total: chapters.length,
-      groups: chapters.length > 0
-        ? [{ id: 'chapters', seq: 0, title: '章节', count: chapters.length, offset: 0 }]
-        : [],
+      groups: chapters.length > 0 ? [{ id: 'chapters', seq: 0, title: '章节', count: chapters.length, offset: 0 }] : [],
       items: chapters.map((chapter, index) => ({
         id: `c${index}`,
         seq: index,

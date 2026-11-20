@@ -33,7 +33,9 @@ export interface ReadingTimeSink {
   recordReadingTime(clientId: string, entries: ReadingTimeEntry[]): Promise<unknown>;
 }
 
-interface Stored { entries: ReadingTimeEntry[] }
+interface Stored {
+  entries: ReadingTimeEntry[];
+}
 
 export class ReadingTimeTracker {
   private bookId: string | null = null;
@@ -51,7 +53,8 @@ export class ReadingTimeTracker {
     private readonly sink: ReadingTimeSink,
     private readonly kv: KeyValueStore,
     private readonly now: () => number = Date.now,
-    private readonly visible: () => boolean = () => typeof document === 'undefined' || document.visibilityState !== 'hidden',
+    private readonly visible: () => boolean = () =>
+      typeof document === 'undefined' || document.visibilityState !== 'hidden',
   ) {}
 
   /** Starts counting for a book; the previous one, if any, is closed first. */
@@ -138,24 +141,34 @@ export class ReadingTimeTracker {
     this.loaded ??= (async () => {
       try {
         this.clientId = (await this.kv.get(CLIENT_KEY)) ?? '';
-        if (!this.clientId) { this.clientId = newId(); await this.kv.set(CLIENT_KEY, this.clientId); }
+        if (!this.clientId) {
+          this.clientId = newId();
+          await this.kv.set(CLIENT_KEY, this.clientId);
+        }
         const stored = JSON.parse((await this.kv.get(STORE_KEY)) ?? '{"entries":[]}') as Stored;
         for (const entry of stored.entries ?? []) {
-          if (typeof entry?.bookId !== 'string' || !Number.isFinite(entry.slot) || !Number.isFinite(entry.seconds)) continue;
+          if (typeof entry?.bookId !== 'string' || !Number.isFinite(entry.slot) || !Number.isFinite(entry.seconds))
+            continue;
           const key = `${entry.bookId}\u0000${entry.slot}`;
           const current = this.pending.get(key);
           // Counted this session before the store was read: the stored total adds to it.
           if (current) current.seconds = Math.min(SLOT_MS / 1000, current.seconds + entry.seconds);
           else this.pending.set(key, { ...entry });
         }
-      } catch { /* an unreadable store only loses what it held */ }
+      } catch {
+        /* an unreadable store only loses what it held */
+      }
     })();
     return this.loaded;
   }
 
   private async save(): Promise<void> {
     await this.load();
-    try { await this.kv.set(STORE_KEY, JSON.stringify({ entries: [...this.pending.values()] } satisfies Stored)); } catch { /* best effort */ }
+    try {
+      await this.kv.set(STORE_KEY, JSON.stringify({ entries: [...this.pending.values()] } satisfies Stored));
+    } catch {
+      /* best effort */
+    }
   }
 
   private send(): Promise<void> {
@@ -165,7 +178,9 @@ export class ReadingTimeTracker {
       this.sinceFlush = 0;
       const cutoff = this.now() - KEEP_MS;
       for (const [key, entry] of this.pending) if (entry.slot < cutoff) this.pending.delete(key);
-      const entries = [...this.pending.values()].map(entry => ({ ...entry, seconds: Math.round(entry.seconds) })).filter(entry => entry.seconds > 0);
+      const entries = [...this.pending.values()]
+        .map((entry) => ({ ...entry, seconds: Math.round(entry.seconds) }))
+        .filter((entry) => entry.seconds > 0);
       if (!entries.length || !this.clientId) return;
       try {
         await this.sink.recordReadingTime(this.clientId, entries);
@@ -176,7 +191,9 @@ export class ReadingTimeTracker {
       const current = this.now() - (this.now() % SLOT_MS);
       for (const [key, entry] of this.pending) if (entry.slot < current) this.pending.delete(key);
       await this.save();
-    })().finally(() => { this.flushing = null; });
+    })().finally(() => {
+      this.flushing = null;
+    });
     return this.flushing;
   }
 }

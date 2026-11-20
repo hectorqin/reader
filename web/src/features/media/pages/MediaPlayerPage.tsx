@@ -17,14 +17,22 @@ export function MediaPlayerPage() {
   const { channel: routeChannel, panel } = useParams();
   const [params] = useSearchParams();
   const channel = routeChannel === 'music' || routeChannel === 'audiobook' ? routeChannel : 'video';
-  const active = usePlaybackStore(state => state.active);
-  const video = usePlaybackStore(state => state.video);
-  const requested = panel === 'lyrics' || panel === 'queue' || panel === 'chapters' ? panel as PlaybackPanel : 'main';
+  const active = usePlaybackStore((state) => state.active);
+  const video = usePlaybackStore((state) => state.video);
+  const requested = panel === 'lyrics' || panel === 'queue' || panel === 'chapters' ? (panel as PlaybackPanel) : 'main';
   // Keep the routed player shell aligned with the legacy Preact screen. The
   // live media element is mounted outside this tree, but the screen classes
   // drive the fixed heading, channel navigation visibility, and page sizing.
   const videoPage = video || channel === 'video';
-  const rootClassName = ['media-screen', 'media-secondary-page', 'media-playback-page', 'media-player-page', videoPage ? 'media-video-page' : undefined].filter(Boolean).join(' ');
+  const rootClassName = [
+    'media-screen',
+    'media-secondary-page',
+    'media-playback-page',
+    'media-player-page',
+    videoPage ? 'media-video-page' : undefined,
+  ]
+    .filter(Boolean)
+    .join(' ');
   const [restoreError, setRestoreError] = useState('');
   // Video and music play on a fixed dark, immersive surface: the current theme's dark
   // values, whatever the app's mode (theme spec §4.7). Audiobooks keep the app's mode.
@@ -34,10 +42,16 @@ export function MediaPlayerPage() {
     if (!immersiveTheme) return;
     // The live player sits outside this tree (it survives navigation), and the page
     // column does not span wide screens, so both the player and the body follow too.
-    const player = runtime.player.element, body = document.body;
-    player.dataset.theme = immersiveTheme; player.dataset.mode = 'dark';
+    const player = runtime.player.element,
+      body = document.body;
+    player.dataset.theme = immersiveTheme;
+    player.dataset.mode = 'dark';
     body.style.background = themes[immersiveTheme].dark.bg;
-    return () => { delete player.dataset.theme; delete player.dataset.mode; body.style.removeProperty('background'); };
+    return () => {
+      delete player.dataset.theme;
+      delete player.dataset.mode;
+      body.style.removeProperty('background');
+    };
   }, [runtime, immersiveTheme]);
   // The player element lives outside the routed React tree so playback survives
   // navigation. A player route is the explicit full-screen/expanded view; mirror
@@ -50,21 +64,29 @@ export function MediaPlayerPage() {
   }, [runtime, restoreError]);
   // The address names what is playing (item/part), so a refresh restores it: kept in
   // step when the track changes, and carried by every panel switch below.
-  const itemId = usePlaybackStore(state => state.itemId), partId = usePlaybackStore(state => state.partId);
-  const here = (value: PlaybackPanel | 'main') => playerPath({ channel, itemId, partId }, value === 'main' ? '' : value);
+  const itemId = usePlaybackStore((state) => state.itemId),
+    partId = usePlaybackStore((state) => state.partId);
+  const here = (value: PlaybackPanel | 'main') =>
+    playerPath({ channel, itemId, partId }, value === 'main' ? '' : value);
   useEffect(() => {
     if (!active || !itemId || !partId || restoreError) return;
     if (params.get('item') === itemId && params.get('part') === partId) return;
     navigate(here(requested), { replace: true });
   }, [active, itemId, partId, restoreError]);
   useEffect(() => {
-    const itemId = params.get('item') ?? '', partId = params.get('part') ?? '';
-    if (!itemId || !partId || (runtime.player.currentItemId === itemId && runtime.player.currentPartId === partId)) return;
+    const itemId = params.get('item') ?? '',
+      partId = params.get('part') ?? '';
+    if (!itemId || !partId || (runtime.player.currentItemId === itemId && runtime.player.currentPartId === partId))
+      return;
     const controller = new AbortController();
     setRestoreError('');
     void restorePlaybackEntries(runtime.mediaApi, itemId, partId, controller.signal)
-      .then(({ entries, index }) => runtime.player.play(entries, Math.max(0, index), false, { autoplay: false, signal: controller.signal }))
-      .catch(reason => { if (!controller.signal.aborted) setRestoreError(reason instanceof Error ? reason.message : '无法恢复播放'); });
+      .then(({ entries, index }) =>
+        runtime.player.play(entries, Math.max(0, index), false, { autoplay: false, signal: controller.signal }),
+      )
+      .catch((reason) => {
+        if (!controller.signal.aborted) setRestoreError(reason instanceof Error ? reason.message : '无法恢复播放');
+      });
     return () => controller.abort();
   }, [runtime, params]);
   // Legacy playback keeps the expanded player open when leaving queue/lyrics/
@@ -76,16 +98,48 @@ export function MediaPlayerPage() {
     }
     navigate(-1);
   };
-  return <div className={rootClassName} data-theme={immersiveTheme} data-mode={immersiveTheme ? 'dark' : undefined}>
-    {videoPage && <header className="media-heading">
-      <button type="button" className="media-back-button" aria-label="← 返回浏览" title="返回浏览" onClick={back}><Icon name="chevron-left" size={20} /></button>
-      <strong>视频播放</strong>
-    </header>}
-    {restoreError ? <div className="page-state" role="alert"><h2>无法恢复播放</h2><p>{restoreError}</p><button type="button" onClick={() => navigate(`/media/${channel}`)}>返回频道</button></div>
-      // A link naming item/part is being restored: say so rather than flash 当前没有播放内容.
-      : !active && params.get('item') && params.get('part') ? <FloatingNotice message="正在恢复播放…" busy />
-      : !active ? <div className="media-player-empty"><p>当前没有播放内容。</p><button type="button" onClick={() => navigate(`/media/${channel}`)}>选择作品</button></div>
-      : video ? createPortal(<VideoControls player={runtime.player} api={runtime.mediaApi} onBack={back} />, runtime.player.videoControlsHost)
-      : <PlaybackControls player={runtime.player} api={runtime.mediaApi} panel={requested} onPanelChange={value => navigate(here(value), { replace: true })} onBack={back} />}
-  </div>;
+  return (
+    <div className={rootClassName} data-theme={immersiveTheme} data-mode={immersiveTheme ? 'dark' : undefined}>
+      {videoPage && (
+        <header className="media-heading">
+          <button type="button" className="media-back-button" aria-label="← 返回浏览" title="返回浏览" onClick={back}>
+            <Icon name="chevron-left" size={20} />
+          </button>
+          <strong>视频播放</strong>
+        </header>
+      )}
+      {restoreError ? (
+        <div className="page-state" role="alert">
+          <h2>无法恢复播放</h2>
+          <p>{restoreError}</p>
+          <button type="button" onClick={() => navigate(`/media/${channel}`)}>
+            返回频道
+          </button>
+        </div>
+      ) : // A link naming item/part is being restored: say so rather than flash 当前没有播放内容.
+      !active && params.get('item') && params.get('part') ? (
+        <FloatingNotice message="正在恢复播放…" busy />
+      ) : !active ? (
+        <div className="media-player-empty">
+          <p>当前没有播放内容。</p>
+          <button type="button" onClick={() => navigate(`/media/${channel}`)}>
+            选择作品
+          </button>
+        </div>
+      ) : video ? (
+        createPortal(
+          <VideoControls player={runtime.player} api={runtime.mediaApi} onBack={back} />,
+          runtime.player.videoControlsHost,
+        )
+      ) : (
+        <PlaybackControls
+          player={runtime.player}
+          api={runtime.mediaApi}
+          panel={requested}
+          onPanelChange={(value) => navigate(here(value), { replace: true })}
+          onBack={back}
+        />
+      )}
+    </div>
+  );
 }

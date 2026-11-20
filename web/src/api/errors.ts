@@ -8,14 +8,7 @@ import type { ApiErrorBody } from './types.ts';
  * §4) hangs off this being a first-class outcome rather than a generic throw.
  */
 export type ApiErrorKind =
-  | 'offline'
-  | 'unauthorized'
-  | 'forbidden'
-  | 'not_found'
-  | 'conflict'
-  | 'bad_request'
-  | 'server'
-  | 'aborted';
+  'offline' | 'unauthorized' | 'forbidden' | 'not_found' | 'conflict' | 'bad_request' | 'server' | 'aborted';
 
 export class ApiError extends Error {
   readonly kind: ApiErrorKind;
@@ -52,7 +45,7 @@ export class ApiError extends Error {
    */
   get isAuthFailure(): boolean {
     // Source credentials are independent of the reader account session.
-    if (['AUTH_REQUIRED','AUTH_EXPIRED','VERIFICATION_REQUIRED'].includes(this.code)) return false;
+    if (['AUTH_REQUIRED', 'AUTH_EXPIRED', 'VERIFICATION_REQUIRED'].includes(this.code)) return false;
     if (this.kind === 'unauthorized') return true;
     if (this.kind !== 'forbidden') return false;
     return AUTH_FAILURE_CODES.has(this.code);

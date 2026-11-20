@@ -56,7 +56,14 @@ export function applyOverrides(
   const effective: BaseMetadata = { ...base };
   const appliedFields: string[] = [];
   const textFields: Array<keyof BaseMetadata> = [
-    'title', 'author', 'publisher', 'language', 'isbn', 'description', 'series', 'pubdate',
+    'title',
+    'author',
+    'publisher',
+    'language',
+    'isbn',
+    'description',
+    'series',
+    'pubdate',
   ];
   for (const field of textFields) {
     const override = overrides[field as string];
@@ -71,7 +78,10 @@ export function applyOverrides(
     appliedFields.push('seriesIndex');
   }
   if (overrides.tags !== undefined) {
-    effective.tags = overrides.tags.split(',').map((t) => t.trim()).filter(Boolean);
+    effective.tags = overrides.tags
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
     appliedFields.push('tags');
   }
   // `source` keeps describing where the BASE metadata came from; the caller

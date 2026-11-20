@@ -62,9 +62,7 @@ export function emptySnapshot(): OfflineSnapshot {
 /** True when there is nothing waiting to be sent. */
 export function isOutboxEmpty(snapshot: OfflineSnapshot): boolean {
   return (
-    snapshot.dirtyProgress.length === 0 &&
-    snapshot.dirtyNotes.length === 0 &&
-    snapshot.pendingNoteDeletes.length === 0
+    snapshot.dirtyProgress.length === 0 && snapshot.dirtyNotes.length === 0 && snapshot.pendingNoteDeletes.length === 0
   );
 }
 
@@ -280,7 +278,10 @@ export class OfflineStore {
    *
    * The `serverTime` is still adopted so the next pull is incremental.
    */
-  async markDelivered(batch: { progress: Progress[]; notes: Note[]; deletes: string[] }, serverTime: number): Promise<void> {
+  async markDelivered(
+    batch: { progress: Progress[]; notes: Note[]; deletes: string[] },
+    serverTime: number,
+  ): Promise<void> {
     const deliveredProgress = new Set(
       batch.progress
         .filter((entry) => this.snapshot.progress[entry.bookId]?.updatedAt === entry.updatedAt)

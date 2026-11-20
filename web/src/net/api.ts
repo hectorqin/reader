@@ -282,8 +282,10 @@ export class ApiClient {
    * exists to avoid.
    */
   coverUrl(bookId: string): string {
-    const resource = this.session?.resourceToken && (this.session.resourceTokenExpiresAt ?? Infinity) > Date.now()
-      ? this.session.resourceToken : null;
+    const resource =
+      this.session?.resourceToken && (this.session.resourceTokenExpiresAt ?? Infinity) > Date.now()
+        ? this.session.resourceToken
+        : null;
     const token = resource || this.session?.accessToken;
     const parameter = resource ? 'resource_token' : 'access_token';
     const path = `/api/v1/books/${encodeURIComponent(bookId)}/cover`;
@@ -348,7 +350,11 @@ export class ApiClient {
   ): Promise<Response> {
     await this.acquire();
     try {
-      if (!options.anonymous && this.session?.resourceToken && (this.session.resourceTokenExpiresAt ?? Infinity) <= Date.now() + 5 * 60_000) {
+      if (
+        !options.anonymous &&
+        this.session?.resourceToken &&
+        (this.session.resourceTokenExpiresAt ?? Infinity) <= Date.now() + 5 * 60_000
+      ) {
         await this.refresh();
       }
       const response = await this.send(method, path, options);

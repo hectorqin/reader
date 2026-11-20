@@ -3,8 +3,15 @@ import { render } from '../src/shared/ui/render-root.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import {
-  ThemeController, defaultThemePreference, migrateLegacyTheme, readThemePreference, resolveAppTheme,
-  resolveReaderSurface, resolveReadingTheme, saveThemePreference, themeSummary,
+  ThemeController,
+  defaultThemePreference,
+  migrateLegacyTheme,
+  readThemePreference,
+  resolveAppTheme,
+  resolveReaderSurface,
+  resolveReadingTheme,
+  saveThemePreference,
+  themeSummary,
 } from '../src/shared/theme/theme.ts';
 import { MediaThemeSettings } from '../src/features/media/components/theme-settings.tsx';
 import { noticeText } from './helpers/notices.ts';
@@ -24,20 +31,39 @@ afterEach(() => {
 function stubSystem(initial: boolean) {
   const events = new EventTarget();
   const state = { dark: initial };
-  vi.stubGlobal('matchMedia', () => ({ get matches() { return state.dark; }, addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events) }));
-  return { set(dark: boolean) { state.dark = dark; events.dispatchEvent(new Event('change')); } };
+  vi.stubGlobal('matchMedia', () => ({
+    get matches() {
+      return state.dark;
+    },
+    addEventListener: events.addEventListener.bind(events),
+    removeEventListener: events.removeEventListener.bind(events),
+  }));
+  return {
+    set(dark: boolean) {
+      state.dark = dark;
+      events.dispatchEvent(new Event('change'));
+    },
+  };
 }
 const pressed = (label: string) => root.querySelector(`[aria-label="${label}"]`)?.getAttribute('aria-pressed');
 const click = (label: string) => act(() => root.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!.click());
 
 describe('theme preference', () => {
   it('defaults to 暖陶, following the system with 暖陶 for both, and the app theme for reading', () => {
-    expect(readThemePreference('new')).toEqual({ theme: 'warm', mode: 'system', system: { light: 'warm', dark: 'warm' }, reading: 'app' });
+    expect(readThemePreference('new')).toEqual({
+      theme: 'warm',
+      mode: 'system',
+      system: { light: 'warm', dark: 'warm' },
+      reading: 'app',
+    });
     expect(themeSummary(readThemePreference('new'))).toBe('跟随系统');
   });
 
   it('carries every V3 choice over as the spec table says, keeping its light/dark mode', () => {
-    const migrated = (choice: string) => { const { theme, mode } = migrateLegacyTheme(choice, undefined); return [theme, mode]; };
+    const migrated = (choice: string) => {
+      const { theme, mode } = migrateLegacyTheme(choice, undefined);
+      return [theme, mode];
+    };
     expect(migrated('sand')).toEqual(['warm', 'light']);
     expect(migrated('midnight')).toEqual(['warm', 'dark']);
     expect(migrated('ocean')).toEqual(['blue', 'light']);
@@ -46,8 +72,16 @@ describe('theme preference', () => {
     // 蔷薇 was removed with no successor: 暖陶, still light.
     expect(migrated('rose')).toEqual(['warm', 'light']);
     // Follow-system keeps its pair, slot by slot.
-    expect(migrateLegacyTheme('system', { light: 'ocean', dark: 'graphite' })).toEqual({ ...defaultThemePreference, theme: 'blue', mode: 'system', system: { light: 'blue', dark: 'blue' } });
-    expect(migrateLegacyTheme('system', { light: 'forest', dark: 'midnight' }).system).toEqual({ light: 'green', dark: 'warm' });
+    expect(migrateLegacyTheme('system', { light: 'ocean', dark: 'graphite' })).toEqual({
+      ...defaultThemePreference,
+      theme: 'blue',
+      mode: 'system',
+      system: { light: 'blue', dark: 'blue' },
+    });
+    expect(migrateLegacyTheme('system', { light: 'forest', dark: 'midnight' }).system).toEqual({
+      light: 'green',
+      dark: 'warm',
+    });
   });
 
   it('reads the V3 keys only until a V3.1 choice is saved, per server and account', () => {
@@ -61,19 +95,29 @@ describe('theme preference', () => {
   });
 
   it('rejects unknown or reading-only values and unreadable storage', () => {
-    localStorage.setItem('reader.theme.v2:a', JSON.stringify({ theme: 'gray', mode: 'dim', system: { light: 'rose', dark: 'blue' }, reading: 'sepia' }));
+    localStorage.setItem(
+      'reader.theme.v2:a',
+      JSON.stringify({ theme: 'gray', mode: 'dim', system: { light: 'rose', dark: 'blue' }, reading: 'sepia' }),
+    );
     expect(readThemePreference('a')).toEqual({ ...defaultThemePreference, system: { light: 'warm', dark: 'blue' } });
     localStorage.setItem('reader.theme.v2:a', '{not json');
     expect(readThemePreference('a')).toEqual(defaultThemePreference);
   });
 
   it('resolves the pair when following the system, and 黑白灰 for reading in the app mode', () => {
-    const preference = { ...defaultThemePreference, system: { light: 'green', dark: 'blue' } as const, reading: 'gray' as const };
+    const preference = {
+      ...defaultThemePreference,
+      system: { light: 'green', dark: 'blue' } as const,
+      reading: 'gray' as const,
+    };
     expect(resolveAppTheme(preference, false)).toEqual({ theme: 'green', mode: 'light' });
     expect(resolveAppTheme(preference, true)).toEqual({ theme: 'blue', mode: 'dark' });
     expect(resolveReadingTheme(preference, true)).toEqual({ theme: 'gray', mode: 'dark' });
     expect(resolveReadingTheme({ ...preference, reading: 'app' }, true)).toEqual({ theme: 'blue', mode: 'dark' });
-    expect(resolveAppTheme({ ...preference, mode: 'light', theme: 'warm' }, true)).toEqual({ theme: 'warm', mode: 'light' });
+    expect(resolveAppTheme({ ...preference, mode: 'light', theme: 'warm' }, true)).toEqual({
+      theme: 'warm',
+      mode: 'light',
+    });
   });
 });
 
@@ -87,7 +131,11 @@ describe('reading paper', () => {
     // Not following the system's dark mode: the paper stays, and the reader stays light around it.
     expect(resolveReaderSurface(dark, false, 'warm', false)).toEqual({ theme: 'warm', mode: 'light', paper: 'warm' });
     expect(resolveReaderSurface(light, false, 'night', true)).toEqual({ theme: 'warm', mode: 'dark', paper: 'night' });
-    expect(resolveReaderSurface({ ...light, reading: 'gray' }, false, 'green', true)).toEqual({ theme: 'gray', mode: 'light', paper: 'green' });
+    expect(resolveReaderSurface({ ...light, reading: 'gray' }, false, 'green', true)).toEqual({
+      theme: 'gray',
+      mode: 'light',
+      paper: 'green',
+    });
   });
 });
 
@@ -114,7 +162,10 @@ describe('ThemeController', () => {
 
   it('applies a choice saved in another tab', () => {
     const controller = new ThemeController('a');
-    localStorage.setItem('reader.theme.v2:a', JSON.stringify({ ...defaultThemePreference, theme: 'blue', mode: 'dark' }));
+    localStorage.setItem(
+      'reader.theme.v2:a',
+      JSON.stringify({ ...defaultThemePreference, theme: 'blue', mode: 'dark' }),
+    );
     window.dispatchEvent(new StorageEvent('storage', { key: 'reader.theme.v2:a' }));
     expect(controller.current).toEqual({ theme: 'blue', mode: 'dark' });
     controller.dispose();
@@ -147,14 +198,18 @@ describe('外观与主题', () => {
     await click('跟随系统');
     expect(readThemePreference('a')).toMatchObject({ mode: 'dark', theme: 'blue' });
     expect(root.querySelector('[aria-label="浅色时使用 暖陶"]')).toBeNull();
-    const light = [...root.querySelectorAll<HTMLButtonElement>('[aria-label="明暗"] button')].find(button => button.textContent === '浅色')!;
+    const light = [...root.querySelectorAll<HTMLButtonElement>('[aria-label="明暗"] button')].find(
+      (button) => button.textContent === '浅色',
+    )!;
     await act(async () => light.click());
     expect(readThemePreference('a')).toMatchObject({ mode: 'light', theme: 'blue' });
   });
 
   it('offers 黑白灰 only as the reading theme, apart from the app theme', async () => {
     await act(async () => render(<MediaThemeSettings scope="a" />, root));
-    const appCards = [...root.querySelectorAll('[aria-label="应用主题"] .theme-card')].map(card => card.getAttribute('aria-label'));
+    const appCards = [...root.querySelectorAll('[aria-label="应用主题"] .theme-card')].map((card) =>
+      card.getAttribute('aria-label'),
+    );
     expect(appCards).toEqual(['暖陶', '雾蓝', '青绿']);
     expect(pressed('跟随应用')).toBe('true');
     await click('黑白灰');
@@ -164,7 +219,9 @@ describe('外观与主题', () => {
 
   it('reports a device that refuses to store the choice', async () => {
     await act(async () => render(<MediaThemeSettings scope="a" />, root));
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('full'); });
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('full');
+    });
     await click('雾蓝');
     expect(root.querySelector('[role=alert]')).toBeNull();
     expect(document.querySelector('.notyf [role=alert]')?.textContent).toContain('无法保存主题');

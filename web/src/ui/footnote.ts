@@ -65,7 +65,11 @@ export function isNoteReference(anchor: Element): boolean {
 /** The element a fragment names, by `id` and then by the older `name`. */
 export function fragmentTarget(root: ParentNode, fragment: string): Element | null {
   let id = fragment;
-  try { id = decodeURIComponent(fragment); } catch { /* a literal id that merely contains a % */ }
+  try {
+    id = decodeURIComponent(fragment);
+  } catch {
+    /* a literal id that merely contains a % */
+  }
   if (!id) return null;
   for (const element of root.querySelectorAll('[id], [name]')) {
     if (element.getAttribute('id') === id || element.getAttribute('name') === id) return element;
@@ -92,7 +96,10 @@ export function noteAt(root: ParentNode, fragment: string): string[] | null {
   const target = fragmentTarget(root, fragment);
   if (!target) return null;
   let block: Element = target;
-  if (!/footnote|endnote|rearnote/.test(declared(target)) && (INLINE.has(target.tagName.toUpperCase()) || !squash(target.textContent ?? ''))) {
+  if (
+    !/footnote|endnote|rearnote/.test(declared(target)) &&
+    (INLINE.has(target.tagName.toUpperCase()) || !squash(target.textContent ?? ''))
+  ) {
     const outer = target.closest(BLOCK);
     if (!outer || outer === target) return null;
     const lead = outer.ownerDocument.createRange();
@@ -108,8 +115,10 @@ export function noteAt(root: ParentNode, fragment: string): string[] | null {
   for (const link of copy.querySelectorAll('a')) {
     if (/backlink|referrer/.test(declared(link)) || BACK.test(link.textContent ?? '')) link.remove();
   }
-  const leaves = [...copy.querySelectorAll(LEAF)].filter(element => !element.querySelector(LEAF));
-  const paragraphs = (leaves.length ? leaves : [copy]).map(element => squash(element.textContent ?? '')).filter(Boolean);
+  const leaves = [...copy.querySelectorAll(LEAF)].filter((element) => !element.querySelector(LEAF));
+  const paragraphs = (leaves.length ? leaves : [copy])
+    .map((element) => squash(element.textContent ?? ''))
+    .filter(Boolean);
   const length = paragraphs.reduce((sum, paragraph) => sum + paragraph.length, 0);
   if (!length || length > MAX_NOTE_CHARS) return null;
   return paragraphs;

@@ -5,7 +5,15 @@ import type { KeyValueStore } from '../src/core/platform.ts';
 /** A KeyValueStore over a Map, for SettingsStore.load(). */
 function memory(initial: Record<string, string>): KeyValueStore {
   const values = new Map(Object.entries(initial));
-  return { get: async (key: string) => values.get(key) ?? null, set: async (key: string, value: string) => { values.set(key, value); }, remove: async (key: string) => { values.delete(key); } };
+  return {
+    get: async (key: string) => values.get(key) ?? null,
+    set: async (key: string, value: string) => {
+      values.set(key, value);
+    },
+    remove: async (key: string) => {
+      values.delete(key);
+    },
+  };
 }
 const load = (stored: object) => new SettingsStore(memory({ 'reader.settings.v1': JSON.stringify(stored) })).load();
 

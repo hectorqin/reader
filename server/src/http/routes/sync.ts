@@ -28,7 +28,8 @@ export function registerSyncRoutes(app: FastifyInstance, ctx: AppContext): void 
     const user = currentUser(request);
     const body = (request.body ?? {}) as { progress?: unknown; notes?: unknown; since?: unknown };
     const since = body.since ?? 0;
-    if (typeof since !== 'number' || !Number.isSafeInteger(since) || since < 0) throw badRequest('since must be a non-negative integer');
+    if (typeof since !== 'number' || !Number.isSafeInteger(since) || since < 0)
+      throw badRequest('since must be a non-negative integer');
     // Validate the shape explicitly. Iterating a non-array would otherwise walk
     // a string character by character and report nonsense rejections.
     if (body.progress !== undefined && !Array.isArray(body.progress)) {
@@ -70,14 +71,16 @@ export function registerSyncRoutes(app: FastifyInstance, ctx: AppContext): void 
     const body = (request.body ?? {}) as Partial<ProgressRecord>;
     validateSyncRecord(body);
     ctx.sync.push(user.id, {
-      progress: [{
-        bookId,
-        locator: body.locator ?? '',
-        percentage: typeof body.percentage === 'number' ? body.percentage : 0,
-        chapterTitle: body.chapterTitle ?? '',
-        device: body.device ?? '',
-        updatedAt: body.updatedAt ?? Date.now(),
-      }],
+      progress: [
+        {
+          bookId,
+          locator: body.locator ?? '',
+          percentage: typeof body.percentage === 'number' ? body.percentage : 0,
+          chapterTitle: body.chapterTitle ?? '',
+          device: body.device ?? '',
+          updatedAt: body.updatedAt ?? Date.now(),
+        },
+      ],
     });
     return { progress: ctx.sync.progressFor(user.id, bookId) };
   });
@@ -118,22 +121,29 @@ export function registerSyncRoutes(app: FastifyInstance, ctx: AppContext): void 
   app.delete('/api/v1/notes/:id', { preHandler: auth }, async (request) => {
     const user = currentUser(request);
     const { id } = request.params as { id: string };
-    const existing = ctx.db.get<{ book_id: string; type: string; locator: string; text: string; comment: string; color: string }>(
-      'SELECT book_id, type, locator, text, comment, color FROM notes WHERE id = ? AND user_id = ?', id, user.id,
-    );
+    const existing = ctx.db.get<{
+      book_id: string;
+      type: string;
+      locator: string;
+      text: string;
+      comment: string;
+      color: string;
+    }>('SELECT book_id, type, locator, text, comment, color FROM notes WHERE id = ? AND user_id = ?', id, user.id);
     if (!existing) return { ok: true };
     ctx.sync.push(user.id, {
-      notes: [{
-        id,
-        bookId: existing.book_id,
-        type: existing.type as NoteRecord['type'],
-        locator: existing.locator,
-        text: existing.text,
-        comment: existing.comment,
-        color: existing.color,
-        updatedAt: Date.now(),
-        deleted: true,
-      }],
+      notes: [
+        {
+          id,
+          bookId: existing.book_id,
+          type: existing.type as NoteRecord['type'],
+          locator: existing.locator,
+          text: existing.text,
+          comment: existing.comment,
+          color: existing.color,
+          updatedAt: Date.now(),
+          deleted: true,
+        },
+      ],
     });
     return { ok: true };
   });

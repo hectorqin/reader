@@ -9,12 +9,7 @@ import { naturalCompare, sortByName } from '../src/formats/natural-sort.ts';
 describe('naturalCompare', () => {
   it('sorts numeric runs by value, not lexicographically', () => {
     const names = ['page10.jpg', 'page2.jpg', 'page1.jpg', 'page100.jpg'];
-    expect(sortByName(names, (name) => name)).toEqual([
-      'page1.jpg',
-      'page2.jpg',
-      'page10.jpg',
-      'page100.jpg',
-    ]);
+    expect(sortByName(names, (name) => name)).toEqual(['page1.jpg', 'page2.jpg', 'page10.jpg', 'page100.jpg']);
   });
 
   it('sorts CJK chapter names with numeric suffixes correctly', () => {
@@ -49,11 +44,6 @@ describe('naturalCompare', () => {
 
   it('handles mixed separators used by scan tools', () => {
     const names = ['c_001.png', 'c_002.png', 'c_010.png', 'c_003.png'];
-    expect(sortByName(names, (name) => name)).toEqual([
-      'c_001.png',
-      'c_002.png',
-      'c_003.png',
-      'c_010.png',
-    ]);
+    expect(sortByName(names, (name) => name)).toEqual(['c_001.png', 'c_002.png', 'c_003.png', 'c_010.png']);
   });
 });

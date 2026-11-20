@@ -10,7 +10,8 @@ const ACQUIRE = 'http://opds-spec.org/acquisition';
 function context(config: Record<string, unknown> = { url: ROOT }): SourceContext {
   return {
     instance: { id: 'library', pluginId: 'builtin.opds', sourceType: 'opds', name: 'Library', config, enabled: true },
-    userId: 'reader', signal: new AbortController().signal,
+    userId: 'reader',
+    signal: new AbortController().signal,
   };
 }
 
@@ -21,9 +22,10 @@ function transport(routes: Record<string, string | object | Response>) {
     calls.push({ url, headers: new Headers(init?.headers), redirect: init?.redirect });
     const route = routes[url];
     assert.notEqual(route, undefined, `Unexpected network request: ${url}`);
-    const response = route instanceof Response
-      ? route
-      : new Response(typeof route === 'string' ? route : JSON.stringify(route), { status: 200 });
+    const response =
+      route instanceof Response
+        ? route
+        : new Response(typeof route === 'string' ? route : JSON.stringify(route), { status: 200 });
     Object.defineProperty(response, 'url', { value: url });
     return response;
   };
@@ -33,11 +35,13 @@ function transport(routes: Record<string, string | object | Response>) {
 function jsonFeed(extra: Record<string, unknown> = {}) {
   return {
     metadata: { title: 'Library' },
-    publications: [{
-      metadata: { identifier: 'urn:book:one', title: 'One', author: [{ name: 'Alice' }, { name: 'Bob' }] },
-      images: [{ href: '/covers/one.jpg', type: 'image/jpeg' }],
-      links: [{ href: '/files/one.epub', type: 'application/epub+zip', rel: ACQUIRE }],
-    }],
+    publications: [
+      {
+        metadata: { identifier: 'urn:book:one', title: 'One', author: [{ name: 'Alice' }, { name: 'Bob' }] },
+        images: [{ href: '/covers/one.jpg', type: 'image/jpeg' }],
+        links: [{ href: '/files/one.epub', type: 'application/epub+zip', rel: ACQUIRE }],
+      },
+    ],
     ...extra,
   };
 }
@@ -64,7 +68,9 @@ test('OPDS 1 Atom resolves namespaces, xml:base, navigation, pagination and dire
   const provider = createOpdsProvider(network);
   const page = await provider.browse!(context(), {});
   assert.equal(page.title, 'A & B');
-  assert.deepEqual(page.navigation, [{ title: 'Fiction', ref: 'https://library.example/books/fiction', kind: 'catalog' }]);
+  assert.deepEqual(page.navigation, [
+    { title: 'Fiction', ref: 'https://library.example/books/fiction', kind: 'catalog' },
+  ]);
   assert.equal(page.nextCursor, 'https://library.example/books/?page=2&count=10');
   assert.equal(page.items[0]?.title, '书籍一');
   assert.deepEqual(page.items[0]?.authors, ['作者']);
@@ -73,13 +79,27 @@ test('OPDS 1 Atom resolves namespaces, xml:base, navigation, pagination and dire
 });
 
 test('OPDS 2 groups and navigation remain separate from publication entries', async () => {
-  const network = transport({ [ROOT]: jsonFeed({
-    links: [{ rel: 'next', href: '?page=2' }],
-    navigation: [{ title: 'Recent', href: '/recent', type: 'application/opds+json' }],
-    groups: [{ publications: [{ metadata: { identifier: 'urn:book:two', title: 'Two' }, links: [{ rel: ACQUIRE, href: '/two.pdf', type: 'application/pdf' }] }] }],
-  }) });
+  const network = transport({
+    [ROOT]: jsonFeed({
+      links: [{ rel: 'next', href: '?page=2' }],
+      navigation: [{ title: 'Recent', href: '/recent', type: 'application/opds+json' }],
+      groups: [
+        {
+          publications: [
+            {
+              metadata: { identifier: 'urn:book:two', title: 'Two' },
+              links: [{ rel: ACQUIRE, href: '/two.pdf', type: 'application/pdf' }],
+            },
+          ],
+        },
+      ],
+    }),
+  });
   const page = await createOpdsProvider(network).browse!(context(), {});
-  assert.deepEqual(page.items.map((item) => item.title), ['One', 'Two']);
+  assert.deepEqual(
+    page.items.map((item) => item.title),
+    ['One', 'Two'],
+  );
   assert.deepEqual(page.items[0]?.authors, ['Alice', 'Bob']);
   assert.equal(page.items[0]?.coverUrl, 'https://library.example/covers/one.jpg');
   assert.equal(page.navigation?.[0]?.title, 'Recent');
@@ -87,7 +107,12 @@ test('OPDS 2 groups and navigation remain separate from publication entries', as
 });
 
 test('acquisition revalidates provider references and streams the selected file', async () => {
-  const network = transport({ [ROOT]: jsonFeed(), 'https://library.example/files/one.epub': new Response('epub-bytes', { headers: { 'content-type': 'application/epub+zip', etag: '"one"' } }) });
+  const network = transport({
+    [ROOT]: jsonFeed(),
+    'https://library.example/files/one.epub': new Response('epub-bytes', {
+      headers: { 'content-type': 'application/epub+zip', etag: '"one"' },
+    }),
+  });
   const provider = createOpdsProvider(network);
   const ctx = context();
   const entry = (await provider.browse!(ctx, {})).items[0]!;
@@ -100,23 +125,40 @@ test('acquisition revalidates provider references and streams the selected file'
   assert.equal(Buffer.concat(chunks).toString(), 'epub-bytes');
   assert.equal(file.mediaType, 'application/epub+zip');
   assert.equal(file.etag, '"one"');
-  await assert.rejects(() => provider.acquire(ctx, { entryRef: entry.ref, optionId: 'invented' }), code('RESOURCE_GONE'));
+  await assert.rejects(
+    () => provider.acquire(ctx, { entryRef: entry.ref, optionId: 'invented' }),
+    code('RESOURCE_GONE'),
+  );
   await assert.rejects(() => provider.detail(ctx, 'not-a-ref'), code('INVALID_SOURCE_REF'));
 });
 
 test('Kindle files are downloadable, and an EPUB of the same book is preferred when no format was picked', async () => {
-  const feed = (links: Array<{ href: string; type: string }>) => jsonFeed({ publications: [{
-    metadata: { identifier: 'urn:book:k', title: 'K' }, links: links.map(link => ({ ...link, rel: ACQUIRE })),
-  }] });
-  const both = transport({ [ROOT]: feed([{ href: '/k.azw3', type: 'application/vnd.amazon.mobi8-ebook' }, { href: '/k.epub', type: 'application/epub+zip' }]) });
+  const feed = (links: Array<{ href: string; type: string }>) =>
+    jsonFeed({
+      publications: [
+        {
+          metadata: { identifier: 'urn:book:k', title: 'K' },
+          links: links.map((link) => ({ ...link, rel: ACQUIRE })),
+        },
+      ],
+    });
+  const both = transport({
+    [ROOT]: feed([
+      { href: '/k.azw3', type: 'application/vnd.amazon.mobi8-ebook' },
+      { href: '/k.epub', type: 'application/epub+zip' },
+    ]),
+  });
   let provider = createOpdsProvider(both);
   let entry = (await provider.browse!(context(), {})).items[0]!;
-  let acquisition = await provider.acquire(context(), { entryRef: entry.ref }) as Extract<Acquisition, { kind: 'file' }>;
+  let acquisition = (await provider.acquire(context(), { entryRef: entry.ref })) as Extract<
+    Acquisition,
+    { kind: 'file' }
+  >;
   assert.equal(acquisition.mediaType, 'application/epub+zip');
   const only = transport({ [ROOT]: feed([{ href: '/k.mobi', type: 'application/x-mobipocket-ebook' }]) });
   provider = createOpdsProvider(only);
   entry = (await provider.browse!(context(), {})).items[0]!;
-  acquisition = await provider.acquire(context(), { entryRef: entry.ref }) as Extract<Acquisition, { kind: 'file' }>;
+  acquisition = (await provider.acquire(context(), { entryRef: entry.ref })) as Extract<Acquisition, { kind: 'file' }>;
   assert.equal(acquisition.kind, 'file');
   assert.equal(acquisition.mediaType, 'application/x-mobipocket-ebook');
 });
@@ -127,7 +169,13 @@ test('borrowing, purchases and DRM are explicit external actions rather than fil
     [`${ACQUIRE}/buy`, 'application/epub+zip', 'external'],
     [ACQUIRE, 'application/vnd.adobe.adept+xml', 'external'],
   ]) {
-    const network = transport({ [ROOT]: jsonFeed({ publications: [{ metadata: { identifier: 'one', title: 'One' }, links: [{ rel, type: mediaType, href: '/action' }] }] }) });
+    const network = transport({
+      [ROOT]: jsonFeed({
+        publications: [
+          { metadata: { identifier: 'one', title: 'One' }, links: [{ rel, type: mediaType, href: '/action' }] },
+        ],
+      }),
+    });
     const provider = createOpdsProvider(network);
     const entry = (await provider.browse!(context(), {})).items[0]!;
     assert.equal(entry.options?.[0]?.available, false);
@@ -140,7 +188,16 @@ test('borrowing, purchases and DRM are explicit external actions rather than fil
 test('JSON search templates encode user input and pagination follows advertised links', async () => {
   const searchUrl = 'https://library.example/search?q=%E4%B8%89%E4%BD%93%20%26%20A&limit=20';
   const network = transport({
-    [ROOT]: jsonFeed({ links: [{ rel: 'search', href: '/search?q={searchTerms}&limit={count}', type: 'application/opds+json', templated: true }] }),
+    [ROOT]: jsonFeed({
+      links: [
+        {
+          rel: 'search',
+          href: '/search?q={searchTerms}&limit={count}',
+          type: 'application/opds+json',
+          templated: true,
+        },
+      ],
+    }),
     [searchUrl]: jsonFeed({ links: [{ rel: 'next', href: '/search?page=2' }] }),
     'https://library.example/search?page=2': jsonFeed(),
   });
@@ -153,9 +210,12 @@ test('JSON search templates encode user input and pagination follows advertised 
 
 test('OPDS 1 OpenSearch descriptions resolve their relative GET templates', async () => {
   const network = transport({
-    [ROOT]: '<feed xmlns="http://www.w3.org/2005/Atom"><title>Search</title><link rel="search" href="/search/description.xml" type="application/opensearchdescription+xml"/></feed>',
-    'https://library.example/search/description.xml': '<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/"><Url type="application/atom+xml" template="results?q={searchTerms}&amp;page={startPage}&amp;language={language?}"/></OpenSearchDescription>',
-    'https://library.example/search/results?q=Hello%20World&page=1&language=': '<feed xmlns="http://www.w3.org/2005/Atom"><title>Results</title></feed>',
+    [ROOT]:
+      '<feed xmlns="http://www.w3.org/2005/Atom"><title>Search</title><link rel="search" href="/search/description.xml" type="application/opensearchdescription+xml"/></feed>',
+    'https://library.example/search/description.xml':
+      '<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/"><Url type="application/atom+xml" template="results?q={searchTerms}&amp;page={startPage}&amp;language={language?}"/></OpenSearchDescription>',
+    'https://library.example/search/results?q=Hello%20World&page=1&language=':
+      '<feed xmlns="http://www.w3.org/2005/Atom"><title>Results</title></feed>',
   });
   const result = await createOpdsProvider(network).search!(context(), { query: 'Hello World' });
   assert.equal(result.title, 'Results');
@@ -170,7 +230,10 @@ test('missing search capability produces a stable unsupported error', async () =
 test('basic credentials stay scoped to the configured origin on allowed CDN redirects', async () => {
   const network = transport({
     [ROOT]: jsonFeed(),
-    'https://library.example/files/one.epub': new Response(null, { status: 302, headers: { location: 'https://cdn.example/one.epub' } }),
+    'https://library.example/files/one.epub': new Response(null, {
+      status: 302,
+      headers: { location: 'https://cdn.example/one.epub' },
+    }),
     'https://cdn.example/one.epub': new Response('epub', { headers: { 'content-type': 'application/epub+zip' } }),
   });
   const ctx: SourceContext = {
@@ -183,52 +246,91 @@ test('basic credentials stay scoped to the configured origin on allowed CDN redi
   assert.equal(acquisition.kind, 'file');
   const resource = await provider.openFile!(ctx, acquisition as Extract<Acquisition, { kind: 'file' }>);
   resource.stream!.resume();
-  assert.equal(network.calls[0]?.headers.get('authorization'), `Basic ${Buffer.from('reader:secret').toString('base64')}`);
+  assert.equal(
+    network.calls[0]?.headers.get('authorization'),
+    `Basic ${Buffer.from('reader:secret').toString('base64')}`,
+  );
   assert.equal(network.calls.at(-1)?.headers.get('authorization'), null);
   assert.ok(network.calls.every((call) => call.redirect === 'manual'));
 });
 
 test('forged origins and redirects are rejected before reaching an unrelated host', async () => {
-  const network = transport({ [ROOT]: new Response(null, { status: 302, headers: { location: 'http://127.0.0.1/private' } }) });
+  const network = transport({
+    [ROOT]: new Response(null, { status: 302, headers: { location: 'http://127.0.0.1/private' } }),
+  });
   const provider = createOpdsProvider(network);
-  await assert.rejects(() => provider.browse!(context(), { cursor: 'https://other.example/private' }), code('OPDS_UNSAFE_URL'));
+  await assert.rejects(
+    () => provider.browse!(context(), { cursor: 'https://other.example/private' }),
+    code('OPDS_UNSAFE_URL'),
+  );
   assert.equal(network.calls.length, 0);
   await assert.rejects(() => provider.browse!(context(), {}), code('OPDS_UNSAFE_URL'));
   assert.equal(network.calls.length, 1);
-  assert.throws(() => provider.validateConfig!({ url: 'https://user:password@example.com/opds' }), code('INVALID_SOURCE_CONFIG'));
+  assert.throws(
+    () => provider.validateConfig!({ url: 'https://user:password@example.com/opds' }),
+    code('INVALID_SOURCE_CONFIG'),
+  );
   assert.throws(() => provider.validateConfig!({ url: ROOT, password: 'secret' }), code('INVALID_SOURCE_CONFIG'));
 });
 
 test('malformed XML, entity declarations, oversized feeds and authentication failures are bounded errors', async () => {
-  for (const xml of ['<feed><title>broken</feed>', '<html><title>Login</title></html>', '{}', '<!DOCTYPE feed [<!ENTITY secret SYSTEM "file:///etc/passwd">]><feed><title>&secret;</title></feed>']) {
-    await assert.rejects(() => createOpdsProvider(transport({ [ROOT]: xml })).browse!(context(), {}), code('OPDS_INVALID_RESPONSE'));
+  for (const xml of [
+    '<feed><title>broken</feed>',
+    '<html><title>Login</title></html>',
+    '{}',
+    '<!DOCTYPE feed [<!ENTITY secret SYSTEM "file:///etc/passwd">]><feed><title>&secret;</title></feed>',
+  ]) {
+    await assert.rejects(
+      () => createOpdsProvider(transport({ [ROOT]: xml })).browse!(context(), {}),
+      code('OPDS_INVALID_RESPONSE'),
+    );
   }
-  await assert.rejects(() => createOpdsProvider({ ...transport({ [ROOT]: jsonFeed() }), maxFeedBytes: 20 }).browse!(context(), {}), code('RESOURCE_TOO_LARGE'));
-  await assert.rejects(() => createOpdsProvider(transport({ [ROOT]: new Response('', { status: 401 }) })).browse!(context(), {}), code('AUTH_REQUIRED'));
-  await assert.rejects(() => createOpdsProvider(transport({ [ROOT]: jsonFeed() })).browse!(context({ url: ROOT, username: 'reader' }), {}), code('AUTH_REQUIRED'));
+  await assert.rejects(
+    () => createOpdsProvider({ ...transport({ [ROOT]: jsonFeed() }), maxFeedBytes: 20 }).browse!(context(), {}),
+    code('RESOURCE_TOO_LARGE'),
+  );
+  await assert.rejects(
+    () => createOpdsProvider(transport({ [ROOT]: new Response('', { status: 401 }) })).browse!(context(), {}),
+    code('AUTH_REQUIRED'),
+  );
+  await assert.rejects(
+    () => createOpdsProvider(transport({ [ROOT]: jsonFeed() })).browse!(context({ url: ROOT, username: 'reader' }), {}),
+    code('AUTH_REQUIRED'),
+  );
 });
 
 test('a successful HTML login page cannot masquerade as an EPUB download', async () => {
   const network = transport({
     [ROOT]: jsonFeed(),
-    'https://library.example/files/one.epub': new Response('<html>login</html>', { headers: { 'content-type': 'text/html' } }),
+    'https://library.example/files/one.epub': new Response('<html>login</html>', {
+      headers: { 'content-type': 'text/html' },
+    }),
   });
   const provider = createOpdsProvider(network);
   const entry = (await provider.browse!(context(), {})).items[0]!;
   const acquisition = await provider.acquire(context(), { entryRef: entry.ref });
-  await assert.rejects(() => provider.openFile!(context(), acquisition as Extract<Acquisition, { kind: 'file' }>), code('OPDS_INVALID_RESPONSE'));
+  await assert.rejects(
+    () => provider.openFile!(context(), acquisition as Extract<Acquisition, { kind: 'file' }>),
+    code('OPDS_INVALID_RESPONSE'),
+  );
 });
 
 test('download streams enforce the byte budget even without Content-Length', async () => {
   const network = transport({
     [ROOT]: jsonFeed(),
-    'https://library.example/files/one.epub': new Response('a'.repeat(64), { headers: { 'content-type': 'application/epub+zip' } }),
+    'https://library.example/files/one.epub': new Response('a'.repeat(64), {
+      headers: { 'content-type': 'application/epub+zip' },
+    }),
   });
   const provider = createOpdsProvider({ ...network, maxFileBytes: 32 });
   const entry = (await provider.browse!(context(), {})).items[0]!;
   const acquisition = await provider.acquire(context(), { entryRef: entry.ref });
   const file = await provider.openFile!(context(), acquisition as Extract<Acquisition, { kind: 'file' }>);
-  await assert.rejects(async () => { for await (const _chunk of file.stream!) { /* Drain until the provider rejects the oversized body. */ } }, code('RESOURCE_TOO_LARGE'));
+  await assert.rejects(async () => {
+    for await (const _chunk of file.stream!) {
+      /* Drain until the provider rejects the oversized body. */
+    }
+  }, code('RESOURCE_TOO_LARGE'));
 });
 
 test('cancelled operations do not start a network request', async () => {

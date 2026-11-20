@@ -12,14 +12,63 @@ import { saveMediaPreferences } from '../src/features/media/services/preferences
 const root = document.createElement('div');
 document.body.append(root);
 const user = { id: 'u1', username: 'lin', displayName: '林间', role: 'member', createdAt: 0 };
-const book = { id: 'b1', title: '夜航船', author: '示例', format: 'epub', coverUrl: null, percentage: 0.42, chapterTitle: '第十二章 夜雨', lastReadAt: 1 };
-const activity = (over: object) => ({ id: 'a', itemId: 'i1', partId: 'p', assetId: 's', libraryId: 'l', kind: 'episode', title: '示例剧集', partTitle: '第 3 集', start: 0, end: 2480, available: 1, position: 1748, completed: false, ...over });
+const book = {
+  id: 'b1',
+  title: '夜航船',
+  author: '示例',
+  format: 'epub',
+  coverUrl: null,
+  percentage: 0.42,
+  chapterTitle: '第十二章 夜雨',
+  lastReadAt: 1,
+};
+const activity = (over: object) => ({
+  id: 'a',
+  itemId: 'i1',
+  partId: 'p',
+  assetId: 's',
+  libraryId: 'l',
+  kind: 'episode',
+  title: '示例剧集',
+  partTitle: '第 3 集',
+  start: 0,
+  end: 2480,
+  available: 1,
+  position: 1748,
+  completed: false,
+  ...over,
+});
 
-const series = { id: 's1', libraryId: 'l', kind: 'series', title: '示例剧集', parentId: null, metadata: {}, overrides: {}, children: [], editions: [] };
+const series = {
+  id: 's1',
+  libraryId: 'l',
+  kind: 'series',
+  title: '示例剧集',
+  parentId: null,
+  metadata: {},
+  overrides: {},
+  children: [],
+  editions: [],
+};
 const episode = { ...series, id: 'i1', kind: 'episode', title: '第 3 集', parentId: 's1' };
-const poster = (id: string, title: string) => ({ id, libraryId: 'l', kind: 'movie', title, parentId: null, metadata: {}, overrides: {}, channel: 'video', libraryName: '片库' });
+const poster = (id: string, title: string) => ({
+  id,
+  libraryId: 'l',
+  kind: 'movie',
+  title,
+  parentId: null,
+  metadata: {},
+  overrides: {},
+  channel: 'video',
+  libraryName: '片库',
+});
 
-function mount({ reading = [book], video = [activity({ title: '第 3 集', updatedAt: 5 })], audio = [] as object[], discover = { items: [] as object[], total: 0 } }: { reading?: object[]; video?: object[]; audio?: object[]; discover?: { items: object[]; total: number } } = {}) {
+function mount({
+  reading = [book],
+  video = [activity({ title: '第 3 集', updatedAt: 5 })],
+  audio = [] as object[],
+  discover = { items: [] as object[], total: 0 },
+}: { reading?: object[]; video?: object[]; audio?: object[]; discover?: { items: object[]; total: number } } = {}) {
   const runtime = {
     api: {
       baseUrl: 'https://reader.example.com',
@@ -30,33 +79,55 @@ function mount({ reading = [book], video = [activity({ title: '第 3 集', updat
     },
     mediaApi: {
       preferenceScope: () => 'home-test',
-      request: vi.fn(async (path: string) => path.startsWith('browse?')
-        ? (path.includes('channel=video&') ? discover : { items: [], total: 0 })
-        : { items: path.includes('channel=video') ? video : audio, total: 0 }),
-      detail: vi.fn(async (id: string) => id === 's1' ? series : episode),
+      request: vi.fn(async (path: string) =>
+        path.startsWith('browse?')
+          ? path.includes('channel=video&')
+            ? discover
+            : { items: [], total: 0 }
+          : { items: path.includes('channel=video') ? video : audio, total: 0 },
+      ),
+      detail: vi.fn(async (id: string) => (id === 's1' ? series : episode)),
       cover: vi.fn().mockRejectedValue(new Error('none')),
     },
   } as any;
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  act(() => render(
-    <RuntimeContext.Provider value={runtime}><QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/']}><Routes><Route path="/" element={<HomePage />} /></Routes></MemoryRouter>
-    </QueryClientProvider></RuntimeContext.Provider>,
-    root,
-  ));
+  act(() =>
+    render(
+      <RuntimeContext.Provider value={runtime}>
+        <QueryClientProvider client={client}>
+          <MemoryRouter initialEntries={['/']}>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>
+      </RuntimeContext.Provider>,
+      root,
+    ),
+  );
   return runtime;
 }
-const settle = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+const settle = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
 // For a result that takes a chain of requests (activity → episode → series): a fixed 20ms
 // is enough on an idle machine and not under a full parallel run, so wait for the thing itself.
-const until = async (done: () => boolean) => { for (let i = 0; i < 50 && !done(); i++) await settle(); };
+const until = async (done: () => boolean) => {
+  for (let i = 0; i < 50 && !done(); i++) await settle();
+};
 
-afterEach(() => { act(() => render(null, root)); useAuthStore.setState({ session: null, verifiedUser: null }); localStorage.clear(); });
+afterEach(() => {
+  act(() => render(null, root));
+  useAuthStore.setState({ session: null, verifiedUser: null });
+  localStorage.clear();
+});
 
 describe('首页', () => {
-  it('pure reading never requests media history or discovery',async()=>{
-    useAuthStore.setState({verifiedUser:{...user,role:'member',features:{media:false}}});
-    const runtime=mount();await settle();
+  it('pure reading never requests media history or discovery', async () => {
+    useAuthStore.setState({ verifiedUser: { ...user, role: 'member', features: { media: false } } });
+    const runtime = mount();
+    await settle();
     expect(runtime.mediaApi.request).not.toHaveBeenCalled();
     expect(runtime.mediaApi.detail).not.toHaveBeenCalled();
     expect(root.querySelectorAll('a[href^="/media/"]')).toHaveLength(0);
@@ -79,7 +150,7 @@ describe('首页', () => {
     await until(() => root.querySelector('.home-continue a.home-resume strong')?.textContent === '示例剧集');
     expect(root.querySelector('h1')?.textContent).toContain('林间');
     const cards = [...root.querySelectorAll<HTMLAnchorElement>('.home-continue a.home-resume')];
-    expect(cards.map(card => card.dataset.channel)).toEqual(['video', 'read']);
+    expect(cards.map((card) => card.dataset.channel)).toEqual(['video', 'read']);
     const [video, read] = cards as [HTMLAnchorElement, HTMLAnchorElement];
     expect(video.getAttribute('href')).toBe('/media/video/items/i1');
     expect(video.querySelector('strong')?.textContent).toBe('示例剧集');
@@ -97,17 +168,25 @@ describe('首页', () => {
     useAuthStore.setState({ verifiedUser: user as any });
     localStorage.clear();
     const runtime = mount({ discover: { items: [poster('m1', '远山'), poster('m2', '近水')], total: 9 } });
-    const browses = () => runtime.mediaApi.request.mock.calls.map(([path]: [string]) => path).filter((path: string) => path.startsWith('browse?channel=video'));
+    const browses = () =>
+      runtime.mediaApi.request.mock.calls
+        .map(([path]: [string]) => path)
+        .filter((path: string) => path.startsWith('browse?channel=video'));
     await settle();
     const section = () => root.querySelector<HTMLElement>('.home-discover[data-channel="video"]')!;
     expect(section().querySelector('h2')?.textContent).toBe('看点什么');
-    expect([...section().querySelectorAll('a.home-tile')].map(tile => tile.getAttribute('href'))).toEqual(['/media/video/items/m1', '/media/video/items/m2']);
+    expect([...section().querySelectorAll('a.home-tile')].map((tile) => tile.getAttribute('href'))).toEqual([
+      '/media/video/items/m1',
+      '/media/video/items/m2',
+    ]);
     expect(root.querySelector('.home-discover[data-channel="audiobook"]')).toBeNull();
     expect(root.querySelector('.home-discover[data-channel="music"]')).toBeNull();
     expect(browses()).toEqual([expect.stringContaining('sort=added')]);
     expect(section().querySelector('.home-shuffle')).toBeNull();
 
-    const random = [...section().querySelectorAll<HTMLButtonElement>('.segmented button')].find(button => button.textContent === '随便看看')!;
+    const random = [...section().querySelectorAll<HTMLButtonElement>('.segmented button')].find(
+      (button) => button.textContent === '随便看看',
+    )!;
     act(() => random.click());
     await settle();
     expect(random.getAttribute('aria-pressed')).toBe('true');
@@ -122,7 +201,9 @@ describe('首页', () => {
     useAuthStore.setState({ verifiedUser: user as any });
     mount({ reading: [{ ...book, id: 'b2', title: '新书', lastReadAt: 9 }, book] });
     await settle();
-    expect([...root.querySelectorAll<HTMLAnchorElement>('a.home-resume')].map(card => card.getAttribute('href'))).toEqual(['/book/b2', '/media/video/items/i1', '/book/b1']);
+    expect(
+      [...root.querySelectorAll<HTMLAnchorElement>('a.home-resume')].map((card) => card.getAttribute('href')),
+    ).toEqual(['/book/b2', '/media/video/items/i1', '/book/b1']);
   });
 
   it('skips finished media and invites the reader to the shelf when nothing is in progress', async () => {
@@ -138,10 +219,17 @@ describe('首页', () => {
     saveMediaPreferences('home-test', { density: 'compact', showContinue: false, showLibraryName: true });
     const runtime = mount();
     await settle();
-    expect([...root.querySelectorAll<HTMLAnchorElement>('a.home-resume')].map(card => card.dataset.channel)).toEqual(['read']);
+    expect([...root.querySelectorAll<HTMLAnchorElement>('a.home-resume')].map((card) => card.dataset.channel)).toEqual([
+      'read',
+    ]);
     expect(runtime.mediaApi.request.mock.calls.some(([path]: [string]) => path.startsWith('history'))).toBe(false);
-    act(() => { saveMediaPreferences('home-test', { density: 'compact', showContinue: true, showLibraryName: true }); });
+    act(() => {
+      saveMediaPreferences('home-test', { density: 'compact', showContinue: true, showLibraryName: true });
+    });
     await settle();
-    expect([...root.querySelectorAll<HTMLAnchorElement>('a.home-resume')].map(card => card.dataset.channel)).toEqual(['video', 'read']);
+    expect([...root.querySelectorAll<HTMLAnchorElement>('a.home-resume')].map((card) => card.dataset.channel)).toEqual([
+      'video',
+      'read',
+    ]);
   });
 });

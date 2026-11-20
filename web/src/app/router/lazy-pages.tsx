@@ -10,7 +10,7 @@ import { FloatingNotice } from '../../ui/floating-notice.tsx';
  * — as `ReaderPage`, `MediaLibrariesPage`, … rather than as anonymous lazy objects.
  */
 function deferred<M, K extends keyof M>(load: () => Promise<M>, name: K): LazyExoticComponent<ComponentType> {
-  return lazy(() => load().then(module => ({ default: module[name] as ComponentType })));
+  return lazy(() => load().then((module) => ({ default: module[name] as ComponentType })));
 }
 
 const fallback = <FloatingNotice message="正在加载…" busy />;
@@ -61,29 +61,185 @@ const LibraryFiles = deferred(library, 'LibraryFilesPage');
 const Sources = deferred(sources, 'SourcesPage');
 const SourceCatalog = deferred(sourceCatalog, 'SourceCatalogPage');
 
-export function ReaderPage() { return <Suspense fallback={fallback}><Reader /></Suspense>; }
-export function MediaLibrariesPage() { return <Suspense fallback={fallback}><Libraries /></Suspense>; }
-export function MediaLibraryCreatePage() { return <Suspense fallback={fallback}><LibraryCreate /></Suspense>; }
-export function MediaLibraryEditPage() { return <Suspense fallback={fallback}><LibraryEdit /></Suspense>; }
-export function MediaLibraryPermissionsPage() { return <Suspense fallback={fallback}><LibraryPermissions /></Suspense>; }
-export function MediaTasksPage() { return <Suspense fallback={fallback}><Tasks /></Suspense>; }
-export function MediaMetadataEditPage() { return <Suspense fallback={fallback}><MetadataEdit /></Suspense>; }
-export function MediaMatchPage() { return <Suspense fallback={fallback}><Match /></Suspense>; }
-export function MediaChaptersPage() { return <Suspense fallback={fallback}><Chapters /></Suspense>; }
-export function MediaEditionPage() { return <Suspense fallback={fallback}><Edition /></Suspense>; }
-export function MediaStructurePage() { return <Suspense fallback={fallback}><Structure /></Suspense>; }
-export function SourceEditorPage() { return <Suspense fallback={fallback}><SourceEditor /></Suspense>; }
-export function SourceCredentialsPage() { return <Suspense fallback={fallback}><SourceCredentials /></Suspense>; }
-export function StatsPage() { return <Suspense fallback={fallback}><Stats /></Suspense>; }
-export function NotesPage() { return <Suspense fallback={fallback}><Notes /></Suspense>; }
-export function SourceExtensionPage() { return <Suspense fallback={fallback}><SourceExtension /></Suspense>; }
-export function AdminUsersPage() { return <Suspense fallback={fallback}><AdminUsers /></Suspense>; }
-export function AdminRegistrationPage() { return <Suspense fallback={fallback}><AdminRegistration /></Suspense>; }
-export function AdminServicesPage() { return <Suspense fallback={fallback}><AdminServices /></Suspense>; }
-export function MediaDetailPage() { return <Suspense fallback={fallback}><MediaDetail /></Suspense>; }
-export function MediaPlayerPage() { return <Suspense fallback={fallback}><MediaPlayer /></Suspense>; }
-export function MediaFoldersPage() { return <Suspense fallback={fallback}><MediaFolders /></Suspense>; }
-export function MediaNarratorsPage() { return <Suspense fallback={fallback}><MediaNarrators /></Suspense>; }
-export function LibraryFilesPage() { return <Suspense fallback={fallback}><LibraryFiles /></Suspense>; }
-export function SourcesPage() { return <Suspense fallback={fallback}><Sources /></Suspense>; }
-export function SourceCatalogPage() { return <Suspense fallback={fallback}><SourceCatalog /></Suspense>; }
+export function ReaderPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <Reader />
+    </Suspense>
+  );
+}
+export function MediaLibrariesPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <Libraries />
+    </Suspense>
+  );
+}
+export function MediaLibraryCreatePage() {
+  return (
+    <Suspense fallback={fallback}>
+      <LibraryCreate />
+    </Suspense>
+  );
+}
+export function MediaLibraryEditPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <LibraryEdit />
+    </Suspense>
+  );
+}
+export function MediaLibraryPermissionsPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <LibraryPermissions />
+    </Suspense>
+  );
+}
+export function MediaTasksPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <Tasks />
+    </Suspense>
+  );
+}
+export function MediaMetadataEditPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <MetadataEdit />
+    </Suspense>
+  );
+}
+export function MediaMatchPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <Match />
+    </Suspense>
+  );
+}
+export function MediaChaptersPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <Chapters />
+    </Suspense>
+  );
+}
+export function MediaEditionPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <Edition />
+    </Suspense>
+  );
+}
+export function MediaStructurePage() {
+  return (
+    <Suspense fallback={fallback}>
+      <Structure />
+    </Suspense>
+  );
+}
+export function SourceEditorPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <SourceEditor />
+    </Suspense>
+  );
+}
+export function SourceCredentialsPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <SourceCredentials />
+    </Suspense>
+  );
+}
+export function StatsPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <Stats />
+    </Suspense>
+  );
+}
+export function NotesPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <Notes />
+    </Suspense>
+  );
+}
+export function SourceExtensionPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <SourceExtension />
+    </Suspense>
+  );
+}
+export function AdminUsersPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <AdminUsers />
+    </Suspense>
+  );
+}
+export function AdminRegistrationPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <AdminRegistration />
+    </Suspense>
+  );
+}
+export function AdminServicesPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <AdminServices />
+    </Suspense>
+  );
+}
+export function MediaDetailPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <MediaDetail />
+    </Suspense>
+  );
+}
+export function MediaPlayerPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <MediaPlayer />
+    </Suspense>
+  );
+}
+export function MediaFoldersPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <MediaFolders />
+    </Suspense>
+  );
+}
+export function MediaNarratorsPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <MediaNarrators />
+    </Suspense>
+  );
+}
+export function LibraryFilesPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <LibraryFiles />
+    </Suspense>
+  );
+}
+export function SourcesPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <Sources />
+    </Suspense>
+  );
+}
+export function SourceCatalogPage() {
+  return (
+    <Suspense fallback={fallback}>
+      <SourceCatalog />
+    </Suspense>
+  );
+}

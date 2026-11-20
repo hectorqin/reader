@@ -1,39 +1,299 @@
 // Detail management expands existing controls; all mutations are intercepted in a temporary service.
-const {chromium}=require('playwright'),{spawn}=require('node:child_process'),{join,resolve}=require('node:path'),{pathToFileURL}=require('node:url'),fs=require('node:fs/promises'),assert=require('node:assert/strict');
-(async()=>{
- const repo=resolve(__dirname,'../..'),out=join(repo,'artifacts/media/detail-admin-review');await fs.mkdir(out,{recursive:true});
- const server=spawn(process.execPath,['--import',pathToFileURL(join(repo,'server/node_modules/tsx/dist/loader.mjs')).href,join(repo,'server/tools/media-review-fixture.ts')],{cwd:repo,windowsHide:true,stdio:['pipe','pipe','pipe']});let browser,logs='';server.stderr.on('data',data=>logs+=data);
- try{
-  const {baseUrl}=await new Promise((ok,no)=>{let buffer='';const timer=setTimeout(()=>no(Error(logs)),30000);server.stdout.on('data',data=>{buffer+=data;for(const line of buffer.split('\n'))try{const value=JSON.parse(line);if(value.baseUrl){clearTimeout(timer);ok(value);}}catch{}});server.once('exit',()=>{clearTimeout(timer);no(Error(logs));});});
-  browser=await chromium.launch({headless:true,executablePath:process.env.PROTOTYPE_CHROMIUM});const page=await browser.newPage({viewport:{width:390,height:900}}),states=[],errors=[],requests=[];page.on('pageerror',error=>errors.push(error.message));
-  const long='穿过群山与城市的长名称 LongUnbrokenName',part=(id)=>({id,assetId:id,title:long+' '+id,start:0,end:120,available:true});
-  const work=(id,kind,libraryId)=>({id,kind,libraryId,title:id==='film'?'海岸线':long,parentId:null,ordinal:1,metadata:{year:2024,artist:'自然录音'},overrides:{},children:[],editions:[{id:'edition-'+id,label:'完整版本',revision:'rev-1',parts:[part(id+'-1'),part(id+'-2'),part(id+'-3')]},{id:'alt-'+id,label:'修订版本',revision:'rev-2',parts:[part(id+'-alt')]}]});
-  const works={film:work('film','movie','video'),target:work('target','movie','video'),song:work('song','track','music'),album:work('album','album','music'),episode:work('episode','episode','video'),series:work('series','series','video')};works.series.children=[{...work('season','season','video'),title:'修订季',ordinal:2}];
-  const modes={},gates=new Map();function hold(key){let release;gates.set(key,new Promise(resolve=>release=resolve));return()=>{release();gates.delete(key);};}
-  await page.route('**/api/v1/media/**',async route=>{
-   const url=new URL(route.request().url()),path=url.pathname.split('/api/v1/media/')[1],method=route.request().method(),key=path.startsWith('libraries/')&&path.endsWith('/items')?'targets':method!=='GET'?'write':path;requests.push({key,method,path,body:route.request().postDataJSON()});if(gates.has(key))await gates.get(key);
-   if(modes[key]==='offline')return route.abort('failed');
-   if(modes[key]==='conflict')return route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:{code:'MEDIA_PARENT_CHANGED',message:'当前归属已被其他操作修改。'}})});
-   let data={items:[],total:0};if(path==='libraries')data={items:['video','music','audiobook'].map(kind=>({id:kind,kind,name:'本地 '+kind,access:'all'}))};
-   else if(/^items\/[^/]+$/.test(path))data=works[path.split('/')[1]];
-   else if(key==='targets'){const kind=url.searchParams.get('kind');data={items:[kind==='movie'?works.target:kind==='album'?works.album:works.series],total:1};}
-   else if(path.endsWith('/favorite'))data={favorite:false};
-   else if(path.endsWith('/playback-context'))data={parts:[]};
-   await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
-  });
-  await page.goto(baseUrl+'/#/media/video/items/film');await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');await page.locator('form button[type=submit]').click();await page.locator('.media-detail-page').waitFor();
-  async function capture(view,selector){for(const width of [360,390,1120])for(const theme of ['light','dark']){await page.setViewportSize({width,height:900});await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;document.activeElement?.blur();},theme);await page.locator(selector).first().scrollIntoViewIfNeeded();await page.mouse.move(0,0);const key=view+'-'+width+'-'+theme;assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,key+' page overflow');assert.equal(await page.locator(selector).first().evaluate(el=>el.scrollWidth>el.clientWidth+1),false,key+' panel overflow');await page.screenshot({path:join(out,key+'.png')});states.push({key,width,theme});}}
-  async function choose(label,option){await page.getByRole('combobox',{name:label,exact:true}).click();await page.getByRole('listbox',{name:label,exact:true}).getByRole('option',{name:option,exact:true}).click();}
-  async function openMenuItem(label){await page.getByRole('button',{name:'作品操作',exact:true}).click();await page.getByRole('menuitem',{name:label,exact:true}).click();}
-  await openMenuItem('版本管理');const sheet=page.getByRole('dialog',{name:'版本管理',exact:true});await sheet.waitFor();
-  const admin=sheet.locator('.media-edition-admin');assert.equal(await admin.evaluate(el=>el.open),true,'management sheet opens the edition tools');await page.getByRole('button',{name:'修改版本名称',exact:true}).click();await page.getByLabel('版本名称',{exact:true}).fill(long);await capture('rename','.media-edition-admin form');modes.write='offline';await page.getByRole('button',{name:'保存版本名称',exact:true}).click();await admin.getByRole('alert').waitFor();await capture('rename-offline','.media-edition-admin form');assert.equal(await page.getByLabel('版本名称',{exact:true}).inputValue(),long);await admin.getByRole('button',{name:'取消',exact:true}).click();modes.write='';
-  await page.getByText('调整章节顺序',{exact:true}).click();const order=page.getByRole('region',{name:'章节排序',exact:true});await order.getByRole('button',{name:'下移 '+long+' film-1',exact:true}).click();await capture('order','.media-edition-order');modes.write='offline';await page.getByRole('button',{name:'保存章节顺序',exact:true}).click();await order.getByRole('alert').waitFor();await capture('order-offline','.media-edition-order');assert.ok((await order.locator('.media-row').first().innerText()).includes('film-2'));await page.getByText('调整章节顺序',{exact:true}).click();modes.write='';
-  await admin.locator('summary').filter({hasText:'拆分或合并版本'}).click();await page.getByLabel('新版本名称',{exact:true}).fill(long);await page.getByRole('checkbox').first().check();await page.getByRole('button',{name:'预览整理结果',exact:true}).click();await capture('split-preview','.media-edition-organizer');modes.write='offline';await page.getByRole('button',{name:'确认整理',exact:true}).click();await page.locator('.media-edition-organizer [role=alert]').waitFor();await capture('split-offline','.media-edition-organizer');await page.getByRole('button',{name:'返回修改',exact:true}).click();modes.write='';await choose('整理方式','合并到已有版本');await choose('目标版本','修订版本 · 1 节');await page.getByRole('button',{name:'预览整理结果',exact:true}).click();await capture('merge-preview','.media-edition-organizer');await admin.locator('summary').filter({hasText:'拆分或合并版本'}).click();
-  const release=hold('targets');await page.getByText('纠正版本归属',{exact:true}).click();await page.locator('.media-edition-assignment .media-read-loading').waitFor();await capture('assignment-loading','.media-edition-assignment');modes.targets='offline';release();await page.getByRole('button',{name:'重新读取作品',exact:true}).waitFor();await capture('assignment-offline','.media-edition-assignment');const writeCount=requests.filter(row=>row.method!=='GET').length;modes.targets='';await page.getByRole('button',{name:'重新读取作品',exact:true}).click();await page.getByRole('button',{name:'选择此作品',exact:true}).click();await page.getByRole('button',{name:'确认修改归属',exact:true}).waitFor();assert.equal(requests.filter(row=>row.method!=='GET').length,writeCount);await capture('assignment-preview','[aria-label=确认版本归属]');modes.write='offline';await page.getByRole('button',{name:'确认修改归属',exact:true}).click();await page.locator('.media-edition-assignment [role=alert]').waitFor();await capture('assignment-save-offline','[aria-label=确认版本归属]');assert.equal(await page.getByRole('button',{name:'重新读取作品',exact:true}).count(),0);await page.getByRole('button',{name:'取消选择',exact:true}).click();modes.write='';
-  await page.getByText('目标作品不存在？新建作品',{exact:true}).click();await page.getByLabel('新作品标题',{exact:true}).fill(long);await page.getByRole('button',{name:'预览新建作品',exact:true}).click();await capture('assignment-new-preview','[aria-label=确认新建作品]');await page.getByRole('button',{name:'取消新建',exact:true}).click();
-  await sheet.locator('.sheet-close').click();await sheet.waitFor({state:'detached'});
-  await page.evaluate(()=>location.hash='#/media/music/items/song');await page.locator('.media-detail-page').waitFor();await openMenuItem('结构整理');await page.waitForFunction(()=>location.hash==='#/media/music/items/song/structure');await page.getByRole('button',{name:'调整所属专辑',exact:true}).click();await page.locator('.media-parent-editor .media-row').waitFor();await capture('music-parent','.media-parent-editor');await page.locator('.media-parent-editor').getByRole('button',{name:'选择',exact:true}).click();await capture('music-parent-preview','.media-parent-preview');modes.write='offline';await page.getByRole('button',{name:'确认调整归属',exact:true}).click();await page.locator('.media-parent-editor [role=alert]').waitFor();await capture('music-parent-offline','.media-parent-preview');modes.write='';
-  await page.evaluate(()=>location.hash='#/media/video/items/episode');await page.locator('.media-detail-page').waitFor();await openMenuItem('结构整理');await page.waitForFunction(()=>location.hash==='#/media/video/items/episode/structure');await page.getByRole('button',{name:'调整归属与集号',exact:true}).click();await page.getByRole('button',{name:'选择剧集',exact:true}).click();await choose('目标季','修订季（第 2 季）');await page.getByLabel('集号',{exact:true}).fill('12');await page.getByRole('button',{name:'预览季集整理',exact:true}).click();await capture('hierarchy-preview','.media-parent-preview');modes.write='conflict';await page.getByRole('button',{name:'确认季集整理',exact:true}).click();await page.getByRole('button',{name:'刷新当前归属',exact:true}).waitFor();await capture('hierarchy-conflict','.media-parent-editor [role=status]');const before=requests.filter(row=>row.method!=='GET').length;await page.getByRole('button',{name:'刷新当前归属',exact:true}).click();await page.getByRole('button',{name:'选择剧集',exact:true}).waitFor();assert.equal(requests.filter(row=>row.method!=='GET').length,before);
-  assert.deepEqual(errors,[]);await fs.writeFile(join(out,'verification.json'),JSON.stringify({passed:true,fixture:'Production UI/login; mocked metadata and every write failure. No actual file/version/library changes.',states,attemptedWrites:requests.filter(row=>row.method!=='GET'),browserErrors:errors},null,2));await fs.writeFile(join(out,'index.html'),`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>详情管理状态评审</title><style>body{font:14px/1.6 system-ui;margin:24px;background:#e9e9e4;color:#30392c}img{max-width:100%}section{margin:30px 0}</style><h1>详情管理与草稿保留</h1><p>原型资源侧栏的展开操作补充，统一沿用表单与列表样式；不是新增的原型页面。三尺寸、两主题，实际生产客户端，数据与保存失败为测试响应。</p>${states.map(row=>`<section><h2>${row.key}</h2><img src="${row.key}.png"></section>`).join('')}</html>`);console.log(JSON.stringify({passed:true,states:states.length}));
- }finally{if(browser)await browser.close();server.stdin.end();await new Promise(resolve=>server.exitCode!==null?resolve():server.once('exit',resolve));}
-})().catch(error=>{console.error(error);process.exitCode=1;});
+const { chromium } = require('playwright'),
+  { spawn } = require('node:child_process'),
+  { join, resolve } = require('node:path'),
+  { pathToFileURL } = require('node:url'),
+  fs = require('node:fs/promises'),
+  assert = require('node:assert/strict');
+(async () => {
+  const repo = resolve(__dirname, '../..'),
+    out = join(repo, 'artifacts/media/detail-admin-review');
+  await fs.mkdir(out, { recursive: true });
+  const server = spawn(
+    process.execPath,
+    [
+      '--import',
+      pathToFileURL(join(repo, 'server/node_modules/tsx/dist/loader.mjs')).href,
+      join(repo, 'server/tools/media-review-fixture.ts'),
+    ],
+    { cwd: repo, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] },
+  );
+  let browser,
+    logs = '';
+  server.stderr.on('data', (data) => (logs += data));
+  try {
+    const { baseUrl } = await new Promise((ok, no) => {
+      let buffer = '';
+      const timer = setTimeout(() => no(Error(logs)), 30000);
+      server.stdout.on('data', (data) => {
+        buffer += data;
+        for (const line of buffer.split('\n'))
+          try {
+            const value = JSON.parse(line);
+            if (value.baseUrl) {
+              clearTimeout(timer);
+              ok(value);
+            }
+          } catch {}
+      });
+      server.once('exit', () => {
+        clearTimeout(timer);
+        no(Error(logs));
+      });
+    });
+    browser = await chromium.launch({ headless: true, executablePath: process.env.PROTOTYPE_CHROMIUM });
+    const page = await browser.newPage({ viewport: { width: 390, height: 900 } }),
+      states = [],
+      errors = [],
+      requests = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    const long = '穿过群山与城市的长名称 LongUnbrokenName',
+      part = (id) => ({ id, assetId: id, title: long + ' ' + id, start: 0, end: 120, available: true });
+    const work = (id, kind, libraryId) => ({
+      id,
+      kind,
+      libraryId,
+      title: id === 'film' ? '海岸线' : long,
+      parentId: null,
+      ordinal: 1,
+      metadata: { year: 2024, artist: '自然录音' },
+      overrides: {},
+      children: [],
+      editions: [
+        {
+          id: 'edition-' + id,
+          label: '完整版本',
+          revision: 'rev-1',
+          parts: [part(id + '-1'), part(id + '-2'), part(id + '-3')],
+        },
+        { id: 'alt-' + id, label: '修订版本', revision: 'rev-2', parts: [part(id + '-alt')] },
+      ],
+    });
+    const works = {
+      film: work('film', 'movie', 'video'),
+      target: work('target', 'movie', 'video'),
+      song: work('song', 'track', 'music'),
+      album: work('album', 'album', 'music'),
+      episode: work('episode', 'episode', 'video'),
+      series: work('series', 'series', 'video'),
+    };
+    works.series.children = [{ ...work('season', 'season', 'video'), title: '修订季', ordinal: 2 }];
+    const modes = {},
+      gates = new Map();
+    function hold(key) {
+      let release;
+      gates.set(key, new Promise((resolve) => (release = resolve)));
+      return () => {
+        release();
+        gates.delete(key);
+      };
+    }
+    await page.route('**/api/v1/media/**', async (route) => {
+      const url = new URL(route.request().url()),
+        path = url.pathname.split('/api/v1/media/')[1],
+        method = route.request().method(),
+        key = path.startsWith('libraries/') && path.endsWith('/items') ? 'targets' : method !== 'GET' ? 'write' : path;
+      requests.push({ key, method, path, body: route.request().postDataJSON() });
+      if (gates.has(key)) await gates.get(key);
+      if (modes[key] === 'offline') return route.abort('failed');
+      if (modes[key] === 'conflict')
+        return route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: { code: 'MEDIA_PARENT_CHANGED', message: '当前归属已被其他操作修改。' } }),
+        });
+      let data = { items: [], total: 0 };
+      if (path === 'libraries')
+        data = {
+          items: ['video', 'music', 'audiobook'].map((kind) => ({
+            id: kind,
+            kind,
+            name: '本地 ' + kind,
+            access: 'all',
+          })),
+        };
+      else if (/^items\/[^/]+$/.test(path)) data = works[path.split('/')[1]];
+      else if (key === 'targets') {
+        const kind = url.searchParams.get('kind');
+        data = { items: [kind === 'movie' ? works.target : kind === 'album' ? works.album : works.series], total: 1 };
+      } else if (path.endsWith('/favorite')) data = { favorite: false };
+      else if (path.endsWith('/playback-context')) data = { parts: [] };
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(data) });
+    });
+    await page.goto(baseUrl + '/#/media/video/items/film');
+    await page.locator('input[autocomplete="username"]').fill('reviewer');
+    await page.locator('input[type="password"]').fill('review-test-pass');
+    await page.locator('form button[type=submit]').click();
+    await page.locator('.media-detail-page').waitFor();
+    async function capture(view, selector) {
+      for (const width of [360, 390, 1120])
+        for (const theme of ['light', 'dark']) {
+          await page.setViewportSize({ width, height: 900 });
+          await page.evaluate((theme) => {
+            document.documentElement.dataset.theme = theme;
+            document.activeElement?.blur();
+          }, theme);
+          await page.locator(selector).first().scrollIntoViewIfNeeded();
+          await page.mouse.move(0, 0);
+          const key = view + '-' + width + '-' + theme;
+          assert.equal(
+            await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+            false,
+            key + ' page overflow',
+          );
+          assert.equal(
+            await page
+              .locator(selector)
+              .first()
+              .evaluate((el) => el.scrollWidth > el.clientWidth + 1),
+            false,
+            key + ' panel overflow',
+          );
+          await page.screenshot({ path: join(out, key + '.png') });
+          states.push({ key, width, theme });
+        }
+    }
+    async function choose(label, option) {
+      await page.getByRole('combobox', { name: label, exact: true }).click();
+      await page
+        .getByRole('listbox', { name: label, exact: true })
+        .getByRole('option', { name: option, exact: true })
+        .click();
+    }
+    async function openMenuItem(label) {
+      await page.getByRole('button', { name: '作品操作', exact: true }).click();
+      await page.getByRole('menuitem', { name: label, exact: true }).click();
+    }
+    await openMenuItem('版本管理');
+    const sheet = page.getByRole('dialog', { name: '版本管理', exact: true });
+    await sheet.waitFor();
+    const admin = sheet.locator('.media-edition-admin');
+    assert.equal(await admin.evaluate((el) => el.open), true, 'management sheet opens the edition tools');
+    await page.getByRole('button', { name: '修改版本名称', exact: true }).click();
+    await page.getByLabel('版本名称', { exact: true }).fill(long);
+    await capture('rename', '.media-edition-admin form');
+    modes.write = 'offline';
+    await page.getByRole('button', { name: '保存版本名称', exact: true }).click();
+    await admin.getByRole('alert').waitFor();
+    await capture('rename-offline', '.media-edition-admin form');
+    assert.equal(await page.getByLabel('版本名称', { exact: true }).inputValue(), long);
+    await admin.getByRole('button', { name: '取消', exact: true }).click();
+    modes.write = '';
+    await page.getByText('调整章节顺序', { exact: true }).click();
+    const order = page.getByRole('region', { name: '章节排序', exact: true });
+    await order.getByRole('button', { name: '下移 ' + long + ' film-1', exact: true }).click();
+    await capture('order', '.media-edition-order');
+    modes.write = 'offline';
+    await page.getByRole('button', { name: '保存章节顺序', exact: true }).click();
+    await order.getByRole('alert').waitFor();
+    await capture('order-offline', '.media-edition-order');
+    assert.ok((await order.locator('.media-row').first().innerText()).includes('film-2'));
+    await page.getByText('调整章节顺序', { exact: true }).click();
+    modes.write = '';
+    await admin.locator('summary').filter({ hasText: '拆分或合并版本' }).click();
+    await page.getByLabel('新版本名称', { exact: true }).fill(long);
+    await page.getByRole('checkbox').first().check();
+    await page.getByRole('button', { name: '预览整理结果', exact: true }).click();
+    await capture('split-preview', '.media-edition-organizer');
+    modes.write = 'offline';
+    await page.getByRole('button', { name: '确认整理', exact: true }).click();
+    await page.locator('.media-edition-organizer [role=alert]').waitFor();
+    await capture('split-offline', '.media-edition-organizer');
+    await page.getByRole('button', { name: '返回修改', exact: true }).click();
+    modes.write = '';
+    await choose('整理方式', '合并到已有版本');
+    await choose('目标版本', '修订版本 · 1 节');
+    await page.getByRole('button', { name: '预览整理结果', exact: true }).click();
+    await capture('merge-preview', '.media-edition-organizer');
+    await admin.locator('summary').filter({ hasText: '拆分或合并版本' }).click();
+    const release = hold('targets');
+    await page.getByText('纠正版本归属', { exact: true }).click();
+    await page.locator('.media-edition-assignment .media-read-loading').waitFor();
+    await capture('assignment-loading', '.media-edition-assignment');
+    modes.targets = 'offline';
+    release();
+    await page.getByRole('button', { name: '重新读取作品', exact: true }).waitFor();
+    await capture('assignment-offline', '.media-edition-assignment');
+    const writeCount = requests.filter((row) => row.method !== 'GET').length;
+    modes.targets = '';
+    await page.getByRole('button', { name: '重新读取作品', exact: true }).click();
+    await page.getByRole('button', { name: '选择此作品', exact: true }).click();
+    await page.getByRole('button', { name: '确认修改归属', exact: true }).waitFor();
+    assert.equal(requests.filter((row) => row.method !== 'GET').length, writeCount);
+    await capture('assignment-preview', '[aria-label=确认版本归属]');
+    modes.write = 'offline';
+    await page.getByRole('button', { name: '确认修改归属', exact: true }).click();
+    await page.locator('.media-edition-assignment [role=alert]').waitFor();
+    await capture('assignment-save-offline', '[aria-label=确认版本归属]');
+    assert.equal(await page.getByRole('button', { name: '重新读取作品', exact: true }).count(), 0);
+    await page.getByRole('button', { name: '取消选择', exact: true }).click();
+    modes.write = '';
+    await page.getByText('目标作品不存在？新建作品', { exact: true }).click();
+    await page.getByLabel('新作品标题', { exact: true }).fill(long);
+    await page.getByRole('button', { name: '预览新建作品', exact: true }).click();
+    await capture('assignment-new-preview', '[aria-label=确认新建作品]');
+    await page.getByRole('button', { name: '取消新建', exact: true }).click();
+    await sheet.locator('.sheet-close').click();
+    await sheet.waitFor({ state: 'detached' });
+    await page.evaluate(() => (location.hash = '#/media/music/items/song'));
+    await page.locator('.media-detail-page').waitFor();
+    await openMenuItem('结构整理');
+    await page.waitForFunction(() => location.hash === '#/media/music/items/song/structure');
+    await page.getByRole('button', { name: '调整所属专辑', exact: true }).click();
+    await page.locator('.media-parent-editor .media-row').waitFor();
+    await capture('music-parent', '.media-parent-editor');
+    await page.locator('.media-parent-editor').getByRole('button', { name: '选择', exact: true }).click();
+    await capture('music-parent-preview', '.media-parent-preview');
+    modes.write = 'offline';
+    await page.getByRole('button', { name: '确认调整归属', exact: true }).click();
+    await page.locator('.media-parent-editor [role=alert]').waitFor();
+    await capture('music-parent-offline', '.media-parent-preview');
+    modes.write = '';
+    await page.evaluate(() => (location.hash = '#/media/video/items/episode'));
+    await page.locator('.media-detail-page').waitFor();
+    await openMenuItem('结构整理');
+    await page.waitForFunction(() => location.hash === '#/media/video/items/episode/structure');
+    await page.getByRole('button', { name: '调整归属与集号', exact: true }).click();
+    await page.getByRole('button', { name: '选择剧集', exact: true }).click();
+    await choose('目标季', '修订季（第 2 季）');
+    await page.getByLabel('集号', { exact: true }).fill('12');
+    await page.getByRole('button', { name: '预览季集整理', exact: true }).click();
+    await capture('hierarchy-preview', '.media-parent-preview');
+    modes.write = 'conflict';
+    await page.getByRole('button', { name: '确认季集整理', exact: true }).click();
+    await page.getByRole('button', { name: '刷新当前归属', exact: true }).waitFor();
+    await capture('hierarchy-conflict', '.media-parent-editor [role=status]');
+    const before = requests.filter((row) => row.method !== 'GET').length;
+    await page.getByRole('button', { name: '刷新当前归属', exact: true }).click();
+    await page.getByRole('button', { name: '选择剧集', exact: true }).waitFor();
+    assert.equal(requests.filter((row) => row.method !== 'GET').length, before);
+    assert.deepEqual(errors, []);
+    await fs.writeFile(
+      join(out, 'verification.json'),
+      JSON.stringify(
+        {
+          passed: true,
+          fixture:
+            'Production UI/login; mocked metadata and every write failure. No actual file/version/library changes.',
+          states,
+          attemptedWrites: requests.filter((row) => row.method !== 'GET'),
+          browserErrors: errors,
+        },
+        null,
+        2,
+      ),
+    );
+    await fs.writeFile(
+      join(out, 'index.html'),
+      `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>详情管理状态评审</title><style>body{font:14px/1.6 system-ui;margin:24px;background:#e9e9e4;color:#30392c}img{max-width:100%}section{margin:30px 0}</style><h1>详情管理与草稿保留</h1><p>原型资源侧栏的展开操作补充，统一沿用表单与列表样式；不是新增的原型页面。三尺寸、两主题，实际生产客户端，数据与保存失败为测试响应。</p>${states.map((row) => `<section><h2>${row.key}</h2><img src="${row.key}.png"></section>`).join('')}</html>`,
+    );
+    console.log(JSON.stringify({ passed: true, states: states.length }));
+  } finally {
+    if (browser) await browser.close();
+    server.stdin.end();
+    await new Promise((resolve) => (server.exitCode !== null ? resolve() : server.once('exit', resolve)));
+  }
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

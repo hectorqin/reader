@@ -12,17 +12,46 @@ import { swipeCatalogTarget } from '../src/features/media/components/channel-nav
  * the page's to reinterpret.
  */
 function pointer(type: string, init: PointerEventInit): PointerEvent {
-  return new window.PointerEvent(type, { bubbles: true, composed: true, cancelable: true, pointerType: 'touch', isPrimary: true, pointerId: 1, ...init });
+  return new window.PointerEvent(type, {
+    bubbles: true,
+    composed: true,
+    cancelable: true,
+    pointerType: 'touch',
+    isPrimary: true,
+    pointerId: 1,
+    ...init,
+  });
 }
 
 let root: Root | null = null;
-afterEach(() => { act(() => root?.unmount()); root = null; document.body.replaceChildren(); });
+afterEach(() => {
+  act(() => root?.unmount());
+  root = null;
+  document.body.replaceChildren();
+});
 
 function mount(enabled = true) {
   const seen: SwipeDirection[] = [];
   function Page() {
-    const ref = useSwipeTabs<HTMLDivElement>(enabled ? direction => { seen.push(direction); return true; } : null);
-    return <div ref={ref} id="page"><input id="field" /><div id="row" style={{ overflowX: 'auto' }}><a id="card" href="#x">card</a></div><p id="text">text</p></div>;
+    const ref = useSwipeTabs<HTMLDivElement>(
+      enabled
+        ? (direction) => {
+            seen.push(direction);
+            return true;
+          }
+        : null,
+    );
+    return (
+      <div ref={ref} id="page">
+        <input id="field" />
+        <div id="row" style={{ overflowX: 'auto' }}>
+          <a id="card" href="#x">
+            card
+          </a>
+        </div>
+        <p id="text">text</p>
+      </div>
+    );
   }
   const host = document.createElement('div');
   document.body.append(host);
@@ -33,7 +62,9 @@ function mount(enabled = true) {
 
 function swipe(target: Element, dx: number, dy = 0, type: 'up' | 'cancel' = 'up', pointerType = 'touch') {
   target.dispatchEvent(pointer('pointerdown', { clientX: 200, clientY: 300, pointerType }));
-  target.dispatchEvent(pointer(type === 'up' ? 'pointerup' : 'pointercancel', { clientX: 200 + dx, clientY: 300 + dy, pointerType }));
+  target.dispatchEvent(
+    pointer(type === 'up' ? 'pointerup' : 'pointercancel', { clientX: 200 + dx, clientY: 300 + dy, pointerType }),
+  );
 }
 
 describe('useSwipeTabs', () => {
@@ -46,7 +77,9 @@ describe('useSwipeTabs', () => {
 
   it('gives up horizontal panning only where it is enabled', () => {
     expect(mount().page.classList.contains('swipe-tabs')).toBe(true);
-    act(() => root?.unmount()); root = null; document.body.replaceChildren();
+    act(() => root?.unmount());
+    root = null;
+    document.body.replaceChildren();
     expect(mount(false).page.classList.contains('swipe-tabs')).toBe(false);
   });
 
@@ -82,18 +115,26 @@ describe('useSwipeTabs', () => {
 describe('swipeCatalogTarget', () => {
   it('walks every catalog tab, channel by channel, and stops at both ends', () => {
     const walk: string[] = ['/media/video'];
-    for (let next = swipeCatalogTarget('/media/video', '', 'next'); next; next = swipeCatalogTarget(next, '', 'next')) walk.push(next);
+    for (let next = swipeCatalogTarget('/media/video', '', 'next'); next; next = swipeCatalogTarget(next, '', 'next'))
+      walk.push(next);
     expect(walk).toEqual([
-      '/media/video', '/media/video/movies', '/media/video/series',
-      '/media/music/albums', '/media/music/artists', '/media/music/tracks',
-      '/media/audiobook/books', '/media/audiobook/narrators',
+      '/media/video',
+      '/media/video/movies',
+      '/media/video/series',
+      '/media/music/albums',
+      '/media/music/artists',
+      '/media/music/tracks',
+      '/media/audiobook/books',
+      '/media/audiobook/narrators',
     ]);
     expect(swipeCatalogTarget('/media/video', '', 'previous')).toBeNull();
     expect(swipeCatalogTarget('/media/music', '', 'next')).toBe('/media/music/artists');
   });
 
   it('keeps the library and sort within a channel and drops them across one', () => {
-    expect(swipeCatalogTarget('/media/video/movies', '?library=a&sort=title-asc&offset=40', 'next')).toBe('/media/video/series?library=a&sort=title-asc');
+    expect(swipeCatalogTarget('/media/video/movies', '?library=a&sort=title-asc&offset=40', 'next')).toBe(
+      '/media/video/series?library=a&sort=title-asc',
+    );
     expect(swipeCatalogTarget('/media/video/series', '?library=a', 'next')).toBe('/media/music/albums');
   });
 

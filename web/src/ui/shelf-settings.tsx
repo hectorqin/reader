@@ -60,7 +60,10 @@ export interface ShelfSettingsOptions {
  * in a sheet, and 我的 › 偏好设置 shows them as its 书架 section. One component, so
  * the two can never offer different choices.
  */
-export function ShelfSettingsFields({ settings, onPatch }: Pick<ShelfSettingsOptions, 'settings' | 'onPatch'>): JSX.Element {
+export function ShelfSettingsFields({
+  settings,
+  onPatch,
+}: Pick<ShelfSettingsOptions, 'settings' | 'onPatch'>): JSX.Element {
   return (
     <>
       <SectionTitle>封面大小</SectionTitle>

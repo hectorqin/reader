@@ -22,7 +22,9 @@
   font: inherit;
   font-size: var(--text-body, 15px);
   line-height: 1.4;
-  box-shadow: 0 10px 32px color-mix(in srgb, #000 18%, transparent), 0 2px 6px color-mix(in srgb, #000 8%, transparent);
+  box-shadow:
+    0 10px 32px color-mix(in srgb, #000 18%, transparent),
+    0 2px 6px color-mix(in srgb, #000 8%, transparent);
   animation: action-menu-in var(--motion-duration) var(--motion-ease);
 }
 
@@ -64,7 +66,7 @@
   outline-offset: -2px;
 }
 
-.action-menu .action-menu-item[aria-checked='true'] {
+.action-menu .action-menu-item[aria-checked="true"] {
   color: var(--color-brand-text);
   font-weight: 600;
 }
@@ -115,8 +117,14 @@
 }
 
 @keyframes action-menu-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

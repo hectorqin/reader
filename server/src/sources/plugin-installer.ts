@@ -17,17 +17,29 @@ function validName(value: unknown): value is string {
 /** Locate npm's JS entry point, including Windows, without passing input through a shell. */
 async function npmCli(): Promise<string> {
   const bin = dirname(process.execPath);
-  const candidates = [process.env.npm_execpath, join(bin, 'node_modules/npm/bin/npm-cli.js'),
-    join(bin, '../lib/node_modules/npm/bin/npm-cli.js')];
+  const candidates = [
+    process.env.npm_execpath,
+    join(bin, 'node_modules/npm/bin/npm-cli.js'),
+    join(bin, '../lib/node_modules/npm/bin/npm-cli.js'),
+  ];
   for (const directory of (process.env.PATH ?? '').split(delimiter)) {
     candidates.push(join(directory, 'node_modules/npm/bin/npm-cli.js'));
     if (process.platform !== 'win32') {
-      try { candidates.push(await realpath(join(directory, 'npm'))); } catch { /* Next PATH entry. */ }
+      try {
+        candidates.push(await realpath(join(directory, 'npm')));
+      } catch {
+        /* Next PATH entry. */
+      }
     }
   }
   for (const candidate of candidates) {
     if (!candidate?.endsWith('npm-cli.js')) continue;
-    try { await access(candidate); return candidate; } catch { /* Next installation. */ }
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      /* Next installation. */
+    }
   }
   throw new AppError(503, 'NPM_UNAVAILABLE', '服务端未找到 npm，请安装包含 npm 的 Node.js 后重试。');
 }
@@ -35,35 +47,69 @@ async function npmCli(): Promise<string> {
 export async function runNpmInstall(directory: string, spec: string): Promise<void> {
   const cli = await npmCli();
   try {
-    await exec(process.execPath, [cli, 'install', '--prefix', directory, '--ignore-scripts', '--omit=dev',
-      '--no-audit', '--no-fund', '--package-lock=false', '--save-exact', '--fetch-retries=1', '--', spec], {
-      cwd: directory, windowsHide: true, timeout: 300_000, maxBuffer: 1024 * 1024,
-      env: { ...process.env, npm_config_cache: join(directory, '.npm-cache'), npm_config_update_notifier: 'false' },
-    });
+    await exec(
+      process.execPath,
+      [
+        cli,
+        'install',
+        '--prefix',
+        directory,
+        '--ignore-scripts',
+        '--omit=dev',
+        '--no-audit',
+        '--no-fund',
+        '--package-lock=false',
+        '--save-exact',
+        '--fetch-retries=1',
+        '--',
+        spec,
+      ],
+      {
+        cwd: directory,
+        windowsHide: true,
+        timeout: 300_000,
+        maxBuffer: 1024 * 1024,
+        env: { ...process.env, npm_config_cache: join(directory, '.npm-cache'), npm_config_update_notifier: 'false' },
+      },
+    );
   } catch (error) {
     // npm output can contain registry credentials or private URLs. Return only known error codes.
     const failure = error as { stderr?: string; killed?: boolean };
-    const code = /\b(E404|E401|E403|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EINTEGRITY|TAR_BAD_ARCHIVE)\b/.exec(failure.stderr ?? '')?.[1];
-    throw new AppError(502, 'PLUGIN_INSTALL_FAILED', failure.killed
-      ? '插件安装超时，请检查服务端网络后重试。'
-      : `插件安装失败${code ? `（${code}）` : ''}，请检查包名、安装包和服务端 npm 仓库配置。`);
+    const code = /\b(E404|E401|E403|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EINTEGRITY|TAR_BAD_ARCHIVE)\b/.exec(
+      failure.stderr ?? '',
+    )?.[1];
+    throw new AppError(
+      502,
+      'PLUGIN_INSTALL_FAILED',
+      failure.killed
+        ? '插件安装超时，请检查服务端网络后重试。'
+        : `插件安装失败${code ? `（${code}）` : ''}，请检查包名、安装包和服务端 npm 仓库配置。`,
+    );
   }
 }
 
 /** Each install owns its dependency tree; a failed attempt cannot modify a running plugin. */
 export class PluginInstaller {
   private busy = false;
-  constructor(private readonly dataDir: string, private readonly manager: PluginManager,
-    private readonly installNpm = runNpmInstall) {}
+  constructor(
+    private readonly dataDir: string,
+    private readonly manager: PluginManager,
+    private readonly installNpm = runNpmInstall,
+  ) {}
 
   installPackage(spec: string): Promise<PluginInfo> {
     const match = /^((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*)(?:@([a-zA-Z0-9][a-zA-Z0-9._-]*))?$/.exec(spec);
-    if (!match || !validName(match[1])) throw new AppError(400, 'PLUGIN_INVALID_PACKAGE', '请输入 npm 包名，可附带版本或标签；不支持 URL、本地路径或安装参数。');
+    if (!match || !validName(match[1]))
+      throw new AppError(
+        400,
+        'PLUGIN_INVALID_PACKAGE',
+        '请输入 npm 包名，可附带版本或标签；不支持 URL、本地路径或安装参数。',
+      );
     return this.install(async () => spec, match[1]);
   }
 
   installArchive(receive: (target: string) => Promise<void>): Promise<PluginInfo> {
-    return this.install(async directory => {
+    return this.install(async (directory) => {
       const target = join(directory, 'upload.tgz');
       await receive(target);
       return target;
@@ -87,7 +133,10 @@ export class PluginInstaller {
       const id = randomUUID();
       directory = join(root, id);
       await mkdir(directory);
-      await writeFile(join(directory, 'package.json'), JSON.stringify({ private: true, name: `reader-install-${id}`, version: '1.0.0' }));
+      await writeFile(
+        join(directory, 'package.json'),
+        JSON.stringify({ private: true, name: `reader-install-${id}`, version: '1.0.0' }),
+      );
       const spec = await prepare(directory);
       await this.installNpm(directory, spec);
       const installed = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'));
@@ -103,8 +152,11 @@ export class PluginInstaller {
       committed = true;
       return plugin;
     } finally {
-      try { if (directory && !committed) await rm(directory, { recursive: true, force: true }); }
-      finally { this.busy = false; }
+      try {
+        if (directory && !committed) await rm(directory, { recursive: true, force: true });
+      } finally {
+        this.busy = false;
+      }
     }
   }
 }

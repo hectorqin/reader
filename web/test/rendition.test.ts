@@ -20,9 +20,13 @@ import { cachedChapterLacksStyles, renditionRef } from '../src/ui/rendition.ts';
  */
 describe('the reference a section is fetched under', () => {
   it('uses a plugin revision reference without changing the saved chapter identity', () => {
-    expect(renditionRef({
-      href: 'chapter:stable-id', format: 'html', resourceRef: 'chapter-resource:revision:stable-id',
-    })).toBe('chapter-resource:revision:stable-id');
+    expect(
+      renditionRef({
+        href: 'chapter:stable-id',
+        format: 'html',
+        resourceRef: 'chapter-resource:revision:stable-id',
+      }),
+    ).toBe('chapter-resource:revision:stable-id');
   });
   it('asks for the whole chapter, under the name that says so', () => {
     // The name is the point: this reference stopped being HTML when the server
@@ -54,11 +58,23 @@ describe('cached chapters from before stylesheets were embedded', () => {
   const bytes = (html: string) => new TextEncoder().encode(html);
   const marked = '/api/v1/books/b/assets?__reader-book-resource__=1&amp;ref=OEBPS%2Fbook.css';
   it('are recognised by the stylesheet link the server used to leave', () => {
-    expect(cachedChapterLacksStyles(bytes(`<html><head><link rel="stylesheet" href="${marked}"/></head><body/></html>`), 'application/xhtml+xml')).toBe(true);
+    expect(
+      cachedChapterLacksStyles(
+        bytes(`<html><head><link rel="stylesheet" href="${marked}"/></head><body/></html>`),
+        'application/xhtml+xml',
+      ),
+    ).toBe(true);
   });
   it('are not: an embedded stylesheet, an alternate one, a missing one, or a non-document', () => {
-    expect(cachedChapterLacksStyles(bytes('<html><head><style data-href="OEBPS/book.css">p{}</style></head></html>'), 'application/xhtml+xml')).toBe(false);
-    expect(cachedChapterLacksStyles(bytes(`<link rel="alternate stylesheet" href="${marked}"/>`), 'text/html')).toBe(false);
+    expect(
+      cachedChapterLacksStyles(
+        bytes('<html><head><style data-href="OEBPS/book.css">p{}</style></head></html>'),
+        'application/xhtml+xml',
+      ),
+    ).toBe(false);
+    expect(cachedChapterLacksStyles(bytes(`<link rel="alternate stylesheet" href="${marked}"/>`), 'text/html')).toBe(
+      false,
+    );
     expect(cachedChapterLacksStyles(bytes('<link rel="stylesheet" href="../missing.css"/>'), 'text/html')).toBe(false);
     expect(cachedChapterLacksStyles(bytes(`<link rel="stylesheet" href="${marked}"/>`), 'text/plain')).toBe(false);
   });

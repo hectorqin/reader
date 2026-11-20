@@ -36,8 +36,22 @@ function fixedDoc(): BookDoc {
     render: 'image',
     direction: 'ltr',
     sections: [
-      { id: 'p0.png', label: '第 1 页', image: { mediaType: 'image/png', bytes: new Uint8Array([1]) }, depth: 0, render: 'image', path: 'p0.png' },
-      { id: 'p1.png', label: '第 2 页', image: { mediaType: 'image/png', bytes: new Uint8Array([2]) }, depth: 0, render: 'image', path: 'p1.png' },
+      {
+        id: 'p0.png',
+        label: '第 1 页',
+        image: { mediaType: 'image/png', bytes: new Uint8Array([1]) },
+        depth: 0,
+        render: 'image',
+        path: 'p0.png',
+      },
+      {
+        id: 'p1.png',
+        label: '第 2 页',
+        image: { mediaType: 'image/png', bytes: new Uint8Array([2]) },
+        depth: 0,
+        render: 'image',
+        path: 'p1.png',
+      },
     ],
     toc: [],
     styles: [],
@@ -88,10 +102,13 @@ function view(doc: BookDoc, pageHost?: ReturnType<typeof createNativePageHost>):
 describe('ReaderView with a native page host', () => {
   it('hands a fixed-layout page to the host and leaves the DOM flow empty', async () => {
     const requests: NativePageRequest[] = [];
-    const host = createNativePageHost(async (request) => {
-      requests.push(request);
-      return true;
-    }, () => undefined);
+    const host = createNativePageHost(
+      async (request) => {
+        requests.push(request);
+        return true;
+      },
+      () => undefined,
+    );
 
     const viewInstance = view(fixedDoc(), host);
     await viewInstance.open(0, 0);
@@ -106,7 +123,10 @@ describe('ReaderView with a native page host', () => {
   });
 
   it('draws the page in the DOM when the host declines', async () => {
-    const host = createNativePageHost(async () => false, () => undefined);
+    const host = createNativePageHost(
+      async () => false,
+      () => undefined,
+    );
     const viewInstance = view(fixedDoc(), host);
     await viewInstance.open(0, 0);
 
@@ -115,7 +135,10 @@ describe('ReaderView with a native page host', () => {
   });
 
   it('renders reflowable sections in the DOM without asking the native host', async () => {
-    const host = createNativePageHost(async () => true, () => undefined);
+    const host = createNativePageHost(
+      async () => true,
+      () => undefined,
+    );
     const show = vi.spyOn(host, 'show');
     const doc: BookDoc = {
       format: 'epub',
@@ -155,10 +178,13 @@ describe('ReaderView with a native page host', () => {
 
   it('does not ask the host to draw a document, which it cannot embed', async () => {
     const requests: NativePageRequest[] = [];
-    const host = createNativePageHost(async (request) => {
-      requests.push(request);
-      return false;
-    }, () => undefined);
+    const host = createNativePageHost(
+      async (request) => {
+        requests.push(request);
+        return false;
+      },
+      () => undefined,
+    );
     const viewInstance = view(docWithPdf(), host);
     await viewInstance.open(0, 0);
 
@@ -178,13 +204,15 @@ describe('ReaderView with a native page host', () => {
 
 describe('serialisePage', () => {
   it('carries bytes as base64 so a JS interface can accept them', () => {
-    const payload = JSON.parse(serialisePage({
-      sectionId: 'p1.png',
-      mode: 'image',
-      mediaType: 'image/png',
-      bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
-      fit: 'contain',
-    })) as Record<string, string>;
+    const payload = JSON.parse(
+      serialisePage({
+        sectionId: 'p1.png',
+        mode: 'image',
+        mediaType: 'image/png',
+        bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+        fit: 'contain',
+      }),
+    ) as Record<string, string>;
 
     expect(payload['sectionId']).toBe('p1.png');
     expect(payload['mode']).toBe('image');
@@ -193,7 +221,10 @@ describe('serialisePage', () => {
   });
 
   it('omits bytes rather than sending an empty payload', () => {
-    const payload = JSON.parse(serialisePage({ sectionId: 'p.png', mode: 'image', fit: 'contain' })) as Record<string, unknown>;
+    const payload = JSON.parse(serialisePage({ sectionId: 'p.png', mode: 'image', fit: 'contain' })) as Record<
+      string,
+      unknown
+    >;
     expect('bytes' in payload).toBe(false);
   });
 
@@ -202,7 +233,10 @@ describe('serialisePage', () => {
     // arguments, which on a real device would look like "native rendering does
     // not work on big pages" rather than a crash in an encoder.
     const bytes = new Uint8Array(300_000).fill(7);
-    const payload = JSON.parse(serialisePage({ sectionId: 'big.png', mode: 'image', bytes, fit: 'contain' })) as Record<string, string>;
+    const payload = JSON.parse(serialisePage({ sectionId: 'big.png', mode: 'image', bytes, fit: 'contain' })) as Record<
+      string,
+      string
+    >;
     expect(atob(payload['bytes']!).length).toBe(300_000);
   });
 });
@@ -212,14 +246,19 @@ describe('androidPageHost', () => {
     const { loadPdf } = await import('../src/formats/pdf.ts');
     const pdf = await loadPdf(new TextEncoder().encode('%PDF-1.7 fixture'));
     const show = vi.fn(async () => true);
-    const reader = view(pdf, createNativePageHost(show, () => undefined));
+    const reader = view(
+      pdf,
+      createNativePageHost(show, () => undefined),
+    );
     try {
       await reader.open(0);
       expect(flowOf(reader).querySelector('canvas')).not.toBeNull();
       expect(flowOf(reader).querySelector('iframe')).toBeNull();
       expect(pdf.pdf?.render).toHaveBeenCalledWith(1, expect.any(HTMLElement), 'contain');
       expect(show).not.toHaveBeenCalled();
-    } finally { reader.dispose(); }
+    } finally {
+      reader.dispose();
+    }
   });
   function bridge(overrides: Partial<AndroidBridge> = {}): AndroidBridge {
     return {

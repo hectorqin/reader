@@ -14,16 +14,26 @@ export function pdfjsAssets(): Plugin {
       server.middlewares.use('/pdfjs', (request, response, next) => {
         const match = /^\/(cmaps|standard_fonts|wasm)\/([\w.-]+)$/.exec(request.url?.split('?')[0] ?? '');
         if (!match) return next();
-        response.setHeader('content-type', match[2]?.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream');
+        response.setHeader(
+          'content-type',
+          match[2]?.endsWith('.wasm') ? 'application/wasm' : 'application/octet-stream',
+        );
         const stream = createReadStream(join(root, match[1]!, match[2]!));
-        stream.on('error', () => { response.statusCode = 404; response.end(); });
+        stream.on('error', () => {
+          response.statusCode = 404;
+          response.end();
+        });
         stream.pipe(response);
       });
     },
     async generateBundle() {
       for (const folder of folders) {
         for (const file of await readdir(join(root, folder))) {
-          this.emitFile({ type: 'asset', fileName: `pdfjs/${folder}/${file}`, source: await readFile(join(root, folder, file)) });
+          this.emitFile({
+            type: 'asset',
+            fileName: `pdfjs/${folder}/${file}`,
+            source: await readFile(join(root, folder, file)),
+          });
         }
       }
     },

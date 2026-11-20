@@ -159,7 +159,7 @@ export class SettingsStore {
         const parsed = JSON.parse(raw) as Partial<AppSettings> & { shelfSort?: string };
         this.settings = { ...DEFAULT_APP_SETTINGS, ...parsed };
         for (const { key } of READOUT_FIELDS) {
-          if (!READOUT_OPTIONS.some(option => option.value === this.settings[key])) {
+          if (!READOUT_OPTIONS.some((option) => option.value === this.settings[key])) {
             this.settings[key] = DEFAULT_APP_SETTINGS[key];
           }
         }
@@ -189,7 +189,8 @@ export class SettingsStore {
         this.settings.tapZones = normalizeTapZones(parsed.tapZones, parsed.tapZone);
         if (typeof this.settings.paperFollowsDark !== 'boolean') this.settings.paperFollowsDark = true;
         if (typeof this.settings.focus !== 'boolean') this.settings.focus = false;
-        if (!['list', 'grid'].includes(this.settings.exploreLayout)) this.settings.exploreLayout = DEFAULT_APP_SETTINGS.exploreLayout;
+        if (!['list', 'grid'].includes(this.settings.exploreLayout))
+          this.settings.exploreLayout = DEFAULT_APP_SETTINGS.exploreLayout;
         if (!['recent', 'added', 'title', 'author'].includes(this.settings.shelfSort)) {
           this.settings.shelfSort = DEFAULT_APP_SETTINGS.shelfSort;
         }

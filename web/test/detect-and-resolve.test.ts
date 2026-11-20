@@ -18,7 +18,9 @@ describe('BookArchive', () => {
   });
 
   it('reads an entry as bytes and as text', async () => {
-    const archive = await BookArchive.open(await makeCbz([{ name: 'note.txt', bytes: new TextEncoder().encode('hello') }]));
+    const archive = await BookArchive.open(
+      await makeCbz([{ name: 'note.txt', bytes: new TextEncoder().encode('hello') }]),
+    );
     expect(await archive.text('note.txt')).toBe('hello');
     expect((await archive.bytes('note.txt'))?.byteLength).toBe(5);
   });

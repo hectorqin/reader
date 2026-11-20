@@ -24,7 +24,18 @@ vi.mock('../src/features/media/queries/media.queries.ts', () => ({
       state.sorts.push(params.get('sort') ?? 'default');
       const offset = Number(params.get('offset')) || 0;
       const count = Math.max(0, Math.min(60, state.total - offset));
-      return { total: state.total, items: Array.from({ length: count }, (_, index) => ({ id: `i${offset + index}`, libraryId: 'a', kind, title: `作品 ${offset + index}`, parentId: null, metadata: {}, overrides: {} })) };
+      return {
+        total: state.total,
+        items: Array.from({ length: count }, (_, index) => ({
+          id: `i${offset + index}`,
+          libraryId: 'a',
+          kind,
+          title: `作品 ${offset + index}`,
+          parentId: null,
+          metadata: {},
+          overrides: {},
+        })),
+      };
     },
   }),
   useMediaLibraries: () => ({ data: { items: state.libraries } }),
@@ -36,7 +47,12 @@ document.body.append(root);
 const scope = 'catalog-page-test';
 const request = vi.fn(async (_path: string) => ({ items: [] }));
 const runtime = {
-  mediaApi: { preferenceScope: () => scope, request, cover: async () => null, narrators: async () => ({ items: [], total: 0 }) },
+  mediaApi: {
+    preferenceScope: () => scope,
+    request,
+    cover: async () => null,
+    narrators: async () => ({ items: [], total: 0 }),
+  },
   player: { play: vi.fn() },
 } as any;
 
@@ -48,33 +64,43 @@ const where = () => root.querySelector('[data-testid=location]')!.textContent;
 
 function mount(entry: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  act(() => render(
-    <RuntimeContext.Provider value={runtime}><QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[entry]}>
-        <Routes>
-          <Route path="/media/audiobook/narrators" element={<MediaNarratorsPage />} />
-          <Route path="/media/:channel/:category?" element={<MediaCatalogPage />} />
-        </Routes>
-        <Probe />
-      </MemoryRouter>
-    </QueryClientProvider></RuntimeContext.Provider>,
-    root,
-  ));
+  act(() =>
+    render(
+      <RuntimeContext.Provider value={runtime}>
+        <QueryClientProvider client={client}>
+          <MemoryRouter initialEntries={[entry]}>
+            <Routes>
+              <Route path="/media/audiobook/narrators" element={<MediaNarratorsPage />} />
+              <Route path="/media/:channel/:category?" element={<MediaCatalogPage />} />
+            </Routes>
+            <Probe />
+          </MemoryRouter>
+        </QueryClientProvider>
+      </RuntimeContext.Provider>,
+      root,
+    ),
+  );
 }
 async function settle(done: () => boolean) {
   // Up to 4s rather than 50 polls: a slow CI runner's first render alone can take over half a second.
   const deadline = Date.now() + 4000;
-  while (!done() && Date.now() < deadline) await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+  while (!done() && Date.now() < deadline)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
   expect(done()).toBe(true);
 }
-const prefer = (patch: Partial<MediaPreferences>) => saveMediaPreferences(scope, { density: 'compact', showContinue: true, showLibraryName: true, ...patch });
+const prefer = (patch: Partial<MediaPreferences>) =>
+  saveMediaPreferences(scope, { density: 'compact', showContinue: true, showLibraryName: true, ...patch });
 const tiles = () => root.querySelectorAll('.media-grid .media-tile').length;
 
 afterEach(() => {
   act(() => render(null, root));
   localStorage.clear();
   useAuthStore.setState({ session: null, verifiedUser: null });
-  state.libraries = []; state.total = 3; state.sorts = [];
+  state.libraries = [];
+  state.total = 3;
+  state.sorts = [];
   request.mockClear();
 });
 
@@ -85,7 +111,9 @@ describe('影音浏览 preferences on the catalog', () => {
     mount('/media/music/albums?library=a');
     await settle(() => tiles() === 3);
     expect(root.querySelector('.media-grid')!.getAttribute('data-density')).toBe('comfortable');
-    act(() => { prefer({ density: 'compact' }); });
+    act(() => {
+      prefer({ density: 'compact' });
+    });
     expect(root.querySelector('.media-grid')!.getAttribute('data-density')).toBe('compact');
   });
 
@@ -111,12 +139,17 @@ describe('影音浏览 preferences on the catalog', () => {
     mount('/media/video?library=a');
     await settle(() => tiles() === 3);
     expect(request.mock.calls.some(([path]) => String(path).startsWith('history'))).toBe(false);
-    act(() => { prefer({ showContinue: true }); });
+    act(() => {
+      prefer({ showContinue: true });
+    });
     await settle(() => request.mock.calls.some(([path]) => String(path).startsWith('history')));
   });
 
   it('hides the 来源库 selector when 列表工具栏显示来源库 is off, unless a link has narrowed to one of several', async () => {
-    state.libraries = [{ id: 'a', name: '音乐库', kind: 'music' }, { id: 'b', name: '另一个库', kind: 'music' }];
+    state.libraries = [
+      { id: 'a', name: '音乐库', kind: 'music' },
+      { id: 'b', name: '另一个库', kind: 'music' },
+    ];
     prefer({ showLibraryName: false });
     mount('/media/music/albums');
     await settle(() => tiles() === 3);
@@ -158,7 +191,9 @@ describe('category tabs', () => {
     mount('/media/audiobook/narrators');
     await settle(() => root.querySelectorAll('.media-tabs .media-tab-link').length === 2);
     const links = [...root.querySelectorAll<HTMLAnchorElement>('.media-tabs .media-tab-link')];
-    expect(links.map(link => [link.textContent, link.getAttribute('href'), link.getAttribute('aria-current')])).toEqual([
+    expect(
+      links.map((link) => [link.textContent, link.getAttribute('href'), link.getAttribute('aria-current')]),
+    ).toEqual([
       ['有声书', '/media/audiobook', null],
       ['演播者', '/media/audiobook/narrators', 'page'],
     ]);
@@ -176,9 +211,16 @@ describe('category tabs', () => {
 });
 
 describe('channel ⋯ menu', () => {
-  const labels = () => [...document.querySelectorAll('[role^=menuitem]')].map(item => item.textContent?.trim());
+  const labels = () => [...document.querySelectorAll('[role^=menuitem]')].map((item) => item.textContent?.trim());
   function open() {
-    act(() => render(<MemoryRouter><ChannelMenu channel="music" /></MemoryRouter>, root));
+    act(() =>
+      render(
+        <MemoryRouter>
+          <ChannelMenu channel="music" />
+        </MemoryRouter>,
+        root,
+      ),
+    );
     act(() => root.querySelector<HTMLButtonElement>('[aria-label="更多操作"]')!.click());
   }
   it('offers 媒体库管理 to an administrator only, and not before the role is known', () => {

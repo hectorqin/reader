@@ -7,8 +7,13 @@ import { MediaFavorites, favoriteChannel, favoriteScope } from '../components/fa
 import { MediaPageFrame, QueryFeedback } from '../components/MediaPageFrame.tsx';
 
 export function MediaFavoritesPage() {
-  const runtime = useRuntime(), navigate = useNavigate(), location = useLocation(), { channel: routeChannel } = useParams(), [params, setParams] = useSearchParams();
-  const scopedChannel = routeChannel === 'video' || routeChannel === 'music' || routeChannel === 'audiobook' ? routeChannel : undefined;
+  const runtime = useRuntime(),
+    navigate = useNavigate(),
+    location = useLocation(),
+    { channel: routeChannel } = useParams(),
+    [params, setParams] = useSearchParams();
+  const scopedChannel =
+    routeChannel === 'video' || routeChannel === 'music' || routeChannel === 'audiobook' ? routeChannel : undefined;
   const queryParams = new URLSearchParams(params);
   if (scopedChannel && !queryParams.has('scope')) queryParams.set('scope', scopedChannel);
   const query = useQuery(favoritesQuery(runtime, queryParams));
@@ -24,9 +29,35 @@ export function MediaFavoritesPage() {
   const total = query.data?.total;
   const pastEnd = total !== undefined && offset > 0 && offset >= total;
   const lastPage = total ? Math.floor((total - 1) / 60) * 60 : 0;
-  useEffect(() => { if (pastEnd) patch({ offset: lastPage ? String(lastPage) : '' }, true); });
-  return <MediaPageFrame className="media-secondary-page" title="我的收藏" backLabel="返回影视">
-    <QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />
-    {query.data && !pastEnd && <MediaFavorites api={runtime.mediaApi} items={query.data.items} total={query.data.total} offset={offset} scope={scope} busy={query.isFetching} onScope={value => patch({ scope: value, offset: '' })} onPage={value => patch({ offset: String(value) })} onOpen={item => navigate(`/media/${favoriteChannel(item)}/items/${encodeURIComponent(item.id)}`, { state: { returnTo: location.pathname + location.search } })} />}
-  </MediaPageFrame>;
+  useEffect(() => {
+    if (pastEnd) patch({ offset: lastPage ? String(lastPage) : '' }, true);
+  });
+  return (
+    <MediaPageFrame className="media-secondary-page" title="我的收藏" backLabel="返回影视">
+      <QueryFeedback
+        pending={query.isPending}
+        error={query.error}
+        retry={() => {
+          void query.refetch();
+        }}
+      />
+      {query.data && !pastEnd && (
+        <MediaFavorites
+          api={runtime.mediaApi}
+          items={query.data.items}
+          total={query.data.total}
+          offset={offset}
+          scope={scope}
+          busy={query.isFetching}
+          onScope={(value) => patch({ scope: value, offset: '' })}
+          onPage={(value) => patch({ offset: String(value) })}
+          onOpen={(item) =>
+            navigate(`/media/${favoriteChannel(item)}/items/${encodeURIComponent(item.id)}`, {
+              state: { returnTo: location.pathname + location.search },
+            })
+          }
+        />
+      )}
+    </MediaPageFrame>
+  );
 }

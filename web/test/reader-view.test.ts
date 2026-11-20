@@ -108,7 +108,11 @@ function stagedBook(count: number, total: number, from: number): BookDoc {
       depth: 0,
     })),
     content: windowOf(from, total, count),
-    loader: { async read(item) { return { html: `<p>${item.title}</p>` }; } },
+    loader: {
+      async read(item) {
+        return { html: `<p>${item.title}</p>` };
+      },
+    },
   });
   // The same hand-off the reader screen performs: a staged document answers to
   // `setWindow`, and the view finds it through this property.
@@ -611,7 +615,6 @@ describe('plain-text chapters are typeset by the reader', () => {
   });
 });
 
-
 /**
  * A link *inside* a chapter that points at another chapter.
  *
@@ -653,10 +656,7 @@ describe('ReaderView chapter links', () => {
     // the pair (marker + same origin). `document.baseURI` is jsdom's about:blank,
     // so the URL is built against it rather than against a made-up origin.
     const origin = document.baseURI;
-    const href = new URL(
-      `/api/v1/books/b1/assets?__reader-book-resource__=1&ref=OEBPS/ch3.xhtml`,
-      origin,
-    ).href;
+    const href = new URL(`/api/v1/books/b1/assets?__reader-book-resource__=1&ref=OEBPS/ch3.xhtml`, origin).href;
     const seen: string[] = [];
     const view = new ReaderView({
       container,
@@ -701,9 +701,19 @@ describe('ReaderView chapter links', () => {
   });
 
   it('keeps the fragment of a link into another chapter', async () => {
-    const href = new URL('/api/v1/books/b1/assets?__reader-book-resource__=1&ref=OEBPS/notes.xhtml#n12', document.baseURI).href;
+    const href = new URL(
+      '/api/v1/books/b1/assets?__reader-book-resource__=1&ref=OEBPS/notes.xhtml#n12',
+      document.baseURI,
+    ).href;
     const seen: string[] = [];
-    const view = new ReaderView({ container, doc: docWithLink(href), onChapterLink: (ref) => { seen.push(ref); return true; } });
+    const view = new ReaderView({
+      container,
+      doc: docWithLink(href),
+      onChapterLink: (ref) => {
+        seen.push(ref);
+        return true;
+      },
+    });
     await view.open(0, 0);
     expect(clickLink(view)).toBe(false);
     expect(seen).toEqual(['xhtml:OEBPS/notes.xhtml#n12']);
@@ -713,15 +723,26 @@ describe('ReaderView chapter links', () => {
   /** A chapter with one reference mark and the note it points at. */
   function docWithNote(link: string, note: string): BookDoc {
     const doc = reflowableDoc(1);
-    return { ...doc, sections: [{ id: 'ch1.xhtml', label: '第一章', html: `<p>正文里的一句话${link}，后面还有正文。</p>${note}`, depth: 0 }] };
+    return {
+      ...doc,
+      sections: [
+        { id: 'ch1.xhtml', label: '第一章', html: `<p>正文里的一句话${link}，后面还有正文。</p>${note}`, depth: 0 },
+      ],
+    };
   }
 
   it('offers a note reference to the screen, with the note readable from the chapter', async () => {
     const seen: Array<{ ref: string | null; fragment: string }> = [];
     const view = new ReaderView({
       container,
-      doc: docWithNote('<sup><a id="r1" href="#n1">[1]</a></sup>', '<p><a id="n1" href="#r1">[1]</a> 这是注释的内容。</p>'),
-      onNoteLink: (link) => { seen.push(link); return true; },
+      doc: docWithNote(
+        '<sup><a id="r1" href="#n1">[1]</a></sup>',
+        '<p><a id="n1" href="#r1">[1]</a> 这是注释的内容。</p>',
+      ),
+      onNoteLink: (link) => {
+        seen.push(link);
+        return true;
+      },
     });
     await view.open(0, 0);
     expect(clickLink(view)).toBe(false);
@@ -737,7 +758,10 @@ describe('ReaderView chapter links', () => {
     const view = new ReaderView({
       container,
       doc: docWithNote('<a href="#n1">参见第三节的讨论</a>', '<p id="n1">第三节</p>'),
-      onNoteLink: (link) => { seen.push(link); return true; },
+      onNoteLink: (link) => {
+        seen.push(link);
+        return true;
+      },
     });
     await view.open(0, 0);
     expect(clickLink(view)).toBe(false);
@@ -751,10 +775,13 @@ describe('ReaderView settings', () => {
     const container = document.createElement('div');
     document.body.append(container);
     const frames: FrameRequestCallback[] = [];
-    const raf = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(callback => { frames.push(callback); return frames.length; });
+    const raf = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
     const view = make(container, reflowableDoc(2));
     await view.open(0, 0);
-    frames.splice(0).forEach(callback => callback(0));
+    frames.splice(0).forEach((callback) => callback(0));
     const measure = vi.spyOn(view as unknown as { measureWithin(): void }, 'measureWithin');
     view.applySettings({ fontScale: 1.1 });
     view.applySettings({ fontScale: 1.2 });
@@ -762,7 +789,7 @@ describe('ReaderView settings', () => {
     // One measurement before the first step, one restore after the last.
     expect(measure).toHaveBeenCalledTimes(1);
     expect(frames).toHaveLength(1);
-    frames.splice(0).forEach(callback => callback(0));
+    frames.splice(0).forEach((callback) => callback(0));
     view.applySettings({ brightness: 0.8 });
     expect(measure).toHaveBeenCalledTimes(1);
     expect(frames).toHaveLength(0);
@@ -776,7 +803,8 @@ describe('ReaderView settings', () => {
  * where the line sits and whether every paragraph can be reached.
  */
 describe('专注模式 focus line', () => {
-  const height = 800, maxScroll = 5000;
+  const height = 800,
+    maxScroll = 5000;
 
   it('rests at a fixed height in the middle of a chapter', () => {
     expect(focusLine(1000, maxScroll, height)).toBe(320);
@@ -820,8 +848,14 @@ describe('专注模式 focus line', () => {
 
 describe('ReaderView pictures', () => {
   let container: HTMLDivElement;
-  beforeEach(() => { container = document.createElement('div'); document.body.append(container); });
-  afterEach(() => { container.remove(); vi.restoreAllMocks(); });
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.append(container);
+  });
+  afterEach(() => {
+    container.remove();
+    vi.restoreAllMocks();
+  });
 
   /** jsdom lays nothing out, so each image is given the size its `data-size` names. */
   function sized(): void {
@@ -830,18 +864,25 @@ describe('ReaderView pictures', () => {
       return new DOMRect(0, 0, size, size);
     });
   }
-  const html = '<p>正文<img id="glyph" data-size="16" src="data:image/png;base64,AA==" alt="注"></p>'
-    + '<div><img id="one" data-size="300" src="data:image/png;base64,AQ==" alt="图一"></div><p>正文</p>'
-    + '<div><img id="two" data-size="300" src="data:image/png;base64,Ag==" alt="图二"></div>';
+  const html =
+    '<p>正文<img id="glyph" data-size="16" src="data:image/png;base64,AA==" alt="注"></p>' +
+    '<div><img id="one" data-size="300" src="data:image/png;base64,AQ==" alt="图一"></div><p>正文</p>' +
+    '<div><img id="two" data-size="300" src="data:image/png;base64,Ag==" alt="图二"></div>';
 
-  it('answers a tap on a picture with the chapter\'s pictures, in order, and leaves glyphs and text alone', async () => {
+  it("answers a tap on a picture with the chapter's pictures, in order, and leaves glyphs and text alone", async () => {
     sized();
     const doc = reflowableDoc(1);
     const view = new ReaderView({ container, doc: { ...doc, sections: [{ id: 'c1', label: '一', html, depth: 0 }] } });
     await view.open(0, 0);
     const flow = view.elementHost.flow;
     const path = (id: string) => [flow.querySelector('#' + id)!, flow];
-    expect(view.picturesAt(path('two'))).toEqual({ index: 1, images: [{ src: 'data:image/png;base64,AQ==', alt: '图一' }, { src: 'data:image/png;base64,Ag==', alt: '图二' }] });
+    expect(view.picturesAt(path('two'))).toEqual({
+      index: 1,
+      images: [
+        { src: 'data:image/png;base64,AQ==', alt: '图一' },
+        { src: 'data:image/png;base64,Ag==', alt: '图二' },
+      ],
+    });
     expect(view.picturesAt(path('one'))?.index).toBe(0);
     expect(view.picturesAt(path('glyph'))).toBeNull();
     expect(view.picturesAt([flow.querySelector('p')!, flow])).toBeNull();

@@ -5,18 +5,19 @@ import { QueryClient } from '@tanstack/query-core';
  * consume the same client through QueryClientProvider and React Query hooks;
  * this module only owns the API client's framework-neutral cache operations.
  */
-export const createReaderQueryClient = () => new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 5 * 60_000,
-      gcTime: 10 * 60_000,
-      // ReaderApi owns auth refresh and transport retry semantics. Query retry
-      // would retry 401s and account-change aborts with the new credentials.
-      retry: false,
-      refetchOnWindowFocus: false,
+export const createReaderQueryClient = () =>
+  new QueryClient({
+    defaultOptions: {
+      queries: {
+        staleTime: 5 * 60_000,
+        gcTime: 10 * 60_000,
+        // ReaderApi owns auth refresh and transport retry semantics. Query retry
+        // would retry 401s and account-change aborts with the new credentials.
+        retry: false,
+        refetchOnWindowFocus: false,
+      },
     },
-  },
-});
+  });
 
 export const readerQueryKey = (baseUrl: string, userId: string | undefined, scope: number, path: string) =>
   ['reader', baseUrl, userId ?? 'anonymous', scope, path] as const;
@@ -24,11 +25,15 @@ export const readerQueryKey = (baseUrl: string, userId: string | undefined, scop
 /** Only navigation data is cached; auth, sync, jobs and playback stay live. */
 export function isNavigationQuery(path: string): boolean {
   const resource = path.split('?')[0]!;
-  return /^\/api\/v1\/(books|books\/[^/]+|sources|sources\/types|plugins|subscriptions|library\/(browse|facets|continue))$/.test(resource)
-    || /^\/api\/v1\/sources\/[^/]+\/(browse|entries|search-filters)$/.test(resource)
-    || /^\/api\/v1\/media\/(libraries|browse|search|narrators|favorites|history|queue|continue)$/.test(resource)
-    || /^\/api\/v1\/media\/libraries\/[^/]+\/(items|narrators|folders)$/.test(resource)
-    || /^\/api\/v1\/media\/items\/[^/]+(?:\/(children|favorite|tracks|chapters))?$/.test(resource);
+  return (
+    /^\/api\/v1\/(books|books\/[^/]+|sources|sources\/types|plugins|subscriptions|library\/(browse|facets|continue))$/.test(
+      resource,
+    ) ||
+    /^\/api\/v1\/sources\/[^/]+\/(browse|entries|search-filters)$/.test(resource) ||
+    /^\/api\/v1\/media\/(libraries|browse|search|narrators|favorites|history|queue|continue)$/.test(resource) ||
+    /^\/api\/v1\/media\/libraries\/[^/]+\/(items|narrators|folders)$/.test(resource) ||
+    /^\/api\/v1\/media\/items\/[^/]+(?:\/(children|favorite|tracks|chapters))?$/.test(resource)
+  );
 }
 
 /**
@@ -64,7 +69,7 @@ const MEDIA_WRITES_WITHOUT_CATALOG_CHANGES = [
 function affectedByMediaWrite(mutation: string, query: string): boolean {
   if (!query.startsWith('/api/v1/media/')) return false;
   const resource = mutation.split('?')[0]!;
-  if (MEDIA_WRITES_WITHOUT_CATALOG_CHANGES.some(pattern => pattern.test(resource))) return false;
+  if (MEDIA_WRITES_WITHOUT_CATALOG_CHANGES.some((pattern) => pattern.test(resource))) return false;
   // Playback sessions and progress heartbeats only move history and 继续播放.
   if (/^\/api\/v1\/media\/(background\/)?playback(?:\/|$)/.test(resource)) {
     return /^\/api\/v1\/media\/(history|continue)(?:\?|$)/.test(query);
@@ -92,27 +97,44 @@ export function affectedNavigationQuery(mutation: string, query: string): boolea
   // until the page was reloaded. A single book (`/books/<id>`) and the library
   // index (`scope=library`) carry no progress and are left alone.
   if (/^\/api\/v1\/sync(?:\/|$)/.test(mutation)) {
-    return query.startsWith('/api/v1/library/continue')
-      || (/^\/api\/v1\/books(?:\?|$)/.test(query) && !/[?&]scope=library(?:&|$)/.test(query));
+    return (
+      query.startsWith('/api/v1/library/continue') ||
+      (/^\/api\/v1\/books(?:\?|$)/.test(query) && !/[?&]scope=library(?:&|$)/.test(query))
+    );
   }
   if (mutation.startsWith('/api/v1/media/')) return affectedByMediaWrite(mutation, query);
   if (/^\/api\/v1\/(notes|tts|ai|auth)(?:\/|$)/.test(mutation)) return false;
   // An upload or a scan changes which books the library holds, and 书库 in 发现 lists them
   // through the built-in source, so its pages are as stale as the shelf's.
   if (mutation === '/api/v1/library/upload' || mutation === '/api/v1/library/scan') {
-    return query.startsWith('/api/v1/books') || query.startsWith('/api/v1/library/browse') || /^\/api\/v1\/sources\/[^/]+\/(browse|entries)(?:\?|$)/.test(query);
+    return (
+      query.startsWith('/api/v1/books') ||
+      query.startsWith('/api/v1/library/browse') ||
+      /^\/api\/v1\/sources\/[^/]+\/(browse|entries)(?:\?|$)/.test(query)
+    );
   }
-  if (mutation === '/api/v1/library/browse/shelf') return query.startsWith('/api/v1/books') || query.startsWith('/api/v1/library/continue');
-  if (/^\/api\/v1\/library\/browse\//.test(mutation)) return query.startsWith('/api/v1/library/browse') || query.startsWith('/api/v1/books');
+  if (mutation === '/api/v1/library/browse/shelf')
+    return query.startsWith('/api/v1/books') || query.startsWith('/api/v1/library/continue');
+  if (/^\/api\/v1\/library\/browse\//.test(mutation))
+    return query.startsWith('/api/v1/library/browse') || query.startsWith('/api/v1/books');
   // A book's metadata and cover are the library's, drawn by every list it is in: the
   // shelf, the library index and 书库 in 发现 — not only the book itself.
   if (/^\/api\/v1\/books\/[^/]+\/(metadata|cover-source)(?:\/|$)/.test(mutation)) {
-    return query.startsWith('/api/v1/books') || query.startsWith('/api/v1/library/continue') || /^\/api\/v1\/sources\/[^/]+\/(browse|entries)(?:\?|$)/.test(query);
+    return (
+      query.startsWith('/api/v1/books') ||
+      query.startsWith('/api/v1/library/continue') ||
+      /^\/api\/v1\/sources\/[^/]+\/(browse|entries)(?:\?|$)/.test(query)
+    );
   }
   if (/^\/api\/v1\/books\//.test(mutation)) {
     const id = mutation.match(/^\/api\/v1\/books\/([^/]+)/)?.[1];
     return query.startsWith('/api/v1/books') && (!id || query.includes('/books/' + id));
   }
-  if (/^\/api\/v1\/sources(?:\/|$)/.test(mutation) || /^\/api\/v1\/plugins/.test(mutation)) return query.startsWith('/api/v1/sources') || query.startsWith('/api/v1/plugins') || query.startsWith('/api/v1/subscriptions');
+  if (/^\/api\/v1\/sources(?:\/|$)/.test(mutation) || /^\/api\/v1\/plugins/.test(mutation))
+    return (
+      query.startsWith('/api/v1/sources') ||
+      query.startsWith('/api/v1/plugins') ||
+      query.startsWith('/api/v1/subscriptions')
+    );
   return false;
 }

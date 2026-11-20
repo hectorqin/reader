@@ -17,29 +17,37 @@ vi.mock('../src/features/media/queries/media.queries.ts', () => ({
 const root = document.createElement('div');
 document.body.append(root);
 let capabilities = { summary: false, scan: true };
-const runtime = { mediaApi: { preferenceScope: () => 'media-task-route-test' }, api: { aiCapabilities: async () => capabilities } } as any;
+const runtime = {
+  mediaApi: { preferenceScope: () => 'media-task-route-test' },
+  api: { aiCapabilities: async () => capabilities },
+} as any;
 
 function mount(initialEntry: { pathname: string; state?: unknown }) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  act(() => render(
-    <RuntimeContext.Provider value={runtime}>
-      <QueryClientProvider client={queryClient}>
-        <>
-          <MemoryRouter initialEntries={[initialEntry]}>
-            <Routes>
-              <Route path="/media/:channel/settings/tasks" element={<MediaTasksPage />} />
-            </Routes>
-          </MemoryRouter>
-        </>
-      </QueryClientProvider>
-    </RuntimeContext.Provider>,
-    root,
-  ));
+  act(() =>
+    render(
+      <RuntimeContext.Provider value={runtime}>
+        <QueryClientProvider client={queryClient}>
+          <>
+            <MemoryRouter initialEntries={[initialEntry]}>
+              <Routes>
+                <Route path="/media/:channel/settings/tasks" element={<MediaTasksPage />} />
+              </Routes>
+            </MemoryRouter>
+          </>
+        </QueryClientProvider>
+      </RuntimeContext.Provider>,
+      root,
+    ),
+  );
 }
 
 /** Lets the capabilities query resolve; fails after a second if `done` never holds. */
 async function settle(done: () => boolean) {
-  for (let i = 0; i < 50 && !done(); i++) await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+  for (let i = 0; i < 50 && !done(); i++)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
   expect(done()).toBe(true);
 }
 
@@ -69,11 +77,13 @@ describe('media task page return route', () => {
 
   it('offers AI 扫描 only while the AI switches allow it', async () => {
     useAuthStore.setState({ verifiedUser: { role: 'admin' } as any });
-    const tabs = () => [...root.querySelectorAll('.media-task-tabs button')].map(button => button.textContent);
+    const tabs = () => [...root.querySelectorAll('.media-task-tabs button')].map((button) => button.textContent);
     capabilities = { summary: true, scan: false };
     mount({ pathname: '/media/video/settings/tasks', search: '?tab=ai' } as any);
     await settle(() => root.querySelectorAll('.media-task-tabs button').length > 0);
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
     expect(tabs()).toEqual(['媒体库扫描', '刮削']);
     // A link straight to the AI tab lands on 媒体库扫描 instead of an empty panel.
     expect(root.querySelector('.media-task-tabs [aria-current=page]')?.textContent).toBe('媒体库扫描');

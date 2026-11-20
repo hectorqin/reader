@@ -37,7 +37,11 @@ describe('staged toc and window jumps', () => {
       kind: 'reflowable',
       toc: [],
       content: windowAt(0, 40, 1200),
-      loader: { async read() { return { html: '' }; } },
+      loader: {
+        async read() {
+          return { html: '' };
+        },
+      },
     });
 
     // Chapter 900 lives in the window starting at 880.
@@ -54,7 +58,11 @@ describe('staged toc and window jumps', () => {
       kind: 'reflowable',
       toc: [],
       content: windowAt(0, 40, 1200),
-      loader: { async read() { return { html: '' }; } },
+      loader: {
+        async read() {
+          return { html: '' };
+        },
+      },
     });
     const local = doc.setWindow(windowAt(0, 40, 1200), 900);
     assert.equal(local, -1);
@@ -67,7 +75,11 @@ describe('staged toc and window jumps', () => {
       kind: 'reflowable',
       toc: [],
       content: windowAt(0, 40, 1200),
-      loader: { async read() { return { html: '' }; } },
+      loader: {
+        async read() {
+          return { html: '' };
+        },
+      },
     });
     assert.equal(doc.sections.length, 40);
     doc.setWindow(windowAt(40, 40, 1200), 40);

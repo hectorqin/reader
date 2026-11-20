@@ -28,7 +28,10 @@ import type { NativePageHost, NativePageRequest } from '../ui/native-page.ts';
  * it is written so that a refusal from the shell is indistinguishable from a
  * browser with no native path at all.
  */
-export async function createAndroidPlatform(baseUrl: string | (() => string), bridge: AndroidBridge): Promise<Platform> {
+export async function createAndroidPlatform(
+  baseUrl: string | (() => string),
+  bridge: AndroidBridge,
+): Promise<Platform> {
   const stores = await createStores();
   const listeners = new Set<(state: Connectivity) => void>();
   let last: Connectivity = normalise(bridge.connectivity());
@@ -226,8 +229,9 @@ export function promoteSpeechInterface(bridge: AndroidBridge): AndroidBridge {
   // Java bridge methods require the injected object as their receiver. A plain
   // spread copies the functions but makes calls use the wrapper as `this`.
   const speech = bindInjectedMethods(raw);
-  speech.onSpeechEvent = callback => registerNativeCallback(raw, 'onSpeechEvent', '__readerSpeechEvent', callback, true);
-  speech.onVoices = callback => registerNativeCallback(raw, 'onVoices', '__readerSpeechVoices', callback, true);
+  speech.onSpeechEvent = (callback) =>
+    registerNativeCallback(raw, 'onSpeechEvent', '__readerSpeechEvent', callback, true);
+  speech.onVoices = (callback) => registerNativeCallback(raw, 'onVoices', '__readerSpeechVoices', callback, true);
   const promoted = { ...bridge, speech };
   for (const key of Object.keys(bridge)) {
     // Some shells also enumerate their native speech() accessor. The client
@@ -238,7 +242,8 @@ export function promoteSpeechInterface(bridge: AndroidBridge): AndroidBridge {
       Reflect.set(promoted, key, method.bind(bridge));
     }
   }
-  promoted.watchConnectivity = callback => registerNativeCallback(bridge, 'watchConnectivity', '__readerConnectivity', callback, false);
+  promoted.watchConnectivity = (callback) =>
+    registerNativeCallback(bridge, 'watchConnectivity', '__readerConnectivity', callback, false);
   return promoted;
 }
 
@@ -251,12 +256,22 @@ function bindInjectedMethods<T extends object>(raw: T): T {
   return result;
 }
 
-function registerNativeCallback<T>(raw: object, method: string, name: string, callback: (value: T) => void, json: boolean): void {
+function registerNativeCallback<T>(
+  raw: object,
+  method: string,
+  name: string,
+  callback: (value: T) => void,
+  json: boolean,
+): void {
   // Each native interface owns one listener. Reusing its name also replaces old
   // listeners when a reading session creates a new speech engine.
   Reflect.set(window, name, (value: string) => {
     let parsed: T;
-    try { parsed = (json ? JSON.parse(value) : value) as T; } catch { return; }
+    try {
+      parsed = (json ? JSON.parse(value) : value) as T;
+    } catch {
+      return;
+    }
     callback(parsed);
   });
   Reflect.apply(Reflect.get(raw, method), raw, [name]);

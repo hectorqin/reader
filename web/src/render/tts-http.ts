@@ -52,7 +52,7 @@ export interface HttpTtsCapabilities {
 }
 
 export interface HttpTtsOptions {
-  requestTimeoutMs?:()=>number;
+  requestTimeoutMs?: () => number;
   /** Absolute URL of the server, e.g. `http://192.168.1.10:8080`. */
   baseUrl: string;
   /** Bearer token; sent as a query parameter, see the note above. */
@@ -102,7 +102,8 @@ export class HttpTtsEngine {
   private generation = 0;
   private timeout: ReturnType<typeof setTimeout> | null = null;
   private readonly listeners = new Set<(snapshot: TtsSnapshot) => void>();
-  private loadQueue: ((from: number) => Promise<{ chunks: Array<{ text: string }>; startIndex: number } | null>) | null = null;
+  private loadQueue:
+    ((from: number) => Promise<{ chunks: Array<{ text: string }>; startIndex: number } | null>) | null = null;
 
   constructor(options: HttpTtsOptions) {
     this.options = options;
@@ -290,9 +291,12 @@ export class HttpTtsEngine {
     const generation = ++this.generation;
     const preparation = this.options.prepareRequest?.();
     if (preparation) {
-      void preparation.then(() => this.playNext(generation), () => {
-        if (generation === this.generation && this.state === 'playing') this.fail('朗读凭据续期失败，请重试');
-      });
+      void preparation.then(
+        () => this.playNext(generation),
+        () => {
+          if (generation === this.generation && this.state === 'playing') this.fail('朗读凭据续期失败，请重试');
+        },
+      );
       return;
     }
     this.playNext(generation);
@@ -330,11 +334,15 @@ export class HttpTtsEngine {
       this.speakNext();
     };
     audio.addEventListener('ended', advance, { once: true });
-    audio.addEventListener('error', () => {
-      if (generation !== this.generation) return;
-      this.clearTimeout();
-      this.fail('朗读音频加载失败');
-    }, { once: true });
+    audio.addEventListener(
+      'error',
+      () => {
+        if (generation !== this.generation) return;
+        this.clearTimeout();
+        this.fail('朗读音频加载失败');
+      },
+      { once: true },
+    );
 
     audio.src = url;
     audio.playbackRate = this.rate;
@@ -350,11 +358,14 @@ export class HttpTtsEngine {
     // The watchdog is what makes a stalled request visible instead of silence.
     this.clearTimeout();
     const schedule = this.options.setTimeout ?? setTimeout;
-    this.timeout = schedule(() => {
-      this.timeout = null;
-      if (generation !== this.generation) return;
-      if (this.state === 'playing') this.speakNext();
-    }, Math.max(1000,Math.min(125000,this.options.requestTimeoutMs?.()??REQUEST_TIMEOUT_MS)));
+    this.timeout = schedule(
+      () => {
+        this.timeout = null;
+        if (generation !== this.generation) return;
+        if (this.state === 'playing') this.speakNext();
+      },
+      Math.max(1000, Math.min(125000, this.options.requestTimeoutMs?.() ?? REQUEST_TIMEOUT_MS)),
+    );
   }
 
   /**

@@ -109,9 +109,15 @@ export class ProcessPlugin {
             if (value !== undefined) credentials[key] = value;
           }
         }
-        return this.request(method, {
-          sourceType: type.id, context: { instance: ctx.instance, userId: ctx.userId, credentials }, ...args,
-        }, ctx.signal) as Promise<T>;
+        return this.request(
+          method,
+          {
+            sourceType: type.id,
+            context: { instance: ctx.instance, userId: ctx.userId, credentials },
+            ...args,
+          },
+          ctx.signal,
+        ) as Promise<T>;
       };
       const provider: SourceProvider = {
         descriptor: { ...type, version: this.manifest.version },
@@ -121,9 +127,14 @@ export class ProcessPlugin {
         detail: async (ctx, entryRef) => decodeCatalogEntry(await call('detail', ctx, { entryRef })),
         acquire: async (ctx, request) => decodeChapterAcquisition(await call('acquire', ctx, { request })),
       };
-      if (type.capabilities.includes('search.filters')) provider.searchFilters = async (ctx) => searchFilterFields(await call('searchFilters', ctx, {}));
-      if (type.capabilities.includes('search.session')) provider.cancelSearch = async (ctx, sessionId) => { await call('searchCancel', ctx, { sessionId }); };
-      if (type.capabilities.includes('content.alternatives')) provider.alternatives = async (ctx, request) => decodeCatalogPage(await call('alternatives', ctx, { request }));
+      if (type.capabilities.includes('search.filters'))
+        provider.searchFilters = async (ctx) => searchFilterFields(await call('searchFilters', ctx, {}));
+      if (type.capabilities.includes('search.session'))
+        provider.cancelSearch = async (ctx, sessionId) => {
+          await call('searchCancel', ctx, { sessionId });
+        };
+      if (type.capabilities.includes('content.alternatives'))
+        provider.alternatives = async (ctx, request) => decodeCatalogPage(await call('alternatives', ctx, { request }));
       if (type.capabilities.includes('browse')) {
         provider.browse = async (ctx, request) => decodeCatalogPage(await call('browse', ctx, { request }));
       }
@@ -131,7 +142,8 @@ export class ProcessPlugin {
         provider.search = async (ctx, request) => decodeCatalogPage(await call('search', ctx, { request }));
       }
       if (type.capabilities.includes('content.manifest')) {
-        provider.getManifest = async (ctx, publicationRef) => decodeManifest(await call('getManifest', ctx, { publicationRef }), publicationRef);
+        provider.getManifest = async (ctx, publicationRef) =>
+          decodeManifest(await call('getManifest', ctx, { publicationRef }), publicationRef);
       }
       if (type.capabilities.includes('content.resource')) {
         provider.readResource = async (ctx, request) => decodeResource(await call('readResource', ctx, { request }));
@@ -144,7 +156,10 @@ export class ProcessPlugin {
     });
   }
 
-  invoke(method: 'extension.page' | 'extension.action' | 'extension.task', params: Record<string, unknown>): Promise<unknown> {
+  invoke(
+    method: 'extension.page' | 'extension.action' | 'extension.task',
+    params: Record<string, unknown>,
+  ): Promise<unknown> {
     return this.request(method, params);
   }
 
@@ -178,20 +193,32 @@ export class ProcessPlugin {
       if (this.process === child) this.onData(chunk);
     });
     // Only structured diagnostic records are forwarded; arbitrary stderr may contain secrets.
-    let diagnosticBuffer = '', dropping = false;
+    let diagnosticBuffer = '',
+      dropping = false;
     child.stderr.setEncoding('utf8');
     child.stderr.on('data', (chunk: string) => {
       for (const part of chunk.split(/(?<=\n)/)) {
         if (!dropping) diagnosticBuffer += part;
-        if (diagnosticBuffer.length > 32768) { diagnosticBuffer = ''; dropping = true; }
+        if (diagnosticBuffer.length > 32768) {
+          diagnosticBuffer = '';
+          dropping = true;
+        }
         if (!part.endsWith('\n')) continue;
         if (!dropping && diagnosticBuffer.startsWith('READER_DIAGNOSTIC ')) {
           try {
             const event: unknown = JSON.parse(diagnosticBuffer.slice(18));
-            if (event && typeof event === 'object' && !Array.isArray(event)) this.onDiagnostic?.({ pluginId: this.manifest.id, pluginVersion: this.manifest.version, diagnostic: event });
-          } catch { /* Invalid diagnostics must never break RPC. */ }
+            if (event && typeof event === 'object' && !Array.isArray(event))
+              this.onDiagnostic?.({
+                pluginId: this.manifest.id,
+                pluginVersion: this.manifest.version,
+                diagnostic: event,
+              });
+          } catch {
+            /* Invalid diagnostics must never break RPC. */
+          }
         }
-        diagnosticBuffer = ''; dropping = false;
+        diagnosticBuffer = '';
+        dropping = false;
       }
     });
     child.stdin.on('error', () => {
@@ -208,9 +235,10 @@ export class ProcessPlugin {
 
   private request(method: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
     const startedAt = Date.now();
-    const abortError = () => signal?.reason?.name === 'TimeoutError'
-      ? new PluginError('PLUGIN_TIMEOUT', 'plugin request exceeded its execution deadline')
-      : new PluginError('PLUGIN_CANCELLED', 'plugin request cancelled');
+    const abortError = () =>
+      signal?.reason?.name === 'TimeoutError'
+        ? new PluginError('PLUGIN_TIMEOUT', 'plugin request exceeded its execution deadline')
+        : new PluginError('PLUGIN_CANCELLED', 'plugin request cancelled');
     if (signal?.aborted) return Promise.reject(abortError());
     let child: ChildProcessWithoutNullStreams;
     try {
@@ -220,25 +248,45 @@ export class ProcessPlugin {
     }
     const id = ++this.sequence;
     const instanceId = (params.context as { instance?: { id?: string } } | undefined)?.instance?.id;
-    const instanceDataDir = this.dataDir && instanceId
-      ? resolve(this.dataDir, 'sources', createHash('sha256').update(instanceId).digest('hex')) : undefined;
-    const line = JSON.stringify({ jsonrpc: '2.0', id, method, params: { ...params, host: { dataDir: this.dataDir, instanceDataDir } } }) + '\n';
+    const instanceDataDir =
+      this.dataDir && instanceId
+        ? resolve(this.dataDir, 'sources', createHash('sha256').update(instanceId).digest('hex'))
+        : undefined;
+    const line =
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id,
+        method,
+        params: { ...params, host: { dataDir: this.dataDir, instanceDataDir } },
+      }) + '\n';
     if (Buffer.byteLength(line) > this.maxMessageBytes) {
       return Promise.reject(new PluginError('PLUGIN_MESSAGE_TOO_LARGE', 'plugin request exceeds the message limit'));
     }
     return new Promise((resolveRequest, reject) => {
-      const type = this.manifest.sourceTypes.find(type => type.id === params.sourceType);
+      const type = this.manifest.sourceTypes.find((type) => type.id === params.sourceType);
       const cancellationRequest = method === 'searchCancel' && type?.capabilities.includes('search.session');
       const cancelRequest = (error: PluginError) => {
         const pending = this.pending.get(id);
         if (!pending) return;
         this.pending.delete(id);
         pending.cleanup();
-        if (error.code === 'PLUGIN_TIMEOUT') this.onDiagnostic?.({ pluginId: this.manifest.id, pluginVersion: this.manifest.version,
-          diagnostic: { event: 'rpc.timeout', method, rpcId: id, sourceId: instanceId, elapsedMs: Date.now() - startedAt, pendingRequests: this.pending.size } });
+        if (error.code === 'PLUGIN_TIMEOUT')
+          this.onDiagnostic?.({
+            pluginId: this.manifest.id,
+            pluginVersion: this.manifest.version,
+            diagnostic: {
+              event: 'rpc.timeout',
+              method,
+              rpcId: id,
+              sourceId: instanceId,
+              elapsedMs: Date.now() - startedAt,
+              pendingRequests: this.pending.size,
+            },
+          });
         // A stop command may still finish late: keep it running so it can release
         // the search session, but never let its deadline kill unrelated work.
-        if (!cancellationRequest) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id } }) + '\n');
+        if (!cancellationRequest)
+          child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id } }) + '\n');
         pending.reject(error);
       };
       const cancel = () => {
@@ -289,7 +337,7 @@ export class ProcessPlugin {
     if (!input || typeof input !== 'object') throw new Error('invalid response');
     const value = input as Record<string, unknown>;
     if (value.jsonrpc !== '2.0' || !Number.isSafeInteger(value.id)) throw new Error('invalid response');
-    if (('result' in value) === ('error' in value)) throw new Error('invalid response');
+    if ('result' in value === 'error' in value) throw new Error('invalid response');
     const pending = this.pending.get(value.id as number);
     if (!pending) return; // Cancelled or timed out calls can still return late.
     this.pending.delete(value.id as number);
@@ -297,7 +345,9 @@ export class ProcessPlugin {
     if ('error' in value) {
       const error = value.error as { code?: unknown; message?: unknown } | null;
       const code = typeof error?.code === 'string' ? error.code : 'PLUGIN_ERROR';
-      pending.reject(new PluginError(code, typeof error?.message === 'string' ? error.message : 'plugin request failed'));
+      pending.reject(
+        new PluginError(code, typeof error?.message === 'string' ? error.message : 'plugin request failed'),
+      );
     } else {
       pending.resolve(value.result);
     }

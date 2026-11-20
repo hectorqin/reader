@@ -1,9 +1,17 @@
-import { createAndroidPlatform, detectAndroidBridge, androidPageHost, androidSpeechBridge } from '../core/android-platform.ts';
+import {
+  createAndroidPlatform,
+  detectAndroidBridge,
+  androidPageHost,
+  androidSpeechBridge,
+} from '../core/android-platform.ts';
 import { createWebPlatform } from '../core/web-platform.ts';
 import type { Platform } from '../core/platform.ts';
 import type { AppSettings } from '../store/settings.ts';
 
-export interface LegacyCompatOptions { root: HTMLElement; defaultServerUrl?: string }
+export interface LegacyCompatOptions {
+  root: HTMLElement;
+  defaultServerUrl?: string;
+}
 
 /**
  * Compatibility boundary for old lifecycle tests and the Android diagnostic API.
@@ -18,7 +26,10 @@ export class App {
   offline: { flush?(): Promise<void> } | null = null;
   sync: { flush?(): Promise<void> } | null = null;
   api: { baseUrl?: string } | null = null;
-  constructor(options: LegacyCompatOptions) { this.options = options; this.root = options.root; }
+  constructor(options: LegacyCompatOptions) {
+    this.options = options;
+    this.root = options.root;
+  }
 
   async createPlatform(): Promise<Platform> {
     const bridge = detectAndroidBridge();
@@ -38,20 +49,36 @@ export class App {
   async flush(): Promise<void> {
     await Promise.allSettled([
       Promise.resolve().then(() => this.mediaPlayer?.flush?.()),
-      (async () => { await this.reader?.flushProgress?.(); await this.offline?.flush?.(); await this.sync?.flush?.(); })(),
+      (async () => {
+        await this.reader?.flushProgress?.();
+        await this.offline?.flush?.();
+        await this.sync?.flush?.();
+      })(),
     ]);
   }
 
-  async start(): Promise<void> { /* Production startup lives in main.tsx. */ }
-  currentBook(): null { return null; }
-  syncStatus(): null { return null; }
-  settingsSnapshot(): Promise<AppSettings | undefined> { return Promise.resolve(undefined); }
+  async start(): Promise<void> {
+    /* Production startup lives in main.tsx. */
+  }
+  currentBook(): null {
+    return null;
+  }
+  syncStatus(): null {
+    return null;
+  }
+  settingsSnapshot(): Promise<AppSettings | undefined> {
+    return Promise.resolve(undefined);
+  }
 }
 
 export function inferDefaultUrl(): string {
   if (typeof location === 'undefined' || location.protocol === 'file:') return '';
   if (location.hostname === 'appassets.androidplatform.net') {
-    try { return validServerUrl(window.ReaderAndroid?.configuredServerUrl?.()); } catch { return ''; }
+    try {
+      return validServerUrl(window.ReaderAndroid?.configuredServerUrl?.());
+    } catch {
+      return '';
+    }
   }
   return location.origin;
 }
@@ -60,6 +87,10 @@ export function validServerUrl(value?: string): string {
   if (!value?.trim()) return '';
   try {
     const url = new URL(value.trim());
-    return ['http:', 'https:'].includes(url.protocol) && url.hostname !== 'appassets.androidplatform.net' ? value.trim() : '';
-  } catch { return ''; }
+    return ['http:', 'https:'].includes(url.protocol) && url.hostname !== 'appassets.androidplatform.net'
+      ? value.trim()
+      : '';
+  } catch {
+    return '';
+  }
 }

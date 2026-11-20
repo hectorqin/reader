@@ -5,70 +5,239 @@ import type { TextAnchor } from './text-anchor.ts';
 import { ConfirmSheet, Sheet } from './sheet.tsx';
 import { FloatingNotice } from './floating-notice.tsx';
 
-export interface AnnotationTarget { anchor: TextAnchor; rect: DOMRect; note?: Note }
-export function AnnotationPopover({ target, save, remove, close, askAi }: {
+export interface AnnotationTarget {
+  anchor: TextAnchor;
+  rect: DOMRect;
+  note?: Note;
+}
+export function AnnotationPopover({
+  target,
+  save,
+  remove,
+  close,
+  askAi,
+}: {
   target: AnnotationTarget;
   /** Present when the server offers the AI 选区助手; opens it on this selection. */
   askAi?: () => void;
   save(type: 'highlight' | 'note' | 'bookmark', comment: string, color: string): Promise<void>;
-  remove(): Promise<void>; close(): void;
+  remove(): Promise<void>;
+  close(): void;
 }) {
-  const [editing, setEditing] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const [comment, setComment] = useState(target.note?.comment ?? ''), [color, setColor] = useState(target.note?.color || '#ffd54f');
+  const [editing, setEditing] = useState(false),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState('');
+  const [comment, setComment] = useState(target.note?.comment ?? ''),
+    [color, setColor] = useState(target.note?.color || '#ffd54f');
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const panel = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null);
+  const panel = useRef<HTMLDivElement>(null),
+    input = useRef<HTMLTextAreaElement>(null);
   const viewport = window.visualViewport;
   const width = Math.min(328, (viewport?.width ?? innerWidth) - 24);
-  const viewLeft = viewport?.offsetLeft ?? 0, viewTop = viewport?.offsetTop ?? 0, viewBottom = viewTop + (viewport?.height ?? innerHeight);
-  const left = Math.max(viewLeft + 12, Math.min(viewLeft + (viewport?.width ?? innerWidth) - width - 12, target.rect.left));
+  const viewLeft = viewport?.offsetLeft ?? 0,
+    viewTop = viewport?.offsetTop ?? 0,
+    viewBottom = viewTop + (viewport?.height ?? innerHeight);
+  const left = Math.max(
+    viewLeft + 12,
+    Math.min(viewLeft + (viewport?.width ?? innerWidth) - width - 12, target.rect.left),
+  );
   // Below the selection when it fits, above it otherwise (ui.md §3.7), using the card's
   // measured height: the selection toolbar is a short row, and placing it as if it were
   // the tall note card pushed it over the very words selected near the bottom of the page.
   const [height, setHeight] = useState(target.note ? 260 : 64);
-  useLayoutEffect(() => { const measured = panel.current?.offsetHeight; if (measured && measured !== height) setHeight(measured); });
-  const below = target.rect.bottom + 10, above = target.rect.top - 10 - height;
-  const top = below + height <= viewBottom - 12 ? below : above >= viewTop + 12 ? above : Math.max(viewTop + 12, viewBottom - 12 - height);
+  useLayoutEffect(() => {
+    const measured = panel.current?.offsetHeight;
+    if (measured && measured !== height) setHeight(measured);
+  });
+  const below = target.rect.bottom + 10,
+    above = target.rect.top - 10 - height;
+  const top =
+    below + height <= viewBottom - 12
+      ? below
+      : above >= viewTop + 12
+        ? above
+        : Math.max(viewTop + 12, viewBottom - 12 - height);
   async function work(action: () => Promise<void>) {
-    if (busy) return; setBusy(true); setError('');
-    try { await action(); close(); } catch (e) { setError(e instanceof Error ? e.message : '操作失败'); setBusy(false); }
+    if (busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await action();
+      close();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '操作失败');
+      setBusy(false);
+    }
   }
   useEffect(() => {
     const dismiss = (event: PointerEvent) => {
       if (editing || busy || confirmDelete || panel.current?.contains(event.target as Node)) return;
       // Native selection handles target the reading surface. Let selectionchange
       // decide when the selection ends instead of clearing it on pointerdown.
-      if (!target.note && event.composedPath().some(node => node instanceof Element && node.tagName === 'BOOK-CONTENT')) return;
+      if (
+        !target.note &&
+        event.composedPath().some((node) => node instanceof Element && node.tagName === 'BOOK-CONTENT')
+      )
+        return;
       close();
     };
-    const key = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy && !confirmDelete) { event.stopPropagation(); close(); } };
-    const moved = (event: Event) => { if (target.note && !editing && !busy && !confirmDelete && !(event.target instanceof Node && panel.current?.contains(event.target))) close(); };
-    document.addEventListener('pointerdown', dismiss); document.addEventListener('keydown', key, true);
-    window.addEventListener('resize',moved); document.addEventListener('scroll',moved,true);
-    return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', key, true); window.removeEventListener('resize',moved); document.removeEventListener('scroll',moved,true); };
+    const key = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !busy && !confirmDelete) {
+        event.stopPropagation();
+        close();
+      }
+    };
+    const moved = (event: Event) => {
+      if (
+        target.note &&
+        !editing &&
+        !busy &&
+        !confirmDelete &&
+        !(event.target instanceof Node && panel.current?.contains(event.target))
+      )
+        close();
+    };
+    document.addEventListener('pointerdown', dismiss);
+    document.addEventListener('keydown', key, true);
+    window.addEventListener('resize', moved);
+    document.addEventListener('scroll', moved, true);
+    return () => {
+      document.removeEventListener('pointerdown', dismiss);
+      document.removeEventListener('keydown', key, true);
+      window.removeEventListener('resize', moved);
+      document.removeEventListener('scroll', moved, true);
+    };
   }, [editing, busy, confirmDelete]);
-  useEffect(() => { if (editing) input.current?.focus(); }, [editing]);
-  if (editing) return <Sheet title={target.note ? '编辑批注' : '添加批注'} busy={busy} onClose={close}>
-    <form className="annotation-editor" onSubmit={event => { event.preventDefault(); void work(() => save(comment.trim() ? 'note' : 'highlight', comment, color)); }}>
-      <blockquote>{target.anchor.quote}</blockquote>
-      <label>批注<textarea ref={input} aria-label="批注" maxLength={4000} value={comment} onInput={event => setComment(event.currentTarget.value)} placeholder="写下此刻的想法" disabled={busy} /></label>
-      <div className="reading-note-colors" role="group" aria-label="高亮颜色">{[['#ffd54f','黄色'],['#80cbc4','绿色'],['#ce93d8','紫色']].map(([value, label]) => <button key={value} type="button" aria-label={label} aria-pressed={color === value} style={{'--note-color':value}} disabled={busy} onClick={() => setColor(value)}>{color === value && <Icon name="check" size={16} />}</button>)}</div>
-      <FloatingNotice message={error} error /><div className="reading-tool-actions"><button type="button" className="button" disabled={busy} onClick={close}>取消</button><button className="button primary" disabled={busy}>保存批注</button></div>
-    </form>
-  </Sheet>;
-  return <><div ref={panel} className="annotation-popover" style={{left,top,width}} role={target.note ? 'dialog' : 'toolbar'} aria-label={target.note ? '批注详情' : '选中文字操作'} onPointerDown={event => event.preventDefault()}>
-    {target.note && <><blockquote>{target.anchor.quote}</blockquote><p className="annotation-comment">{target.note.comment || '这段文字已高亮，尚未添加批注。'}</p></>}
-    <FloatingNotice message={error} error />
-    <div className="annotation-actions">
-      {!target.note && <button disabled={busy} onClick={() => void work(async () => { if (!navigator.clipboard) throw new Error('当前环境不支持剪贴板，请使用系统复制'); await navigator.clipboard.writeText(target.anchor.quote); })}>复制</button>}
-      {!target.note && <button disabled={busy} onClick={() => void work(() => save('highlight', '', color))}>高亮</button>}
-      <button disabled={busy} onClick={() => setEditing(true)}>{target.note ? '编辑批注' : '批注'}</button>
-      {!target.note && <button disabled={busy} onClick={() => void work(() => save('bookmark', '', ''))}>书签</button>}
-      {!target.note && askAi && <button disabled={busy} onClick={askAi}>问AI</button>}
-      {target.note && <button disabled={busy} onClick={() => setConfirmDelete(true)}>删除</button>}
-      <button disabled={busy} aria-label="关闭选区工具" onClick={close}>关闭</button>
-    </div>
-  </div>
-  {/* Outside the popover, so its pointer handling does not swallow the sheet's taps. */}
-  {confirmDelete && <ConfirmSheet danger title="删除批注" text="确定删除这段高亮及其批注？" confirmText="确认删除" onCancel={()=>setConfirmDelete(false)} onConfirm={()=>{setConfirmDelete(false);void work(remove);}} />}
-  </>;
+  useEffect(() => {
+    if (editing) input.current?.focus();
+  }, [editing]);
+  if (editing)
+    return (
+      <Sheet title={target.note ? '编辑批注' : '添加批注'} busy={busy} onClose={close}>
+        <form
+          className="annotation-editor"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void work(() => save(comment.trim() ? 'note' : 'highlight', comment, color));
+          }}
+        >
+          <blockquote>{target.anchor.quote}</blockquote>
+          <label>
+            批注
+            <textarea
+              ref={input}
+              aria-label="批注"
+              maxLength={4000}
+              value={comment}
+              onInput={(event) => setComment(event.currentTarget.value)}
+              placeholder="写下此刻的想法"
+              disabled={busy}
+            />
+          </label>
+          <div className="reading-note-colors" role="group" aria-label="高亮颜色">
+            {[
+              ['#ffd54f', '黄色'],
+              ['#80cbc4', '绿色'],
+              ['#ce93d8', '紫色'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-label={label}
+                aria-pressed={color === value}
+                style={{ '--note-color': value }}
+                disabled={busy}
+                onClick={() => setColor(value)}
+              >
+                {color === value && <Icon name="check" size={16} />}
+              </button>
+            ))}
+          </div>
+          <FloatingNotice message={error} error />
+          <div className="reading-tool-actions">
+            <button type="button" className="button" disabled={busy} onClick={close}>
+              取消
+            </button>
+            <button className="button primary" disabled={busy}>
+              保存批注
+            </button>
+          </div>
+        </form>
+      </Sheet>
+    );
+  return (
+    <>
+      <div
+        ref={panel}
+        className="annotation-popover"
+        style={{ left, top, width }}
+        role={target.note ? 'dialog' : 'toolbar'}
+        aria-label={target.note ? '批注详情' : '选中文字操作'}
+        onPointerDown={(event) => event.preventDefault()}
+      >
+        {target.note && (
+          <>
+            <blockquote>{target.anchor.quote}</blockquote>
+            <p className="annotation-comment">{target.note.comment || '这段文字已高亮，尚未添加批注。'}</p>
+          </>
+        )}
+        <FloatingNotice message={error} error />
+        <div className="annotation-actions">
+          {!target.note && (
+            <button
+              disabled={busy}
+              onClick={() =>
+                void work(async () => {
+                  if (!navigator.clipboard) throw new Error('当前环境不支持剪贴板，请使用系统复制');
+                  await navigator.clipboard.writeText(target.anchor.quote);
+                })
+              }
+            >
+              复制
+            </button>
+          )}
+          {!target.note && (
+            <button disabled={busy} onClick={() => void work(() => save('highlight', '', color))}>
+              高亮
+            </button>
+          )}
+          <button disabled={busy} onClick={() => setEditing(true)}>
+            {target.note ? '编辑批注' : '批注'}
+          </button>
+          {!target.note && (
+            <button disabled={busy} onClick={() => void work(() => save('bookmark', '', ''))}>
+              书签
+            </button>
+          )}
+          {!target.note && askAi && (
+            <button disabled={busy} onClick={askAi}>
+              问AI
+            </button>
+          )}
+          {target.note && (
+            <button disabled={busy} onClick={() => setConfirmDelete(true)}>
+              删除
+            </button>
+          )}
+          <button disabled={busy} aria-label="关闭选区工具" onClick={close}>
+            关闭
+          </button>
+        </div>
+      </div>
+      {/* Outside the popover, so its pointer handling does not swallow the sheet's taps. */}
+      {confirmDelete && (
+        <ConfirmSheet
+          danger
+          title="删除批注"
+          text="确定删除这段高亮及其批注？"
+          confirmText="确认删除"
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            setConfirmDelete(false);
+            void work(remove);
+          }}
+        />
+      )}
+    </>
+  );
 }

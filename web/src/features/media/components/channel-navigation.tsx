@@ -16,10 +16,15 @@ export const channelPath = (id: string) => `/media/${id}`;
  * On wider screens the sidebar lists the same channels, so this is hidden there.
  */
 export function ChannelSegments({ current }: { current: string }) {
-  return <nav className="media-channel-segments" aria-label="切换内容频道">
-    {mediaChannels.map(({ id, label }) =>
-      <a key={id} href={'#' + channelPath(id)} aria-current={id === current ? 'page' : undefined}>{label}</a>)}
-  </nav>;
+  return (
+    <nav className="media-channel-segments" aria-label="切换内容频道">
+      {mediaChannels.map(({ id, label }) => (
+        <a key={id} href={'#' + channelPath(id)} aria-current={id === current ? 'page' : undefined}>
+          {label}
+        </a>
+      ))}
+    </nav>
+  );
 }
 
 /**
@@ -29,14 +34,27 @@ export function ChannelSegments({ current }: { current: string }) {
 export function CatalogTabs({ channel }: { channel: MediaChannel }) {
   const { pathname } = useLocation();
   const categories = channelCategories[channel];
-  return <nav className="media-tabs" aria-label={`${channelLabels[channel]}分类`}>{categories.map((item, index) => {
-    const isDefault = index === 0;
-    // The first category answers at both the channel's bare path and its own one
-    // (/media/music redirects to /media/music/albums), so either marks it current.
-    const own = item.path ? `/media/${channel}/${item.path}` : `/media/${channel}`;
-    const selected = pathname === own || (isDefault && pathname === `/media/${channel}`);
-    return <Link key={item.path} className="media-tab-link" to={isDefault ? `/media/${channel}` : own} aria-current={selected ? 'page' : undefined}>{item.label}</Link>;
-  })}</nav>;
+  return (
+    <nav className="media-tabs" aria-label={`${channelLabels[channel]}分类`}>
+      {categories.map((item, index) => {
+        const isDefault = index === 0;
+        // The first category answers at both the channel's bare path and its own one
+        // (/media/music redirects to /media/music/albums), so either marks it current.
+        const own = item.path ? `/media/${channel}/${item.path}` : `/media/${channel}`;
+        const selected = pathname === own || (isDefault && pathname === `/media/${channel}`);
+        return (
+          <Link
+            key={item.path}
+            className="media-tab-link"
+            to={isDefault ? `/media/${channel}` : own}
+            aria-current={selected ? 'page' : undefined}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
 }
 
 /**
@@ -44,12 +62,14 @@ export function CatalogTabs({ channel }: { channel: MediaChannel }) {
  * 歌手 曲目）, 有声书（有声书 演播者）. A swipe past a channel's last category is
  * the next channel's first, which is where the channel switch above would go.
  */
-const catalogTabs = mediaChannels.flatMap(({ id }) => channelCategories[id].map((category, index) => ({
-  channel: id,
-  path: category.path ? `/media/${id}/${category.path}` : `/media/${id}`,
-  // A channel's bare path is its first category: /media/music redirects to albums.
-  alias: index === 0 ? `/media/${id}` : undefined,
-})));
+const catalogTabs = mediaChannels.flatMap(({ id }) =>
+  channelCategories[id].map((category, index) => ({
+    channel: id,
+    path: category.path ? `/media/${id}/${category.path}` : `/media/${id}`,
+    // A channel's bare path is its first category: /media/music redirects to albums.
+    alias: index === 0 ? `/media/${id}` : undefined,
+  })),
+);
 
 /**
  * The catalog tab a swipe from `pathname` lands on, or null at either end and on
@@ -61,19 +81,28 @@ const catalogTabs = mediaChannels.flatMap(({ id }) => channelCategories[id].map(
  * through them looks like the swipe did nothing. The swipe then moves a whole
  * channel, to its first category — what the channel switch above would do.
  */
-export function swipeCatalogTarget(pathname: string, search: string, direction: 'next' | 'previous', step: 'category' | 'channel' = 'category'): string | null {
-  const index = catalogTabs.findIndex(tab => tab.path === pathname || tab.alias === pathname);
+export function swipeCatalogTarget(
+  pathname: string,
+  search: string,
+  direction: 'next' | 'previous',
+  step: 'category' | 'channel' = 'category',
+): string | null {
+  const index = catalogTabs.findIndex((tab) => tab.path === pathname || tab.alias === pathname);
   const from = catalogTabs[index];
   if (from && step === 'channel') {
-    const channel = mediaChannels.findIndex(item => item.id === from.channel);
+    const channel = mediaChannels.findIndex((item) => item.id === from.channel);
     const to = mediaChannels[channel + (direction === 'next' ? 1 : -1)];
-    return to ? catalogTabs.find(tab => tab.channel === to.id)!.path : null;
+    return to ? catalogTabs.find((tab) => tab.channel === to.id)!.path : null;
   }
   const to = catalogTabs[index + (direction === 'next' ? 1 : -1)];
   if (!from || !to) return null;
   if (from.channel !== to.channel) return to.path;
-  const params = new URLSearchParams(search), kept = new URLSearchParams();
-  for (const key of ['library', 'sort']) { const value = params.get(key); if (value) kept.set(key, value); }
+  const params = new URLSearchParams(search),
+    kept = new URLSearchParams();
+  for (const key of ['library', 'sort']) {
+    const value = params.get(key);
+    if (value) kept.set(key, value);
+  }
   const query = kept.toString();
   return query ? `${to.path}?${query}` : to.path;
 }

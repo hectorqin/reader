@@ -81,7 +81,9 @@ export class CDP {
     const ws = new WebSocketImpl(endpoint);
     await new Promise((resolve, reject) => {
       ws.addEventListener('open', resolve, { once: true });
-      ws.addEventListener('error', (event) => reject(new Error(`ws error: ${event?.message ?? 'unknown'}`)), { once: true });
+      ws.addEventListener('error', (event) => reject(new Error(`ws error: ${event?.message ?? 'unknown'}`)), {
+        once: true,
+      });
     });
 
     const cdp = new CDP(ws, proc, profile);
@@ -409,7 +411,10 @@ function sleep(ms) {
 function readDevToolsEndpoint(proc) {
   return new Promise((resolve, reject) => {
     let buffer = '';
-    const timer = setTimeout(() => reject(new Error(`chromium did not report a devtools endpoint:\n${buffer}`)), 20_000);
+    const timer = setTimeout(
+      () => reject(new Error(`chromium did not report a devtools endpoint:\n${buffer}`)),
+      20_000,
+    );
     const onData = (chunk) => {
       buffer += chunk.toString();
       const match = /(ws:\/\/[^\s]+)/.exec(buffer);

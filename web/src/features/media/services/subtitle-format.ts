@@ -7,15 +7,18 @@
  */
 export const LOCAL_SUBTITLE_MAX_BYTES = 5 * 1024 * 1024;
 export const localSubtitleFormats = ['srt', 'vtt', 'ass', 'ssa'] as const;
-export type LocalSubtitleFormat = typeof localSubtitleFormats[number];
+export type LocalSubtitleFormat = (typeof localSubtitleFormats)[number];
 
 export class SubtitleFormatError extends Error {
-  constructor(message = '无法读取这个字幕文件，请选择 SRT、VTT 或 ASS 字幕。') { super(message); this.name = 'SubtitleFormatError'; }
+  constructor(message = '无法读取这个字幕文件，请选择 SRT、VTT 或 ASS 字幕。') {
+    super(message);
+    this.name = 'SubtitleFormatError';
+  }
 }
 
 export function subtitleFormatOf(name: string): LocalSubtitleFormat | null {
   const ext = /\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase();
-  return localSubtitleFormats.includes(ext as LocalSubtitleFormat) ? ext as LocalSubtitleFormat : null;
+  return localSubtitleFormats.includes(ext as LocalSubtitleFormat) ? (ext as LocalSubtitleFormat) : null;
 }
 
 /** UTF-16 by BOM, then strict UTF-8, then GB18030 — the encodings Chinese subtitle files come in. */
@@ -26,8 +29,11 @@ export function decodeSubtitleBytes(bytes: Uint8Array): string {
     if (bytes[0] === 0xfe && bytes[1] === 0xff) return new TextDecoder('utf-16be', { fatal: true }).decode(bytes);
     return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
-    try { return new TextDecoder('gb18030', { fatal: true }).decode(bytes); }
-    catch { throw new SubtitleFormatError('字幕文件的编码不受支持。'); }
+    try {
+      return new TextDecoder('gb18030', { fatal: true }).decode(bytes);
+    } catch {
+      throw new SubtitleFormatError('字幕文件的编码不受支持。');
+    }
   }
 }
 
@@ -51,34 +57,62 @@ export function subtitleTextToVtt(text: string, format: LocalSubtitleFormat): st
   const entities: Record<string, string> = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&nbsp;': ' ' };
   function add(start: number | null, end: number | null, body: string) {
     if (start === null || end === null || end <= start || end > 24 * 3600 * 1000) return;
-    const plain = body.replace(/<[^>]*>/g, '').replace(/&(amp|lt|gt|nbsp);/g, entity => entities[entity]!)
-      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim();
+    const plain = body
+      .replace(/<[^>]*>/g, '')
+      .replace(/&(amp|lt|gt|nbsp);/g, (entity) => entities[entity]!)
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+      .trim();
     if (plain) cues.push({ start, end, text: plain });
     if (cues.length > 20000) throw new SubtitleFormatError('字幕文件过大。');
   }
   if (format === 'ass' || format === 'ssa') {
-    let events = false, columns: string[] = [];
+    let events = false,
+      columns: string[] = [];
     for (const line of source.split('\n')) {
-      if (/^\[/.test(line.trim())) { events = /^\[events\]$/i.test(line.trim()); continue; }
+      if (/^\[/.test(line.trim())) {
+        events = /^\[events\]$/i.test(line.trim());
+        continue;
+      }
       if (!events) continue;
-      if (/^format:/i.test(line)) { columns = line.slice(line.indexOf(':') + 1).split(',').map(value => value.trim().toLowerCase()); continue; }
+      if (/^format:/i.test(line)) {
+        columns = line
+          .slice(line.indexOf(':') + 1)
+          .split(',')
+          .map((value) => value.trim().toLowerCase());
+        continue;
+      }
       if (!/^dialogue:/i.test(line) || columns.at(-1) !== 'text') continue;
       const values = line.slice(line.indexOf(':') + 1).split(',');
       if (values.length < columns.length) continue;
       const body = values.slice(columns.length - 1).join(',');
       if (/\{[^}]*\\p[1-9]/i.test(body)) continue;
-      add(seconds(values[columns.indexOf('start')] || ''), seconds(values[columns.indexOf('end')] || ''), body.replace(/\{[^}]*\}/g, '').replace(/\\[Nn]/g, '\n').replace(/\\h/g, ' '));
+      add(
+        seconds(values[columns.indexOf('start')] || ''),
+        seconds(values[columns.indexOf('end')] || ''),
+        body
+          .replace(/\{[^}]*\}/g, '')
+          .replace(/\\[Nn]/g, '\n')
+          .replace(/\\h/g, ' '),
+      );
     }
   } else {
     for (const block of source.split(/\n[ \t]*\n/)) {
       const lines = block.trim().split('\n');
       if (/^(?:WEBVTT|NOTE|STYLE|REGION)(?:\s|$)/.test(lines[0] || '')) continue;
-      const index = lines.findIndex(line => line.includes('-->'));
+      const index = lines.findIndex((line) => line.includes('-->'));
       if (index < 0 || index > 1) continue;
       const timing = /^(\S+)\s+-->\s+(\S+)/.exec(lines[index]!);
       if (timing) add(seconds(timing[1]!), seconds(timing[2]!), lines.slice(index + 1).join('\n'));
     }
   }
   if (!cues.length) throw new SubtitleFormatError();
-  return 'WEBVTT\n\n' + cues.map((cue, index) => `${index + 1}\n${stamp(cue.start)} --> ${stamp(cue.end)}\n${cue.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}\n`).join('\n');
+  return (
+    'WEBVTT\n\n' +
+    cues
+      .map(
+        (cue, index) =>
+          `${index + 1}\n${stamp(cue.start)} --> ${stamp(cue.end)}\n${cue.text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}\n`,
+      )
+      .join('\n')
+  );
 }

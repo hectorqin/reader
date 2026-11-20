@@ -9,10 +9,30 @@ const root = document.createElement('div');
 document.body.append(root);
 afterEach(() => act(() => render(null, root)));
 
-const api = { request: vi.fn().mockResolvedValue({ size: 1024, available: true, probe: { status: 'ready', info: null } }) } as unknown as MediaApi;
+const api = {
+  request: vi.fn().mockResolvedValue({ size: 1024, available: true, probe: { status: 'ready', info: null } }),
+} as unknown as MediaApi;
 
 it('keeps the resource trigger visible and exposes resource, version and source actions', async () => {
-  await act(async () => render(<ResourcePanel api={api} assets={[{ id: 'asset-1', title: '影片' }]} summary="1 个文件 · 原版" versionPicker={<label>版本<select><option>原版</option></select></label>} sourceInfo={<p>资料来源：TMDB</p>} />, root));
+  await act(async () =>
+    render(
+      <ResourcePanel
+        api={api}
+        assets={[{ id: 'asset-1', title: '影片' }]}
+        summary="1 个文件 · 原版"
+        versionPicker={
+          <label>
+            版本
+            <select>
+              <option>原版</option>
+            </select>
+          </label>
+        }
+        sourceInfo={<p>资料来源：TMDB</p>}
+      />,
+      root,
+    ),
+  );
   const panel = root.querySelector('.media-resource-panel');
   expect(panel).not.toBeNull();
   expect(panel?.classList.contains('media-resource-hidden')).toBe(false);
@@ -21,7 +41,7 @@ it('keeps the resource trigger visible and exposes resource, version and source 
   await act(async () => (panel?.querySelector('[aria-label="资源信息操作"]') as HTMLElement).click());
   expect(root.textContent).toContain('资源信息');
   const buttons = [...document.querySelectorAll<HTMLButtonElement>('.action-menu[role=menu] [role=menuitem]')];
-  expect(buttons.map(button => button.textContent)).toEqual(['资源信息', '播放版本', '来源']);
+  expect(buttons.map((button) => button.textContent)).toEqual(['资源信息', '播放版本', '来源']);
 
   await act(async () => buttons[1]!.click());
   expect(document.querySelector('.action-menu')).toBeNull();
@@ -30,7 +50,20 @@ it('keeps the resource trigger visible and exposes resource, version and source 
 
 it('allows the page action menu to open resource details without rendering a body trigger', async () => {
   const onPanelChange = vi.fn();
-  await act(async () => render(<ResourcePanel api={api} assets={[{ id: 'asset-1', title: '影片' }]} summary="1 个文件 · 原版" sourceInfo={<p>资料来源：TMDB</p>} openPanel="source" onPanelChange={onPanelChange} showTrigger={false} />, root));
+  await act(async () =>
+    render(
+      <ResourcePanel
+        api={api}
+        assets={[{ id: 'asset-1', title: '影片' }]}
+        summary="1 个文件 · 原版"
+        sourceInfo={<p>资料来源：TMDB</p>}
+        openPanel="source"
+        onPanelChange={onPanelChange}
+        showTrigger={false}
+      />,
+      root,
+    ),
+  );
   expect(root.querySelector('.media-resource-panel')).toBeNull();
   expect(document.querySelector('dialog[open]')?.getAttribute('aria-label')).toBe('来源');
   const close = document.querySelector<HTMLButtonElement>('dialog button[aria-label="关闭"]');

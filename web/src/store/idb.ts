@@ -103,7 +103,11 @@ class MemoryBlobs {
 }
 
 export interface Stores {
-  kv: { get(key: string): Promise<string | null>; set(key: string, value: string): Promise<void>; remove(key: string): Promise<void> };
+  kv: {
+    get(key: string): Promise<string | null>;
+    set(key: string, value: string): Promise<void>;
+    remove(key: string): Promise<void>;
+  };
   blobs: {
     get(key: string): Promise<Uint8Array | null>;
     put(key: string, bytes: Uint8Array): Promise<void>;

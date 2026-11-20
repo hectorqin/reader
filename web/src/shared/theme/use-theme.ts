@@ -8,7 +8,7 @@ import { readThemePreference, subscribeTheme, systemPrefersDark, type ThemePrefe
  */
 export function useThemeState(scope: string): { preference: ThemePreference; systemDark: boolean } {
   const raw = useSyncExternalStore(
-    notify => subscribeTheme(scope, notify),
+    (notify) => subscribeTheme(scope, notify),
     () => JSON.stringify({ preference: readThemePreference(scope), systemDark: systemPrefersDark() }),
     () => JSON.stringify({ preference: readThemePreference(scope), systemDark: false }),
   );
