@@ -742,17 +742,9 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
       throw forbidden('only an administrator may overwrite library files', 'ADMIN_REQUIRED');
     }
     const result = await ctx.uploads.commit(staged, target, policy, { booksOnly: !admin });
-    // The one book that does go straight onto a shelf: the uploader's own.
-    const now = Date.now();
-    const uploader = currentUser(request);
-    for (const bookId of new Set(result.uploaded.map((item) => item.bookId).filter((id): id is string => !!id))) {
-      ctx.db.run(
-        `INSERT INTO user_books (user_id, book_id, added_at, hidden) VALUES (?, ?, ?, 0)
-         ON CONFLICT(user_id, book_id) DO UPDATE SET hidden = 0,
-         added_at = CASE WHEN user_books.hidden = 1 THEN excluded.added_at ELSE user_books.added_at END`,
-        uploader.id, bookId, now,
-      );
-    }
+    // An upload joins the library and nothing else, the same as a book the scanner
+    // finds: a shelf holds what its reader chose to put there, from 书库 or 发现 —
+    // the uploader included (or every shelf, with `library.autoShelf` on).
     return result;
   });
 

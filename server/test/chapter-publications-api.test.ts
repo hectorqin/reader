@@ -492,7 +492,7 @@ test('only an administrator edits a local book, from 书库 or the shelf; a read
   assert.equal((await h.app.inject({ method: 'PATCH', url: '/api/v1/books/no-such-book/metadata', headers: auth(h.admin), payload: { title: 'x' } })).statusCode, 404);
 });
 
-test('by default a book joins the library only; an upload lands on the uploader\'s shelf; autoShelf restores sharing', async (t) => {
+test('by default a book joins the library only, an upload included, even for the uploader; autoShelf restores sharing', async (t) => {
   const h = await harness(); t.after(() => h.close());
   const shelf = async (session: Session) => (await h.app.inject({ method: 'GET', url: '/api/v1/books', headers: auth(session) })).json().items.map((item: { title: string }) => item.title).sort();
   const library = async (session: Session) => (await h.app.inject({ method: 'GET', url: '/api/v1/books?scope=library', headers: auth(session) })).json().items.map((item: { title: string }) => item.title).sort();
@@ -506,12 +506,13 @@ test('by default a book joins the library only; an upload lands on the uploader\
   const body = `--${boundary}\r\nContent-Disposition: form-data; name="path"\r\n\r\n\r\n--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="上传的书.txt"\r\nContent-Type: text/plain\r\n\r\n${file}\r\n--${boundary}--\r\n`;
   const uploaded = await h.app.inject({ method: 'POST', url: '/api/v1/library/upload', headers: { ...auth(member), 'content-type': `multipart/form-data; boundary=${boundary}` }, payload: body });
   assert.equal(uploaded.statusCode, 200, uploaded.body);
-  assert.deepEqual(await shelf(member), ['上传的书'], 'what a reader uploads is on their own shelf');
-  assert.deepEqual(await shelf(h.admin), [], 'and on nobody else\'s');
+  assert.deepEqual(await shelf(member), [], 'an upload joins the library, not even the uploader\'s shelf');
+  assert.deepEqual(await shelf(h.admin), [], 'nor anybody else\'s');
   assert.deepEqual(await library(h.admin), ['上传的书', '扫描到的书']);
+  assert.deepEqual(await library(member), ['上传的书', '扫描到的书'], 'the uploader finds it in 书库, to add when they choose');
 
   const { autoShelf } = await import('./auto-shelf.ts'); autoShelf(h.ctx.db);
   await writeFile(join(h.booksDir, '共享的书.txt'), '第一章\n\n共享正文。\n');
   await h.ctx.scanner.scan();
-  assert.deepEqual(await shelf(h.admin), ['共享的书']); assert.deepEqual(await shelf(member), ['上传的书', '共享的书'].sort());
+  assert.deepEqual(await shelf(h.admin), ['共享的书']); assert.deepEqual(await shelf(member), ['共享的书']);
 });

@@ -77,7 +77,7 @@ export function SourceExplore({ sources }: { sources: SourceInstance[] }) {
     setUploading(true); setError('');
     try {
       const result = await runtime.api.upload(files, current?.ref ?? '', 'rename');
-      notify(result.uploaded.length ? `已上传 ${result.uploaded.length} 个文件，并加入你的书架${result.skipped.length ? `；${result.skipped.length} 个已跳过` : ''}` : '没有文件被上传：' + (result.skipped[0]?.reason ?? '格式不受支持'), { kind: result.uploaded.length ? 'success' : 'error' });
+      notify(result.uploaded.length ? `已上传 ${result.uploaded.length} 个文件到书库${result.skipped.length ? `；${result.skipped.length} 个已跳过` : ''}` : '没有文件被上传：' + (result.skipped[0]?.reason ?? '格式不受支持'), { kind: result.uploaded.length ? 'success' : 'error' });
       for (const key of ['shelf', 'search', 'library-files']) void queryClient.invalidateQueries({ queryKey: [key] });
       await open(trail.slice(0, -1), current?.ref);
     } catch (reason) { setError(reason instanceof Error ? reason.message : '上传失败，请重试'); }
