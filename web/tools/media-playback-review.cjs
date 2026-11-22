@@ -63,9 +63,9 @@ const { chromium } = require('playwright'),
     });
     const shot = async (name) => {
       if (name.startsWith('video')) {
-        await page.locator('.dplayer-host').hover();
-        await page.waitForFunction(
-          () => getComputedStyle(document.querySelector('.dplayer-controller')).opacity === '1',
+        await page.locator('.artplayer-host').hover();
+        await page.waitForFunction(() =>
+          document.querySelector('.art-video-player')?.classList.contains('art-control-show'),
         );
         await page.waitForFunction(() => document.querySelector('.media-player video').readyState >= 2);
       } else await page.mouse.move(0, 0);
@@ -191,7 +191,7 @@ const { chromium } = require('playwright'),
     await direct.close();
     await go('#/media/video/items/' + movie.id);
     await page.getByRole('button', { name: '播放电影', exact: true }).click();
-    await page.locator('.dplayer-host').waitFor();
+    await page.locator('.artplayer-host').waitFor();
     await ready('video');
     await page.waitForURL((url) => {
       const routed = new URL('http://route' + url.hash.slice(1));
@@ -199,14 +199,14 @@ const { chromium } = require('playwright'),
         routed.pathname === '/media/video/player' && routed.searchParams.get('item') && routed.searchParams.get('part')
       );
     });
-    assert.equal(await page.locator('.dplayer-controller').count(), 1);
+    assert.equal(await page.locator('.art-controls').count(), 1);
     assert.equal(await page.locator('.media-video-timeline').count(), 0);
     await shot('video-mobile');
     await page.setViewportSize({ width: 390, height: 844 });
     await shot('video-mobile-narrow');
-    assert.ok(await page.locator('.dplayer-host').evaluate((node) => node.scrollWidth <= node.clientWidth + 1));
-    assert.equal(await page.locator('.dplayer-volume-bar-wrap').isVisible(), false);
-    assert.ok((await page.locator('.dplayer-bar-wrap').boundingBox()).width >= 80);
+    assert.ok(await page.locator('.artplayer-host').evaluate((node) => node.scrollWidth <= node.clientWidth + 1));
+    assert.equal(await page.locator('.art-volume-panel').evaluate((node) => getComputedStyle(node).opacity), '0');
+    assert.ok((await page.locator('.art-control-progress').boundingBox()).width >= 80);
     await page.setViewportSize({ width: 535, height: 834 });
     const videoUrl = page.url(),
       videoSource = await page.locator('.media-player video').getAttribute('src');
@@ -216,12 +216,12 @@ const { chromium } = require('playwright'),
     assert.equal(await page.locator('.media-player video').getAttribute('src'), videoSource);
     await page.setViewportSize({ width: 1120, height: 900 });
     await shot('video-desktop');
-    await page.locator('.dplayer-host').hover();
-    await page.locator('.dplayer-full-icon').click();
+    await page.locator('.artplayer-host').hover();
+    await page.getByRole('button', { name: '横屏全屏播放' }).click();
     await page.waitForFunction(() => !!document.fullscreenElement);
     await shot('video-fullscreen');
-    await page.locator('.dplayer-host').hover();
-    await page.locator('.dplayer-full-icon').click();
+    await page.locator('.artplayer-host').hover();
+    await page.getByRole('button', { name: '退出全屏', exact: true }).click();
     await page.waitForFunction(() => !document.fullscreenElement);
     const saveVideo = saved();
     await page.locator('.media-player video').evaluate((video) => {
@@ -230,14 +230,14 @@ const { chromium } = require('playwright'),
     });
     await saveVideo;
     await page.reload();
-    await page.locator('.dplayer-host').waitFor();
+    await page.locator('.artplayer-host').waitFor();
     await ready('video');
     assert.equal(page.url(), videoUrl);
     assert.ok(await page.locator('.media-player video').evaluate((video) => video.currentTime >= 19 && video.paused));
     await shot('video-restored-desktop');
-    await page.locator('.dplayer-play-icon').click();
+    await page.locator('.art-control-playAndPause').click();
     await page.waitForFunction(() => !document.querySelector('.media-player video').paused);
-    // DPlayer's own hotkey (the Plyr-era 'k' shortcut no longer exists): Space toggles once the player has been interacted with.
+    // Artplayer's own hotkey (the Plyr-era 'k' shortcut no longer exists): Space toggles once the player has been interacted with.
     await page.evaluate(() => document.activeElement?.blur());
     await page.keyboard.press('Space');
     await page.waitForFunction(() => document.querySelector('.media-player video').paused);
@@ -265,10 +265,10 @@ const { chromium } = require('playwright'),
             'continuous playback across panels',
             'next track updates route',
             'audio reload and direct-link restore',
-            'DPlayer local assets and fullscreen',
+            'Artplayer local assets and fullscreen',
             'video subtitle menu retains source',
             'video reload restores progress paused',
-            'DPlayer Space hotkey toggles playback',
+            'Artplayer Space hotkey toggles playback',
             'invalid resource shows error',
           ],
           sessions,
@@ -280,7 +280,7 @@ const { chromium } = require('playwright'),
     );
     await fs.writeFile(
       join(out, 'index.html'),
-      '<!doctype html><meta charset="utf-8"><title>播放页验收</title><style>body{font:15px system-ui;background:#f4f4f1;color:#273323;padding:20px}img{max-width:100%;border:1px solid #ccc}figure{margin:24px 0}</style><h1>播放页实际截图</h1><p>真实媒体、临时数据库。DPlayer 控件、歌词、定时和刷新恢复。</p>' +
+      '<!doctype html><meta charset="utf-8"><title>播放页验收</title><style>body{font:15px system-ui;background:#f4f4f1;color:#273323;padding:20px}img{max-width:100%;border:1px solid #ccc}figure{margin:24px 0}</style><h1>播放页实际截图</h1><p>真实媒体、临时数据库。Artplayer 控件、歌词、定时和刷新恢复。</p>' +
         shots.map((name) => `<figure><figcaption>${name}</figcaption><img src="${name}.png"></figure>`).join(''),
     );
     console.log(JSON.stringify({ screenshots: shots.length, sessions, errors }));

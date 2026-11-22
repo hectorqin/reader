@@ -26,7 +26,7 @@
 
 OpenList 使用 fs/list 与 fs/get，只读扫描，按需解析临时下载地址。播放方式由服务配置「媒体播放」决定：自动（默认）和直连模式在流票据鉴权后以 307 跳转让浏览器直连临时地址，失败或需要时由 Reader 授权接口代理 Range；代理模式始终经服务端转发。令牌不交给前端或下载源；远程内嵌资料暂不探测。具体配置与驱动限制见[OpenList](media-openlist.md)。
 
-Web 音频使用浏览器媒体能力，视频采用 DPlayer；Android 使用 Media3。播放会话、流票据、进度并发和即时撤权由服务端控制。后台授权与进程恢复见[后台播放](media-background-auth.md)。不提供转码、TVBox/JAR、云盘登录或影音离线下载。
+Web 音频使用浏览器媒体能力，视频采用 Artplayer；Android 使用 Media3。播放会话、流票据、进度并发和即时撤权由服务端控制。后台授权与进程恢复见[后台播放](media-background-auth.md)。不提供转码、TVBox/JAR、云盘登录或影音离线下载。
 
 ## 代码与维护入口
 

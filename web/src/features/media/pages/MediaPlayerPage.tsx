@@ -34,10 +34,9 @@ export function MediaPlayerPage() {
     .filter(Boolean)
     .join(' ');
   const [restoreError, setRestoreError] = useState('');
-  // Video and music play on a fixed dark, immersive surface: the current theme's dark
-  // values, whatever the app's mode (theme spec §4.7). Audiobooks keep the app's mode.
+  // Music keeps its immersive dark surface; video and audiobooks follow the app.
   const { preference, systemDark } = useThemeState(runtime.mediaApi.preferenceScope());
-  const immersiveTheme = videoPage || channel === 'music' ? resolveAppTheme(preference, systemDark).theme : undefined;
+  const immersiveTheme = channel === 'music' ? resolveAppTheme(preference, systemDark).theme : undefined;
   useEffect(() => {
     if (!immersiveTheme) return;
     // The live player sits outside this tree (it survives navigation), and the page

@@ -1058,7 +1058,7 @@
         letter-spacing: 0.25em;
         color: #d4decf;
       }
-      .app .dplayer-demo {
+      .app .artplayer-demo {
         position: absolute;
         z-index: 1;
         bottom: 0;
@@ -1070,16 +1070,16 @@
         align-items: center;
         gap: 8px;
       }
-      .app .dplayer-demo .icon-button {
+      .app .artplayer-demo .icon-button {
         width: 36px;
         height: 44px;
       }
-      .app .dplayer-demo .seek {
+      .app .artplayer-demo .seek {
         flex: 1;
         min-width: 20px;
         accent-color: #c6d7af;
       }
-      .app .dplayer-demo time {
+      .app .artplayer-demo time {
         font-size: 10px;
         white-space: nowrap;
       }
@@ -2046,7 +2046,7 @@
         background: var(--accent);
         border: 0;
       }
-      .app .dplayer-demo {
+      .app .artplayer-demo {
         --accent: #c0d4a6;
         --line: #778279;
       }
@@ -2197,7 +2197,7 @@
             '影视',
             '剧集播放',
             '/media/video/player?item=mountains&part=mountains-3',
-            '按 DPlayer 控件语义校准布局；移动端下方工具定宽排布，桌面右侧承载选季和选集。',
+            '按 Artplayer 控件语义校准布局；移动端下方工具定宽排布，桌面右侧承载选季和选集。',
           ],
           [
             'music',
@@ -2620,7 +2620,7 @@
         }
         function video() {
           const episodic = state.page === 'episode-player';
-          return `<div class="video-layout ${episodic ? 'with-episodes' : 'film-layout'}"><div><div class="video-surface"><div class="video-word">${episodic ? '远山之路' : '海岸线'}<small>${episodic ? '山间的清晨' : '沿着海岸，回到日常'}</small></div><div class="dplayer-demo">${ib(state.playing ? 'pause' : 'play', 'toggle', '播放或暂停')}<input class="seek" type="range" min="0" max="100" value="38" aria-label="视频进度"><time>38:12</time>${ib('volume', 'sheet:volume', '音量')}${ib('settings', 'sheet:speed', '倍速')}${ib('fullscreen', 'fullscreen', '全屏')}</div></div><div class="video-info"><h1>${episodic ? '远山之路 · 山间的清晨' : '海岸线'}</h1><p>${episodic ? '第 1 季 · 第 3 集 · 1080p' : '原版 · 1080p · 剩余 1 小时 10 分'}</p><div class="video-tool-row">${button(ic('subtitle') + '字幕', 'sheet:subtitles')}${button(ic('volume') + '音轨', 'sheet:tracks')}${button(ic('layers') + '版本', 'sheet:versions')}${button(ic('more') + '更多', 'sheet:player-more')}</div><details class="video-description"><summary>作品信息 ${ic('down')}</summary><p>一位久别故乡的年轻人沿着海岸返回，重新寻找家的方向。</p></details></div></div>${episodic ? `<aside class="episode-rail">${section('选集', button('第 1 季' + ic('down'), 'sheet:seasons', 'scope-button'))}${episodes()}</aside>` : ''}</div>`;
+          return `<div class="video-layout ${episodic ? 'with-episodes' : 'film-layout'}"><div><div class="video-surface"><div class="video-word">${episodic ? '远山之路' : '海岸线'}<small>${episodic ? '山间的清晨' : '沿着海岸，回到日常'}</small></div><div class="artplayer-demo">${ib(state.playing ? 'pause' : 'play', 'toggle', '播放或暂停')}<input class="seek" type="range" min="0" max="100" value="38" aria-label="视频进度"><time>38:12</time>${ib('volume', 'sheet:volume', '音量')}${ib('settings', 'sheet:speed', '倍速')}${ib('fullscreen', 'fullscreen', '全屏')}</div></div><div class="video-info"><h1>${episodic ? '远山之路 · 山间的清晨' : '海岸线'}</h1><p>${episodic ? '第 1 季 · 第 3 集 · 1080p' : '原版 · 1080p · 剩余 1 小时 10 分'}</p><div class="video-tool-row">${button(ic('subtitle') + '字幕', 'sheet:subtitles')}${button(ic('volume') + '音轨', 'sheet:tracks')}${button(ic('layers') + '版本', 'sheet:versions')}${button(ic('more') + '更多', 'sheet:player-more')}</div><details class="video-description"><summary>作品信息 ${ic('down')}</summary><p>一位久别故乡的年轻人沿着海岸返回，重新寻找家的方向。</p></details></div></div>${episodic ? `<aside class="episode-rail">${section('选集', button('第 1 季' + ic('down'), 'sheet:seasons', 'scope-button'))}${episodes()}</aside>` : ''}</div>`;
         }
         function settingRow(icon, title, sub, id) {
           return link(id, ic(icon) + `<span>${title}</span><small>${sub}</small>` + ic('chevron'), 'setting-row');
