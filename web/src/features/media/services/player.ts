@@ -375,8 +375,10 @@ export class MediaPlayer extends EventTarget {
         if (media === this.media) volume.value = String(media.muted ? 0 : media.volume);
       });
     this.volumeLabel.className = 'media-volume';
-    this.volumeLabel.textContent = '音量';
-    this.volumeLabel.append(volume);
+    const volumeCaption = document.createElement('span');
+    volumeCaption.className = 'media-volume-label';
+    volumeCaption.textContent = '音量';
+    this.volumeLabel.append(volumeCaption, volume);
     this.audioControls.append(this.chapterSeek, this.volumeLabel);
     this.subtitles = new SubtitleControls(api, this.video);
     this.element.dataset.subtitleSize = this.subtitleSize;

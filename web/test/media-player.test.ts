@@ -203,6 +203,8 @@ describe('media playback lifecycle', () => {
     expect(player.video.currentTime).toBe(65);
     expect(player.video.controls).toBe(false);
     const volume = volumeHost.querySelector<HTMLInputElement>('input')!;
+    expect(volumeHost.querySelector('.media-volume-label')?.textContent).toBe('音量');
+    expect(volume.getAttribute('aria-label')).toBe('音量');
     volume.value = '0.35';
     volume.dispatchEvent(new Event('input'));
     expect(player.video.volume).toBe(0.35);

@@ -392,6 +392,7 @@ export function PlaybackControls({
   onBack?: () => void;
   onFavoriteChange?: (id: string, favorite: boolean) => void;
 }) {
+  usePlayerChanges(player);
   const [localPanel, setLocalPanel] = useState<PlaybackPanel>('main');
   const [detail, setDetail] = useState<Detail | null>(null),
     [failed, setFailed] = useState(''),
@@ -753,7 +754,10 @@ export function PlaybackControls({
               </div>
             ) : (
               <>
-                <section className="media-audio-section" aria-label={channel === 'audiobook' ? '音量' : '音量与倍速'}>
+                <section
+                  className={`media-audio-section${channel === 'audiobook' ? ' media-audio-volume-only' : ''}`}
+                  aria-label={channel === 'audiobook' ? '音量' : '音量与倍速'}
+                >
                   <h3>{channel === 'audiobook' ? '音量' : '音量与倍速'}</h3>
                   <VolumeControl player={player} />
                   {channel !== 'audiobook' && <div className="media-audio-speed">{speed}</div>}
@@ -793,7 +797,7 @@ export function PlaybackControls({
                     </button>
                   </div>
                 </section>
-                <section className="media-audio-section" aria-label="队列">
+                <section className="media-audio-section media-audio-queue" aria-label="队列">
                   <h3>队列</h3>
                   {channel === 'audiobook' && (
                     <button

@@ -608,8 +608,8 @@
   width: 64px;
   height: 64px;
   min-height: 64px;
-  background: var(--color-brand);
-  color: var(--color-on-brand);
+  background: var(--color-brand-text);
+  color: var(--color-bg);
 }
 .media-toggle-play svg {
   width: 28px;
@@ -670,8 +670,10 @@
   min-width: 44px;
   height: 44px;
   min-height: 44px;
-  background: var(--color-brand);
-  color: var(--color-on-brand);
+}
+.media-mini .media-mini-toggle {
+  background: var(--color-brand-text);
+  color: var(--color-bg);
 }
 .media-mini .media-mini-close {
   background: transparent;
@@ -2128,6 +2130,19 @@
   font-size: var(--text-label);
   font-weight: 600;
   color: var(--color-muted);
+}
+.media-audio-volume-only .media-volume-label {
+  display: none;
+}
+.media-audio-queue > button,
+.media-audio-queue > section > button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
 }
 .media-audio-section .media-audio-shortcuts,
 .media-audio-section .media-audio-support {

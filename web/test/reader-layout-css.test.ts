@@ -29,8 +29,8 @@ const css = readFileSync(join(process.cwd(), 'src/styles/reader.css'), 'utf8');
  * Comments are stripped first: several of them contain braces, `.class` names and
  * even whole selectors.
  */
-function rule(selector: string): string {
-  const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+function rule(selector: string, source = css): string {
+  const text = source.replace(/\/\*[\s\S]*?\*\//g, '');
   let index = 0;
   let depth = 0;
   while (index < text.length) {
@@ -138,8 +138,23 @@ describe('the reading surface fills the screen', () => {
     expect(declaration(controls, 'grid-template-columns')).toBe('44px minmax(0, 1fr) 44px');
     expect(declaration(rule('.tts-transport'), 'grid-column')).toBe('2');
     expect(declaration(rule('.tts-bar .tts-controls .tts-toggle'), 'width')).toBe('56px');
-    expect(declaration(rule('.tts-bar .tts-controls .tts-toggle'), 'background')).toBe('var(--color-brand)');
+    expect(declaration(rule('.tts-bar .tts-controls .tts-toggle'), 'background')).toBe('var(--color-brand-text)');
+    expect(declaration(rule('.tts-bar .tts-controls .tts-toggle'), 'color')).toBe('var(--color-bg)');
     expect(declaration(rule('.tts-bar .tts-controls .tts-stop'), 'grid-column')).toBe('3');
+  });
+
+  it('uses strong primary audio controls and consistent More-sheet queue rows', () => {
+    const media = readFileSync(join(process.cwd(), 'src/features/media/styles/v2.css'), 'utf8');
+    expect(declaration(rule('.media-screen .media-toggle-play', media), 'background')).toBe('var(--color-brand-text)');
+    expect(declaration(rule('.media-screen .media-toggle-play', media), 'color')).toBe('var(--color-bg)');
+    expect(media).toMatch(
+      /\.media-mini \.media-mini-toggle \{[\s\S]*?background: var\(--color-brand-text\);[\s\S]*?color: var\(--color-bg\);/,
+    );
+    expect(media).toMatch(/\.media-mini \.media-mini-close \{[\s\S]*?background: transparent;/);
+    expect(media).toMatch(/\.media-audio-volume-only \.media-volume-label \{[\s\S]*?display: none;/);
+    expect(media).toMatch(
+      /\.media-audio-queue > button,[\s\S]*?\.media-audio-queue > section > button \{[\s\S]*?justify-content: flex-start;[\s\S]*?width: 100%;[\s\S]*?min-height: 44px;/,
+    );
   });
 
   it('uses the same reading geometry with chrome visible and hidden', () => {

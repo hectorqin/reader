@@ -2579,8 +2579,8 @@ book-content {
   height: 56px;
   min-height: 56px;
   border-radius: var(--radius-pill);
-  background: var(--color-brand);
-  color: var(--color-on-brand);
+  background: var(--color-brand-text);
+  color: var(--color-bg);
 }
 .tts-bar .tts-toggle svg {
   width: 24px;
