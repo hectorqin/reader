@@ -1,5 +1,5 @@
 /* Approved v2 visual contract. Media-only selectors keep reading isolated.
-   DPlayer owns the video controls; this sheet only lays out its stage. */
+   Artplayer owns the video controls; this sheet only lays out its stage. */
 .media-screen {
   padding: 68px 32px 96px;
   font-size: var(--text-ui);
@@ -760,7 +760,9 @@
   aspect-ratio: 16/9;
 }
 .media-video-workspace .media-video-controls {
-  padding: 16px 24px 30px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-4) 0;
 }
 .media-video-caption {
   border: 0;
@@ -1005,6 +1007,8 @@
   color: var(--color-ink) !important;
 }
 :root body .media-screen.media-video-page > .media-heading {
+  max-width: 960px;
+  margin-inline: auto;
   background: var(--color-bg) !important;
   color: var(--color-ink) !important;
   border-color: var(--color-line) !important;
@@ -1013,6 +1017,18 @@
 :root body .media-video-controls,
 :root body .media-episode-rail {
   color: var(--color-ink);
+}
+:root body .media-video-workspace {
+  background: var(--color-bg);
+}
+:root body .media-video-workspace .media-video-controls {
+  width: 100%;
+  padding: var(--space-4) 0;
+}
+@media (max-width: 700px) {
+  :root body .media-video-workspace .media-video-controls {
+    padding: var(--space-3);
+  }
 }
 :root body .media-episode-rail {
   background: var(--color-surface);
@@ -1026,7 +1042,7 @@
   background: var(--color-brand-soft);
   color: var(--color-brand-text);
 }
-:root body .media-video-stage .dplayer-host {
+:root body .media-video-stage .artplayer-host {
   color-scheme: dark;
 }
 /* Also used outside media (sources search), so every media alias falls back to a global token. */
@@ -1218,9 +1234,6 @@
   .media-playback-status[data-panel="main"][data-channel="audiobook"] .media-playing-artwork > .media-cover {
     width: 230px;
     aspect-ratio: 2/3;
-  }
-  .media-video-toolbar.media-video-tools {
-    max-width: 440px;
   }
   .media-video-tools > button {
     flex-direction: row;
@@ -2402,17 +2415,17 @@
   background: var(--media-primary);
   color: var(--media-on-primary);
 }
-.media-player .dplayer-host .dplayer-bar-wrap .dplayer-played,
-.media-player .dplayer-host .dplayer-volume-bar-inner {
+.media-player .artplayer-host .art-control-progress .art-progress-played,
+.media-player .artplayer-host .art-volume-loaded {
   background: var(--media-fill) !important;
 }
-.media-player .dplayer-host .dplayer-setting-box,
-.media-player .dplayer-host .dplayer-setting-item {
+.media-player .artplayer-host .art-settings,
+.media-player .artplayer-host .art-setting {
   background: var(--media-paper);
   color: var(--text);
 }
 @media (hover: hover) and (pointer: fine) {
-  .media-player .dplayer-host .dplayer-setting-item:hover {
+  .media-player .artplayer-host .art-setting:hover {
     background: var(--media-selection);
   }
 }
@@ -2740,12 +2753,12 @@
 .media-video-stage * {
   color-scheme: dark;
 }
-.media-video-stage .dplayer-host {
-  background: #080b0e;
+.media-video-stage .artplayer-host {
+  background: black;
 }
-.media-video-stage .dplayer-controller button {
+.media-video-stage .art-controls button {
   background: transparent;
-  color: #f2f2e9;
+  color: var(--color-ink);
 }
 
 /* Folder actions use the same compact icon button as other page menus. */

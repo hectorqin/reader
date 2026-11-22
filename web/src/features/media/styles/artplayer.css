@@ -1,0 +1,66 @@
+.artplayer-host {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.artplayer-host .art-video-player {
+  --art-theme: var(--color-brand);
+  --art-font-color: var(--reader-viewer-ink);
+  --art-background-color: var(--color-surface);
+  --art-text-shadow-color: transparent;
+  --art-transition-duration: var(--motion-duration);
+  --art-padding: var(--space-3);
+  --art-border-radius: var(--radius-sm);
+  --art-progress-color: var(--reader-viewer-edge);
+  --art-loaded-color: var(--reader-viewer-ink);
+  --art-hover-color: var(--reader-viewer-edge);
+  --art-widget-background: var(--reader-viewer-control);
+  --art-tip-background: var(--reader-viewer-control);
+  --art-control-height: calc(var(--space-4) * 2);
+  --art-control-icon-size: var(--space-4);
+  --art-control-icon-scale: 1;
+  --art-control-opacity: 1;
+  --art-bottom-offset: 0px;
+  --art-bottom-gap: 0px;
+  --art-scrollbar-background: var(--color-line);
+  --art-scrollbar-background-hover: var(--color-muted);
+  font: inherit;
+}
+.artplayer-host .art-video {
+  background: black;
+}
+.artplayer-host .art-video-player .art-bottom {
+  padding-left: max(var(--space-3), var(--safe-left));
+  padding-right: max(var(--space-3), var(--safe-right));
+  background: linear-gradient(to top, var(--reader-viewer-bed), var(--color-scrim), transparent) bottom / 100%
+    var(--art-bottom-height) no-repeat;
+}
+.media-player:fullscreen .art-bottom {
+  padding-bottom: var(--safe-bottom);
+}
+.artplayer-host .art-controls {
+  font: inherit;
+}
+.artplayer-host :is(.art-controls, .art-progress) {
+  background: transparent;
+}
+.artplayer-host .art-progress-indicator svg {
+  fill: var(--color-brand);
+}
+.artplayer-host .art-control-time {
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.artplayer-host .art-control {
+  min-width: calc(var(--space-4) * 2);
+}
+.artplayer-host .art-contextmenus,
+.artplayer-host .art-subtitle {
+  display: none !important;
+}
+@media (hover: hover) and (pointer: fine) {
+  .artplayer-host .art-control:hover {
+    background: var(--reader-viewer-edge);
+  }
+}

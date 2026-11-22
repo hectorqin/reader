@@ -7,12 +7,12 @@ import { VideoControls } from '../src/features/media/components/video-controls.t
 import { PlaybackProblem } from '../src/features/media/components/playback-problem.tsx';
 import { ApiError } from '../src/api/errors.ts';
 import type { MediaApi, Detail } from '../src/features/media/api/media-api.ts';
-import type { MediaPlayer } from '../src/features/media/services/player.ts';
+import { MediaPlayer } from '../src/features/media/services/player.ts';
 const root = document.createElement('div');
 document.body.append(root);
 afterEach(() => act(() => render(null, root)));
 const player = () =>
-  ({
+  Object.assign(new EventTarget(), {
     currentItemId: 'film',
     currentPlaylist: [],
     mountVideoTimeline: () => () => {},
@@ -96,4 +96,33 @@ it('uses different icons for the episode list and the version switcher', async (
       ?.getAttribute('class') ?? '';
   expect(icon('选集')).toContain('lucide-list-video');
   expect(icon('版本')).toContain('lucide-layers');
+});
+it('keeps the speed summary and chips in sync with player and media rate changes', async () => {
+  const api = { detail: vi.fn().mockResolvedValue(film()) } as unknown as MediaApi;
+  let p!: MediaPlayer;
+  await act(async () => {
+    p = new MediaPlayer(api);
+    render(<VideoControls api={api} player={p} />, root);
+  });
+  await act(async () => root.querySelector<HTMLButtonElement>('[aria-label="更多播放选项"]')!.click());
+  const summary = () => document.querySelector('.media-video-more-label')?.textContent;
+  const chip = (label: string) =>
+    [...document.querySelectorAll<HTMLButtonElement>('.media-video-speeds button')].find(
+      (button) => button.textContent === label,
+    )!;
+  expect(summary()).toBe('倍速 · 1.0×');
+  await act(async () => chip('1.5×').click());
+  expect(p.audio.playbackRate).toBe(1.5);
+  expect(chip('1.5×').getAttribute('aria-pressed')).toBe('true');
+  expect(summary()).toBe('倍速 · 1.5×');
+  await act(async () => {
+    p.audio.playbackRate = 2;
+    p.audio.dispatchEvent(new Event('ratechange'));
+  });
+  expect(p.playbackRate).toBe(2);
+  expect(summary()).toBe('倍速 · 2.0×');
+  expect(chip('2.0×').getAttribute('aria-pressed')).toBe('true');
+  expect(chip('1.5×').getAttribute('aria-pressed')).toBe('false');
+  await act(async () => p.speed(NaN));
+  expect(summary()).toBe('倍速 · 2.0×');
 });

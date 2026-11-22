@@ -331,7 +331,7 @@ async function saveShot(capture) {
       ]) {
         await go('#/media/video/items/' + item.id);
         await page.locator('.media-detail-actions .media-primary').click();
-        await page.locator('.dplayer-video').waitFor();
+        await page.locator('.art-video').waitFor();
         await page.waitForFunction(() => document.querySelector('.media-player video')?.readyState >= 2);
         for (const width of [390, 1120]) await shot(id, width);
       }
@@ -359,7 +359,7 @@ async function saveShot(capture) {
         {
           complete: true,
           fixture:
-            'Real local acceptance media and disposable server; reference content differs where the library lacks prototype metadata. Video internals use DPlayer.',
+            'Real local acceptance media and disposable server; reference content differs where the library lacks prototype metadata. Video internals use Artplayer.',
           checks,
           errors,
         },
@@ -369,7 +369,7 @@ async function saveShot(capture) {
     );
     await fs.writeFile(
       join(out, 'index.html'),
-      `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>影音 v2 实施验收</title><style>body{margin:24px;background:#f8f9f5;color:#202b24;font:14px/1.6 system-ui}h1{font-size:24px}section{margin:32px 0}.pair{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1600px}figure{margin:0;min-width:0}img{width:100%;border:1px solid #dfe5d9}figcaption{margin:8px 0}nav{display:flex;flex-wrap:wrap;gap:12px}a{color:#466638}@media(max-width:600px){body{margin:12px}.pair{gap:8px}}</style><h1>影音 v2 · 原型与实际页面</h1><p>左侧为已确认的 v2 原型，右侧为生产构建。尺寸与主题一致；实际页面使用本地验收资源，条目数量、封面及元数据可能不同。视频控件由 DPlayer 提供。</p><nav>${checks.map((r) => `<a href="#${r.key}">${r.id} ${r.width}</a>`).join('')}</nav>${checks.map((r) => `<section id="${r.key}"><h2>${r.id} · ${r.width}px</h2><div class="pair"><figure><figcaption>v2 原型</figcaption><img loading="lazy" src="${r.key}-reference.png"></figure><figure><figcaption>实际页面</figcaption><img loading="lazy" src="${r.key}-actual.png"></figure></div></section>`).join('')}</html>`,
+      `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>影音 v2 实施验收</title><style>body{margin:24px;background:#f8f9f5;color:#202b24;font:14px/1.6 system-ui}h1{font-size:24px}section{margin:32px 0}.pair{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1600px}figure{margin:0;min-width:0}img{width:100%;border:1px solid #dfe5d9}figcaption{margin:8px 0}nav{display:flex;flex-wrap:wrap;gap:12px}a{color:#466638}@media(max-width:600px){body{margin:12px}.pair{gap:8px}}</style><h1>影音 v2 · 原型与实际页面</h1><p>左侧为已确认的 v2 原型，右侧为生产构建。尺寸与主题一致；实际页面使用本地验收资源，条目数量、封面及元数据可能不同。视频控件由 Artplayer 提供。</p><nav>${checks.map((r) => `<a href="#${r.key}">${r.id} ${r.width}</a>`).join('')}</nav>${checks.map((r) => `<section id="${r.key}"><h2>${r.id} · ${r.width}px</h2><div class="pair"><figure><figcaption>v2 原型</figcaption><img loading="lazy" src="${r.key}-reference.png"></figure><figure><figcaption>实际页面</figcaption><img loading="lazy" src="${r.key}-actual.png"></figure></div></section>`).join('')}</html>`,
     );
     console.log(JSON.stringify({ comparisons: checks.length, errors }));
   } catch (error) {

@@ -197,10 +197,11 @@ async function backBox(page) {
   });
 }
 
-async function capture(page, name, checks, errors) {
-  for (const width of widths) {
+async function capture(page, name, checks, errors, captureWidths = widths) {
+  for (const width of captureWidths) {
     const height = heightFor(width);
-    await page.setViewportSize({ width, height });
+    if (page.viewportSize()?.width !== width || page.viewportSize()?.height !== height)
+      await page.setViewportSize({ width, height });
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(120);
     const metrics = await page.evaluate(() => {
@@ -650,9 +651,15 @@ async function runMediaReview(browser, fixture, checks, errors) {
   }
   await page.goto(`${origin}/#/me/settings`);
   await waitMediaHeading(page, '偏好设置');
+  const appThemes = page.getByRole('group', { name: '应用主题', exact: true });
+  const originalThemeLabel = await appThemes.locator('[aria-pressed="true"]').getAttribute('aria-label');
+  const originalTheme = await page.locator('html').getAttribute('data-theme');
   await page.locator('.theme-grid [aria-pressed="false"]').first().click();
   await page.locator('.notyf .global-notice').filter({ hasText: '主题已保存' }).waitFor({ state: 'visible' });
   assert.equal(await page.locator('.settings-section [role=status]').count(), 0, 'theme feedback must not be inline');
+  assert.notEqual(await page.locator('html').getAttribute('data-theme'), originalTheme);
+  await appThemes.getByRole('button', { name: originalThemeLabel, exact: true }).click();
+  await page.waitForFunction((theme) => document.documentElement.dataset.theme === theme, originalTheme);
 
   // The browse fixture includes one playable, partially watched video.  Keep
   // this assertion close to the route sweep so the recent continuation card
@@ -798,12 +805,77 @@ async function runMediaReview(browser, fixture, checks, errors) {
   assert.equal((await playback).status(), 201);
   await page.waitForURL(/#\/media\/video\/player/);
   await page.locator('.media-playback-page').waitFor({ state: 'attached' });
+  assert.equal(await page.locator('html').getAttribute('data-theme'), originalTheme);
+  assert.equal(await page.locator('.media-player').getAttribute('data-theme'), null, 'video inherits the app theme');
   const videoPlayback = await assertLoadedAndAdvancingVideo(page);
   assert.ok(
     videoPlayback.after.currentTime > videoPlayback.before.currentTime,
     'video playback session did not advance',
   );
   await capture(page, 'media-player', checks, errors);
+  const chrome = await page.locator('.art-video-player').evaluate((player) => {
+    const style = getComputedStyle(player);
+    const bottom = player.querySelector('.art-bottom');
+    return {
+      controlsBackground: getComputedStyle(player.querySelector('.art-controls')).backgroundColor,
+      scrim: getComputedStyle(bottom).backgroundImage,
+      overlayWidth: bottom.getBoundingClientRect().width,
+      playerWidth: player.getBoundingClientRect().width,
+      ink: style.getPropertyValue('--art-font-color').trim(),
+      expectedInk: style.getPropertyValue('--reader-viewer-ink').trim(),
+      accent: style.getPropertyValue('--art-theme').trim(),
+      brand: style.getPropertyValue('--color-brand').trim(),
+    };
+  });
+  assert.equal(chrome.controlsBackground, 'rgba(0, 0, 0, 0)');
+  assert.match(chrome.scrim, /linear-gradient/);
+  assert.equal(chrome.overlayWidth, chrome.playerWidth, 'scrim spans the stage');
+  assert.equal(chrome.ink, chrome.expectedInk, 'chrome uses the existing on-dark viewer ink');
+  assert.equal(chrome.accent, chrome.brand, 'progress uses the active app brand');
+  assert.equal(await page.locator('.art-video-player').count(), 1);
+  assert.equal(await page.locator('.art-control-fullscreen').count(), 0, 'Reader owns fullscreen');
+  const sessionVideo = await page.locator('.media-player video').elementHandle();
+  await sessionVideo.evaluate((video) => video.pause());
+  await page.locator('.art-control-playAndPause').click();
+  await page.waitForFunction(() => !document.querySelector('.media-player video').paused);
+  await page.locator('.art-control-playAndPause').click();
+  await page.waitForFunction(() => document.querySelector('.media-player video').paused);
+  await page.keyboard.press('Space');
+  await page.waitForFunction(() => !document.querySelector('.media-player video').paused);
+  await page.locator('.media-player video').click({ force: true });
+  await page.waitForFunction(() => document.querySelector('.media-player video').paused);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await capture(page, 'media-player-dark', checks, errors);
+  await page.emulateMedia({ colorScheme: 'light' });
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: heightFor(width) });
+    await page.getByRole('button', { name: '横屏全屏播放' }).click();
+    await page.waitForFunction(() => document.fullscreenElement?.classList.contains('media-player'));
+    assert.equal(
+      await page.locator('.media-video-stage').evaluate((stage) => Math.round(stage.getBoundingClientRect().height)),
+      await page.evaluate(() => innerHeight),
+      'fullscreen stage must fill the viewport',
+    );
+    await capture(page, 'media-player-fullscreen', checks, errors, [width]);
+    await page.getByRole('button', { name: '适应屏幕', exact: true }).click();
+    assert.equal(
+      await page.locator('.media-player video').evaluate((video) => getComputedStyle(video).objectFit),
+      'cover',
+    );
+    await page.getByRole('button', { name: '锁定', exact: true }).click();
+    await page.keyboard.press('Space');
+    assert.equal(await page.locator('.media-player video').evaluate((video) => video.paused), true);
+    assert.equal(
+      await page.locator('.artplayer-host').evaluate((host) => getComputedStyle(host).pointerEvents),
+      'none',
+    );
+    await capture(page, 'media-player-locked', checks, errors, [width]);
+    await page.getByRole('button', { name: '解除锁定' }).click();
+    await page.getByRole('button', { name: '完整画面', exact: true }).click();
+    await page.getByRole('button', { name: '退出全屏', exact: true }).click();
+    await page.waitForFunction(() => !document.fullscreenElement);
+  }
+  assert.equal(await sessionVideo.evaluate((video) => video === document.querySelector('.media-player video')), true);
 
   // The player is a runtime-owned session. Navigate away and return through the
   // mini-player control; a fresh POST /playback would indicate the session was
