@@ -343,6 +343,16 @@ CREATE TABLE IF NOT EXISTS book_reviews (
   PRIMARY KEY (user_id, book_id)
 );
 
+-- How one reader asked to see one book, when a format can be read more than one
+-- way (today: a PDF as its pages or as extracted text). No row: the site default.
+CREATE TABLE IF NOT EXISTS book_view_modes (
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  book_id    TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  pdf_mode   TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, book_id)
+);
+
 -- Highest-priority override layer: user manual edits. Never auto overwritten.
 CREATE TABLE IF NOT EXISTS metadata_overrides (
   book_id    TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,

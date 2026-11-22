@@ -120,6 +120,10 @@ export interface PdfSource {
 
 export interface PdfRenderer {
   render(page: number, container: HTMLElement, fit: 'contain' | 'width'): Promise<void>;
+  /** A page's text layer as plain text, for in-book search. Reads that page's bytes if not yet read. */
+  pageText(page: number, signal?: AbortSignal): Promise<string>;
+  /** The book's bookmarks, with the page (1-based) each points at; empty when it has none. */
+  outline(): Promise<Array<{ title: string; page: number; depth: number }>>;
   cancel(): void;
   dispose(): void;
 }

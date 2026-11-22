@@ -164,6 +164,42 @@ export async function openPdf(
       });
       observer.observe(container);
     },
+    async pageText(pageNumber, pageSignal) {
+      pageSignal?.throwIfAborted();
+      const page = await pdf.getPage(pageNumber);
+      try {
+        const content = await page.getTextContent();
+        pageSignal?.throwIfAborted();
+        // A line break where the text layer has one, so a phrase is not found across two lines' ends.
+        return content.items.map((item) => ('str' in item ? item.str + (item.hasEOL ? '\n' : '') : '')).join('');
+      } finally {
+        if (page !== currentPage) page.cleanup();
+      }
+    },
+    async outline() {
+      const entries: Array<{ title: string; page: number; depth: number }> = [];
+      type Item = { title: string; dest: unknown; items: Item[] };
+      const walk = async (items: Item[] | null, depth: number): Promise<void> => {
+        for (const item of items ?? []) {
+          try {
+            const dest = typeof item.dest === 'string' ? await pdf.getDestination(item.dest) : item.dest;
+            const target = Array.isArray(dest) ? dest[0] : null;
+            const index =
+              typeof target === 'number'
+                ? target
+                : target
+                  ? await pdf.getPageIndex(target as Parameters<PDFDocumentProxy['getPageIndex']>[0])
+                  : -1;
+            if (index >= 0 && item.title?.trim()) entries.push({ title: item.title.trim(), page: index + 1, depth });
+          } catch {
+            /* a bookmark that points nowhere is left out */
+          }
+          await walk(item.items, depth + 1);
+        }
+      };
+      await walk((await pdf.getOutline().catch(() => null)) as Item[] | null, 0);
+      return entries;
+    },
     cancel,
     dispose() {
       cancel();

@@ -24,7 +24,7 @@ A self-hosted reading and media library for browsers and Android, with EPUB and 
 | EPUB / TXT | Publisher typography, contents, footnotes; TXT encoding detection and inferred chapters |
 | MOBI / AZW3 | DRM-free Kindle books, with the same styles, images, and contents as EPUB |
 | CBZ / ZIP / image directories | Natural page ordering, comic paging, and volumes |
-| PDF | Basic browser or device viewing without reflow |
+| PDF | Original pages (PDF.js, bookmarks, page search) or 增强解析: text reflowed into chapters by bookmarks, read like EPUB |
 | OPDS | Browse, search, and acquire books; publish a read-only catalog to external readers |
 | Movies / series | Artwork, metadata, seasons, episodes, editions, subtitles, and progress |
 | Music | Artists, albums, tracks, lyrics, queues, and continuous playback |

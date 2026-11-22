@@ -10,6 +10,17 @@ import { renditionRef } from '../ui/rendition.ts';
  * with no network. See docs/kindle-formats.zh-CN.md.
  */
 export const RANGED_FORMATS: readonly string[] = ['chapters', 'txt', 'mobi'];
+
+/**
+ * Whether this book downloads by chapter range. A PDF does when it is read as text
+ * (增强解析): its chapters are the server's; read as pages, the file is the book.
+ */
+export function downloadsByChapter(manifest: Pick<Manifest, 'book' | 'content'>): boolean {
+  return (
+    RANGED_FORMATS.includes(manifest.book.format) ||
+    (manifest.book.format === 'pdf' && manifest.content?.kind === 'reflowable')
+  );
+}
 const SELF_CONTAINED_FORMATS: readonly string[] = ['mobi'];
 /** Marks a chapter stored in its self-contained form; one read online is not. */
 const selfContainedKey = (ref: string): string => `offline-ready:${ref}`;
@@ -58,7 +69,7 @@ export class OfflineDownload {
   }
   async start(
     from = 1,
-    to = RANGED_FORMATS.includes(this.manifest.book.format) ? (this.manifest.content?.total ?? 1) : 1,
+    to = downloadsByChapter(this.manifest) ? (this.manifest.content?.total ?? 1) : 1,
   ): Promise<void> {
     if (this.run) return;
     const run = (this.run = new AbortController());
@@ -77,7 +88,7 @@ export class OfflineDownload {
       signal = run.signal;
     const overrides = await this.cache.overrides(book.id);
     const chapters =
-      RANGED_FORMATS.includes(book.format) &&
+      downloadsByChapter(this.manifest) &&
       !!this.manifest.content &&
       !(book.format === 'txt' && overrides?.headingPrefix);
     const selfContained = SELF_CONTAINED_FORMATS.includes(book.format);

@@ -175,6 +175,10 @@ export interface ChromeState {
   ttsEngine: AppSettings['ttsEngine'];
   showFitRow: boolean;
   showDirectionRow: boolean;
+  /** How a PDF is read (its pages, or its text as chapters); `none` for every other book. */
+  pdfMode: 'none' | 'pdfjs' | 'enhanced';
+  /** True while a switch is being saved, so a second tap cannot race it. */
+  pdfModeBusy: boolean;
   showEncodingRow: boolean;
   /** Plain-text typography rows; see the `正文` section in the panel. */
   showTxtRows: boolean;
@@ -198,6 +202,8 @@ export interface ChromeHandlers {
   toggleToc(): void;
   toggleSettings(tab?: 'appearance' | 'behavior' | 'speech'): void;
   onSetting(patch: Partial<AppSettings>): void;
+  /** Reads this PDF as its pages or as text; the book re-opens on the same page. */
+  onPdfMode?(mode: 'pdfjs' | 'enhanced'): void;
   onSpeechSetting(patch: Partial<AppSettings>): void;
   onVoice(value: string): void;
   onSpeakFromHere(): void;
@@ -937,6 +943,25 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
           {/* Rows that only apply to some books. The old panel built every row and
           then hid the irrelevant ones by hand after each open; here they are
           simply not part of the tree. */}
+          {state.pdfMode !== 'none' && handlers.onPdfMode ? (
+            <>
+              <SegmentedRow
+                label="PDF 解析"
+                options={[
+                  { value: 'pdfjs', label: '原版页面' },
+                  { value: 'enhanced', label: '增强解析' },
+                ]}
+                value={state.pdfMode}
+                disabled={state.pdfModeBusy}
+                onChange={(value) => handlers.onPdfMode!(value as 'pdfjs' | 'enhanced')}
+              />
+              <p className="reader-setting-hint">
+                {state.pdfMode === 'enhanced'
+                  ? '按书签把文字整理成章节，可调字号、朗读、批注；插图、表格和公式请切回原版页面查看。'
+                  : '保留原书版式；切到增强解析可像 EPUB 一样阅读（仅这本书，下次打开仍然有效）。'}
+              </p>
+            </>
+          ) : null}
           {state.showFitRow ? (
             <SegmentedRow
               label="图片适配"
@@ -1160,11 +1185,13 @@ function SegmentedRow({
   options,
   value,
   onChange,
+  disabled = false,
 }: {
   label: string;
   options: Array<{ value: string; label: string }>;
   value: string;
   onChange(value: string): void;
+  disabled?: boolean;
 }): JSX.Element {
   return (
     <div className="field">
@@ -1175,6 +1202,7 @@ function SegmentedRow({
             type="button"
             key={option.value}
             aria-pressed={option.value === value}
+            disabled={disabled}
             onClick={() => onChange(option.value)}
           >
             {option.label}

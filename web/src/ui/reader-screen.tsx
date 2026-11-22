@@ -23,6 +23,7 @@ import { makeAssetSigner } from '../net/asset-url.ts';
 import { attachGestures } from './gestures.ts';
 import { READOUT_FIELDS, type AppSettings } from '../store/settings.ts';
 import { createStagedDoc, isStagedKind, windowIndexOf } from '../formats/windowed.ts';
+import { pdfPageOf, pdfSectionId } from '../formats/pdf.ts';
 import type { BookDoc } from '../formats/types.ts';
 import type { ContentItem, TocEntry } from '../api/types.ts';
 
@@ -138,6 +139,8 @@ export class ReaderScreen {
    * measured.
    */
   private chrome: ChromeState = {
+    pdfMode: 'none',
+    pdfModeBusy: false,
     title: '',
     author: '',
     chromeVisible: true,
@@ -436,6 +439,7 @@ export class ReaderScreen {
             toggleToc: () => this.toggleToc(),
             toggleSettings: (tab) => this.toggleSettings(tab),
             onSetting: (patch) => void this.updateSetting(patch),
+            onPdfMode: (mode) => void this.switchPdfMode(mode),
             theme: () => {
               const preference = readThemePreference(this.themeScope());
               const systemDark = systemPrefersDark();
@@ -714,6 +718,10 @@ export class ReaderScreen {
 
     try {
       this.manifest = await this.loadManifest(book);
+      if (book.format === 'pdf') {
+        const content = this.manifest.content;
+        this.patch({ pdfMode: content?.kind === 'reflowable' || content?.notice ? 'enhanced' : 'pdfjs' });
+      }
       if (token !== this.loadingToken) return;
       const storedOverrides = (await this.publicationCache.overrides(book.id)) ?? emptyOverrides();
       if (token !== this.loadingToken) return;
@@ -804,6 +812,9 @@ export class ReaderScreen {
 
       await this.restorePosition(book, token);
       await this.openRequested(at, token);
+      // Asked for as text, shown as pages: say why (a scan has no text layer).
+      const notice = this.manifest?.content?.notice;
+      if (notice && token === this.loadingToken) this.flashStatus(notice, 6000);
     } catch (err) {
       if (token !== this.loadingToken) return;
       this.handleLoadError(err);
@@ -827,10 +838,17 @@ export class ReaderScreen {
    */
   private async openStaged(book: Book, token: number): Promise<{ doc: BookDoc } | null> {
     if (book.format === 'txt' && this.overrides.headingPrefix) return null;
-    if (!['chapters', 'txt'].includes(book.format) && (await this.publicationCache.resource(book.id, OFFLINE_FILE)))
-      return null;
     const manifest = this.manifest;
     const content = manifest?.content;
+    // A downloaded whole file opens from the device — except a PDF read as text (增强解析),
+    // whose chapters are the server's, not the file's.
+    const pdfText = book.format === 'pdf' && !!content && isStagedKind(content.kind);
+    if (
+      !['chapters', 'txt'].includes(book.format) &&
+      !pdfText &&
+      (await this.publicationCache.resource(book.id, OFFLINE_FILE))
+    )
+      return null;
     if (!content || !isStagedKind(content.kind)) return null;
 
     // The manifest's own items are the fallback *and* the sanity check.
@@ -1104,6 +1122,14 @@ export class ReaderScreen {
     const doc = this.doc,
       book = this.book,
       content = this.manifest?.content;
+    // A PDF shown as pages is searched page by page in its own text layer.
+    if (doc?.pdf) {
+      for (let page = 1; page <= doc.sections.length; page += 1) {
+        signal.throwIfAborted();
+        yield { id: pdfSectionId(page), title: `第 ${page} 页`, text: await doc.pdf.pageText(page, signal) };
+      }
+      return;
+    }
     if (!doc || !book || doc.layout === 'fixed') throw new Error('此格式暂不支持正文搜索');
     if (this.content && content) {
       for (let group = 0; group < Math.max(1, content.groups.length); group++) {
@@ -1181,6 +1207,11 @@ export class ReaderScreen {
 
   private async navigateTool(target: TextAnchor | string): Promise<void> {
     if (!this.view) throw new Error('阅读器已关闭');
+    // A hit in a PDF's pages lands on its page; the page is drawn, not text the anchor could mark.
+    if (this.doc?.pdf && typeof target !== 'string') {
+      await this.goToChapterRef(target.sectionId);
+      return;
+    }
     const locator = typeof target === 'string' ? /^r1:([^:]+):(.+)$/.exec(target) : null;
     const section = typeof target === 'string' ? (locator?.[2] ?? target) : target.sectionId;
     await this.goToChapterRef(section);
@@ -2104,6 +2135,12 @@ export class ReaderScreen {
    */
   private async openRequested(at: string, token: number): Promise<void> {
     if (!at || token !== this.loadingToken || !this.view) return;
+    // A page of a PDF: where the reader was when switching between pages and text.
+    if (at.startsWith('pdf-page:')) {
+      const ref = await this.pdfPageRef(Number(at.slice('pdf-page:'.length))).catch(() => null);
+      if (ref && token === this.loadingToken) await this.goToChapterRef(ref);
+      return;
+    }
     try {
       await this.navigateTool(decodeAnchor(at) ?? at);
       this.flashStatus('已跳到笔记位置', 1800);
@@ -2111,6 +2148,69 @@ export class ReaderScreen {
       if (token !== this.loadingToken) return;
       this.flashStatus(error instanceof Error ? error.message : '无法定位到这条笔记', 4000);
     }
+  }
+
+  /**
+   * Switches how this PDF is read — its pages (`pdfjs`) or its text as chapters
+   * (`enhanced`) — for this reader and this book, and re-opens it on the same page.
+   */
+  private async switchPdfMode(mode: 'pdfjs' | 'enhanced'): Promise<void> {
+    const book = this.book;
+    if (!book || book.format !== 'pdf' || this.chrome.pdfMode === mode || this.chrome.pdfModeBusy) return;
+    const page = this.currentPdfPage() ?? 1;
+    this.patch({ pdfModeBusy: true });
+    try {
+      await this.options.api.setViewMode(book.id, mode);
+    } catch (error) {
+      this.patch({ pdfModeBusy: false });
+      if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
+      else this.flashStatus(error instanceof Error ? error.message : '切换失败，请重试', 4000);
+      return;
+    }
+    await this.flushProgress().catch(() => undefined);
+    this.patch({ pdfModeBusy: false, settingsOpen: false });
+    const opening = this.open(book, `pdf-page:${page}`);
+    // The first time a PDF is read as text the server has to read all of it.
+    if (mode === 'enhanced') this.setStatus('loading', '正在整理 PDF 正文，第一次打开需要一些时间…');
+    await opening;
+    if (this.book === book && this.chrome.statusState !== 'error')
+      this.flashStatus(
+        mode === 'enhanced' ? (this.manifest?.content?.notice ?? '已切换到增强解析') : '已切换到原版页面',
+        3000,
+      );
+  }
+
+  /** The PDF page the reader is on: the section itself as pages, estimated within a chapter as text. */
+  private currentPdfPage(): number | null {
+    const position = this.view?.position();
+    if (!position) return null;
+    const page = pdfPageOf(position.sectionId);
+    if (page !== null) return page;
+    const items = this.content?.items ?? [];
+    const index = items.findIndex((item) => item.href === position.sectionId);
+    const start = items[index]?.page;
+    if (start === undefined) return null;
+    const next = items[index + 1]?.page ?? start;
+    return start + Math.floor(Math.max(0, Math.min(1, position.within)) * Math.max(0, next - start));
+  }
+
+  /** Where a PDF page is in the current reading: its section as pages, or the chapter it falls in as text. */
+  private async pdfPageRef(page: number): Promise<string | null> {
+    if (!Number.isInteger(page) || page < 1) return null;
+    if (this.doc?.pdf) return pdfSectionId(Math.min(page, this.doc.sections.length));
+    const content = this.content,
+      book = this.book;
+    if (!content || !book) return null;
+    let best: { href: string; page: number } | null = null;
+    for (let group = 0; group < Math.max(1, content.groups.length); group += 1) {
+      const window = group === (content.group ?? 0) ? content : await this.readWindow(book.id, group);
+      for (const item of window.items) {
+        if (item.page === undefined) continue;
+        if (item.page > page) return best ? `${best.href}#pdf-page-${page}` : null;
+        best = { href: item.href, page: item.page };
+      }
+    }
+    return best ? `${best.href}#pdf-page-${page}` : null;
   }
 
   /** Goes back to a place from 阅读记录; that place then becomes the saved position. */

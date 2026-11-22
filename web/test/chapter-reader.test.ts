@@ -202,6 +202,144 @@ describe('PDF reading', () => {
     expect(document.renderer.dispose).toHaveBeenCalled();
   });
 
+  it('as pages, its bookmarks are the table of contents and each page is searched in its own text', async () => {
+    const env = await setup();
+    servePdf(env.transport);
+    await act(async () => env.screen.open({ ...book, format: 'pdf' }));
+    const screen = env.screen as unknown as {
+      chrome: { toc: Array<{ id: string; label: string; depth: number }>; pdfMode: string };
+      searchSections(signal: AbortSignal): AsyncGenerator<{ id: string; title: string; text: string }>;
+    };
+    await vi.waitFor(() =>
+      expect(screen.chrome.toc.map((entry) => [entry.id, entry.label, entry.depth])).toEqual([
+        ['pdf', '序', 0],
+        ['pdf:2', '第一章', 0],
+        ['pdf:3', '第一节', 1],
+      ]),
+    );
+    expect(screen.chrome.pdfMode).toBe('pdfjs');
+    const pages = [];
+    for await (const section of screen.searchSections(new AbortController().signal)) pages.push(section);
+    expect(pages.map((page) => [page.id, page.title])).toEqual([
+      ['pdf', '第 1 页'],
+      ['pdf:2', '第 2 页'],
+      ['pdf:3', '第 3 页'],
+    ]);
+    expect(pages[1]!.text).toContain('要找的词');
+  });
+
+  it('switches between pages and text on the same page, saving the choice for this book', async () => {
+    const env = await setup();
+    let mode: 'pdfjs' | 'enhanced' = 'pdfjs';
+    const viewModes: unknown[] = [];
+    const chapters = {
+      kind: 'reflowable',
+      total: 2,
+      revision: 'pdf-text:k',
+      groups: [{ id: 'spine:0', seq: 0, offset: 0, count: 2, title: '一 – 二' }],
+      items: [
+        {
+          id: 'pdf/part0000.xhtml',
+          seq: 0,
+          title: '一',
+          kind: 'chapter',
+          mediaType: 'text/html',
+          href: 'xhtml:pdf/part0000.xhtml',
+          page: 1,
+        },
+        {
+          id: 'pdf/part0001.xhtml',
+          seq: 1,
+          title: '二',
+          kind: 'chapter',
+          mediaType: 'text/html',
+          href: 'xhtml:pdf/part0001.xhtml',
+          page: 3,
+        },
+      ],
+    };
+    env.transport.respondWith((request) => {
+      if (request.url.endsWith('/view-mode')) {
+        const body = JSON.parse(String(request.body)) as { pdfMode: 'pdfjs' | 'enhanced' };
+        viewModes.push(body.pdfMode);
+        mode = body.pdfMode;
+        return { status: 200, headers: {}, json: { pdfMode: mode, chosen: mode, defaultPdfMode: 'pdfjs' } };
+      }
+      if (request.url.endsWith('/manifest'))
+        return {
+          status: 200,
+          headers: {},
+          json: {
+            book: { ...book, format: 'pdf' },
+            files: [],
+            contentUrl: '',
+            coverUrl: null,
+            content: mode === 'pdfjs' ? { kind: 'document', total: 1, items: [], groups: [] } : chapters,
+          },
+        };
+      if (request.method === 'HEAD')
+        return { status: 200, headers: { 'content-length': '1000000', 'accept-ranges': 'bytes' } };
+      if (request.url.includes('/assets?')) {
+        const ref = new URL(request.url, 'http://one.test').searchParams.get('ref')!;
+        const html = ref.includes('part0001')
+          ? '<p><span class="pdf-page" id="pdf-page-3"></span>第二章从第三页开始。</p>'
+          : '<p><span class="pdf-page" id="pdf-page-1"></span>第一章。</p>';
+        return { status: 200, headers: {}, bytes: new TextEncoder().encode(html) };
+      }
+      return { status: 200, headers: {}, json: { progress: null } };
+    });
+    const screen = env.screen as unknown as {
+      goToChapterRef(ref: string): Promise<void>;
+      switchPdfMode(mode: 'pdfjs' | 'enhanced'): Promise<void>;
+      chrome: { pdfMode: string };
+    };
+    await act(async () => env.screen.open({ ...book, format: 'pdf' }));
+    await act(async () => screen.goToChapterRef('pdf:3'));
+    await act(async () => screen.switchPdfMode('enhanced'));
+    expect(viewModes).toEqual(['enhanced']);
+    expect(screen.chrome.pdfMode).toBe('enhanced');
+    // Page 3 is in the second chapter.
+    expect(body(env.screen)?.textContent).toContain('第二章从第三页开始');
+    const document = await openPdf.mock.results.at(-1)!.value;
+    document.renderer.render.mockClear();
+    await act(async () => screen.switchPdfMode('pdfjs'));
+    expect(viewModes).toEqual(['enhanced', 'pdfjs']);
+    expect(screen.chrome.pdfMode).toBe('pdfjs');
+    const reopened = await openPdf.mock.results.at(-1)!.value;
+    expect(reopened.renderer.render.mock.calls.at(-1)?.[0]).toBe(3);
+  });
+
+  it('asked for as text, a scan opens as pages and says why', async () => {
+    const env = await setup();
+    env.transport.respondWith((request) => {
+      if (request.url.endsWith('/manifest'))
+        return {
+          status: 200,
+          headers: {},
+          json: {
+            book: { ...book, format: 'pdf' },
+            files: [],
+            contentUrl: '',
+            coverUrl: null,
+            content: {
+              kind: 'document',
+              total: 1,
+              items: [],
+              groups: [],
+              notice: '这本 PDF 没有文字层（可能是扫描版），已按原版页面打开。',
+            },
+          },
+        };
+      if (request.method === 'HEAD')
+        return { status: 200, headers: { 'content-length': '1000000', 'accept-ranges': 'bytes' } };
+      return { status: 200, headers: {}, json: { progress: null } };
+    });
+    await act(async () => env.screen.open({ ...book, format: 'pdf' }));
+    expect((env.screen as unknown as { chrome: { pdfMode: string } }).chrome.pdfMode).toBe('enhanced');
+    expect(body(env.screen)?.querySelector('canvas')).not.toBeNull();
+    expect(document.body.textContent).toContain('没有文字层');
+  });
+
   it('opens an explicitly downloaded PDF from cache without requesting its network content', async () => {
     const env = await setup();
     servePdf(env.transport);

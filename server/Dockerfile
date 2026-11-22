@@ -35,7 +35,9 @@ COPY server/src ./src
 RUN npm run build
 
 # Strip dev dependencies for the runtime image.
-RUN npm prune --omit=dev
+# Optional packages are native add-ons we never load (pdf.js's canvas: the server only
+# reads PDF text, it never draws a page). Pruned so the image stays free of native code.
+RUN npm prune --omit=dev --omit=optional
 
 
 # --- runtime stage -----------------------------------------------------------

@@ -48,7 +48,7 @@
 
 ### `GET /books/:id/search?q=关键词&cursor=上一页游标`
 
-仅允许搜索当前用户书架中的书籍，支持 TXT 和 EPUB。关键词去除首尾空白后搜索，原始长度限 1–200 个字符。响应不缓存。
+仅允许搜索当前用户书架中的书籍，支持 TXT、EPUB、Kindle 和按增强解析阅读的 PDF。按原版页面阅读的 PDF 返回 `400 SEARCH_LOCAL_PDF`，由阅读器逐页搜索文本层。关键词去除首尾空白后搜索，原始长度限 1–200 个字符。响应不缓存。
 
 ```json
 {
@@ -196,6 +196,16 @@
 
 → `{ "book": {...}, "progress": {...} | null }`
 
+### `GET /books/:id/view-mode`、`PUT /books/:id/view-mode`
+
+当前用户怎样阅读这本书（目前只有 PDF 有两种方式，见 [PDF](pdf.md)）。
+
+→ `{ "pdfMode": "pdfjs" | "enhanced", "chosen": "pdfjs" | "enhanced" | null, "defaultPdfMode": "pdfjs" | "enhanced" }`
+
+`pdfMode` 是生效的模式，`chosen` 是读者为这本书的选择（`null` 表示跟随全站默认），`defaultPdfMode` 是管理员在服务配置里设的默认。
+`PUT { "pdfMode": "enhanced" }` 保存选择，`{ "pdfMode": null }` 或空对象清除；非 PDF 返回 `400 UNSUPPORTED_FORMAT`，其他值返回 `400 BAD_MODE`。
+清单、目录和书内搜索按生效的模式回答；客户端切换后重新打开书。
+
 ### `GET /books/:id/manifest`
 
 渲染器布局前需要的清单。**打开一本书就是这一次请求**，可寻址结构也在里面，
@@ -210,6 +220,9 @@
   "content": { "kind": "reflowable", "total": 42, "groups": [...], "items": [...] },
   "kind": "reflowable", "total": 42, "groups": [...], "items": [...] }
 ```
+
+`content.notice`（可选）是要告诉读者的话，例如按增强解析打开的 PDF 没有文字层、已按原版页面显示。
+增强解析的 PDF 章节项另有 `page`：这一章的文字从第几页开始（从 1 起）。
 
 `kind` / `total` / `groups` / `items` 与 `content` 的内容相同，同时放在顶层是**冗余的
 兼容层**：它们先于 `content` 存在，且 `kind` 是外壳判断「谁来渲染」的唯一开关

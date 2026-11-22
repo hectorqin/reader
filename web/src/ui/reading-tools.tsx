@@ -8,7 +8,7 @@ import type { Manifest, Note } from '../api/types.ts';
 import type { OfflineStore } from '../store/offline.ts';
 import type { SyncEngine } from '../core/sync.ts';
 import { PublicationCache } from '../store/publications.ts';
-import { OfflineDownload, RANGED_FORMATS, type DownloadState } from '../core/offline-download.ts';
+import { OfflineDownload, downloadsByChapter, type DownloadState } from '../core/offline-download.ts';
 import { decodeAnchor, encodeAnchor, findText, type SearchHit, type TextAnchor } from './text-anchor.ts';
 import { ApiError } from '../api/errors.ts';
 import { newId } from '../core/id.ts';
@@ -74,9 +74,7 @@ export function ReadingTools(props: ReadingToolsProps) {
   const [deleteId, setDeleteId] = useState('');
   const editorRef = useRef<HTMLDivElement>(null);
   const [from, setFrom] = useState(1),
-    [to, setTo] = useState(
-      RANGED_FORMATS.includes(props.manifest.book.format) ? (props.manifest.content?.total ?? 1) : 1,
-    );
+    [to, setTo] = useState(downloadsByChapter(props.manifest) ? (props.manifest.content?.total ?? 1) : 1);
   const [downloadReady, setDownloadReady] = useState(false);
   const [download, setDownload] = useState<DownloadState | null>(null);
   const [usage, setUsage] = useState(0),
@@ -94,7 +92,7 @@ export function ReadingTools(props: ReadingToolsProps) {
     [],
   );
   const bookId = props.manifest.book.id;
-  const rangedDownload = RANGED_FORMATS.includes(props.manifest.book.format) && !props.overrides.headingPrefix;
+  const rangedDownload = downloadsByChapter(props.manifest) && !props.overrides.headingPrefix;
   const visibleNotes = notes.filter(
     (note) => noteFilter === 'all' || (noteFilter === 'bookmark' ? note.type === 'bookmark' : note.type !== 'bookmark'),
   );
@@ -178,13 +176,22 @@ export function ReadingTools(props: ReadingToolsProps) {
         return;
       } catch (error) {
         run.signal.throwIfAborted();
-        if (!(error instanceof ApiError) || (!error.isConnectivity && error.code !== 'SEARCH_LOCAL_LAYOUT'))
+        if (
+          !(error instanceof ApiError) ||
+          (!error.isConnectivity && error.code !== 'SEARCH_LOCAL_LAYOUT' && error.code !== 'SEARCH_LOCAL_PDF')
+        )
           throw error;
         found.length = 0;
         setHits([]);
         setSearchFailures([]);
         setSearchTotal(0);
-        setSearchMode(error.code === 'SEARCH_LOCAL_LAYOUT' ? '本地搜索（自定义目录）' : '离线搜索（仅已缓存内容）');
+        setSearchMode(
+          error.code === 'SEARCH_LOCAL_LAYOUT'
+            ? '本地搜索（自定义目录）'
+            : error.code === 'SEARCH_LOCAL_PDF'
+              ? '逐页搜索（PDF 原版页面）'
+              : '离线搜索（仅已缓存内容）',
+        );
       }
       for await (const section of props.sections(run.signal)) {
         run.signal.throwIfAborted();
