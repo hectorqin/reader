@@ -1510,3 +1510,28 @@ test('PDF range preflight permits HEAD and Range and exposes byte metadata to An
   assert.match(String(response.headers['access-control-allow-headers']), /range/);
   assert.match(String(response.headers['access-control-expose-headers']), /content-range/);
 });
+
+test('local EPUB assets and content are isolated, including error responses', async () => {
+  const session = await createUser('content-isolation');
+  await writeFile(
+    join(booksDir, 'isolated.epub'),
+    await makeEpub({ id: 'isolation', title: 'Isolated', creator: 'Author' }),
+  );
+  await ctx.scanner.scan();
+  const book = ctx.db.get<{ id: string }>('SELECT id FROM books WHERE title=?', 'Isolated')!;
+  for (const suffix of ['/assets?ref=OEBPS%2Fc.xhtml', '/content', '/assets', '/cover']) {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}${suffix}`,
+      headers: auth(session.token),
+    });
+    assert.equal(response.headers['x-content-type-options'], 'nosniff');
+    assert.equal(response.headers['content-security-policy'], "default-src 'none'; img-src data:; sandbox");
+    if (suffix.includes('?ref=') || suffix === '/content') assert.equal(response.statusCode, 200, response.body);
+    else assert.ok(response.statusCode >= 400);
+  }
+  const denied = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/content` });
+  assert.equal(denied.statusCode, 401);
+  assert.equal(denied.headers['x-content-type-options'], 'nosniff');
+  assert.equal(denied.headers['content-security-policy'], "default-src 'none'; img-src data:; sandbox");
+});
