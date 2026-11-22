@@ -1216,7 +1216,7 @@ body:has(> #app > .media-screen) {
   line-height: 1.6;
 }
 .media-audio-sheet .media-volume,
-.media-audio-speed > label {
+.media-audio-speed > .media-speed-control {
   display: flex;
   align-items: center;
   gap: 12px;

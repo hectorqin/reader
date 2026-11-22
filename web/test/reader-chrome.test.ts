@@ -142,10 +142,10 @@ describe('ReaderChrome', () => {
     container.remove();
   });
 
-  function paint(state: Partial<ChromeState>): HTMLElement {
+  function paint(state: Partial<ChromeState>, actions: Partial<ChromeHandlers> = {}): HTMLElement {
     const stage = document.createElement('div');
     stage.className = 'stage';
-    render(h(ReaderChrome, { state: chromeState(state), stage, handlers: handlers() }), container);
+    render(h(ReaderChrome, { state: chromeState(state), stage, handlers: { ...handlers(), ...actions } }), container);
     return container;
   }
 
@@ -433,13 +433,25 @@ describe('ReaderChrome', () => {
     expect(tree.querySelector('.sheet')?.textContent).toContain('黑白灰');
   });
 
-  it('puts the start action first in the read-aloud sheet and folds pitch and volume', () => {
-    const tree = paint({ settingsOpen: true, settingsTab: 'speech', ttsRate: 1.2, showPitchRow: true });
+  it('starts reading from the idle transport and keeps only labeled rate presets', () => {
+    const start = vi.fn(),
+      toggle = vi.fn();
+    const tree = paint(
+      { settingsOpen: true, settingsTab: 'speech', ttsRate: 1.2, showPitchRow: true },
+      { onSpeakFromHere: start, onSpeechToggle: toggle },
+    );
     const body = tree.querySelector('.sheet-body')!;
-    // The action the sheet exists for is not buried under five sliders.
-    expect(body.firstElementChild?.textContent).toBe('从当前位置朗读');
-    expect(body.firstElementChild?.classList.contains('primary')).toBe(true);
-    const presets = [...body.querySelectorAll('[aria-label="常用"] button')];
+    expect(body.firstElementChild?.classList.contains('tts-bar')).toBe(true);
+    expect(body.querySelector('.speech-start')).toBeNull();
+    expect(body.querySelector('.speech-rate input')).toBeNull();
+    const play = body.querySelector<HTMLButtonElement>('.tts-toggle')!;
+    expect(play.getAttribute('aria-label')).toBe('从当前位置朗读');
+    play.click();
+    expect(start).toHaveBeenCalledTimes(1);
+    expect(toggle).not.toHaveBeenCalled();
+    for (const button of body.querySelectorAll<HTMLButtonElement>('.tts-controls button:not(.tts-toggle)'))
+      expect(button.disabled).toBe(true);
+    const presets = [...body.querySelectorAll('[aria-label="语速"] button')];
     expect(presets.map((button) => button.textContent)).toEqual(['0.8×', '1.0×', '1.2×', '1.5×', '2.0×']);
     expect(
       presets.filter((button) => button.getAttribute('aria-pressed') === 'true').map((button) => button.textContent),
@@ -465,17 +477,22 @@ describe('ReaderChrome', () => {
     });
     const bar = tree.querySelector('.tts-bar');
     expect(bar).not.toBeNull();
-    // The controls are one row of their own, so they divide the width evenly and
-    // none of them is clipped — which is what made 停止 unreachable.
     const controls = bar?.querySelector('.tts-controls');
     expect(controls).not.toBeNull();
     const labels = [...(controls?.querySelectorAll('button') ?? [])].map((button) => button.getAttribute('aria-label'));
-    expect(labels).toContain('停止朗读');
+    expect(labels).toContain('停止');
     expect(labels).toContain('暂停朗读');
     expect(labels).toContain('上一句');
     expect(labels).toContain('下一句');
-    // The sentence and its scrubber are the second row, so the sentence can never
-    // push a control out of the bar.
+    expect(bar?.querySelector('.tts-heading .tts-position')?.textContent).toBe('第 3 / 10 句');
+    expect(bar?.querySelector('.tts-heading button')).toBeNull();
+    expect(bar?.querySelector('.tts-transport')?.querySelectorAll('button')).toHaveLength(3);
+    expect(bar?.querySelector('.tts-transport .tts-stop')).toBeNull();
+    expect(controls?.firstElementChild?.classList.contains('tts-restart')).toBe(true);
+    expect(controls?.firstElementChild?.getAttribute('aria-label')).toBe('从本页重新朗读');
+    expect(controls?.firstElementChild?.getAttribute('title')).toBe('从本页重新朗读');
+    expect(controls?.lastElementChild?.classList.contains('tts-stop')).toBe(true);
+    expect(tree.querySelector('.speech-start')).toBeNull();
     expect(bar?.querySelector('.tts-progress .tts-range')).not.toBeNull();
   });
 
@@ -497,8 +514,67 @@ describe('ReaderChrome', () => {
       },
     });
     const stop = [...tree.querySelectorAll('.tts-controls button')].find(
-      (button) => button.getAttribute('aria-label') === '停止朗读',
+      (button) => button.getAttribute('aria-label') === '停止',
     );
     expect(stop?.getAttribute('class')).toContain('tts-stop');
+    expect(stop?.getAttribute('title')).toBe('停止');
+  });
+
+  it('keeps paused playback actions and restart semantics with passive chapter metadata', () => {
+    const restart = vi.fn(),
+      toggle = vi.fn(),
+      stop = vi.fn();
+    const tree = paint(
+      {
+        settingsOpen: true,
+        settingsTab: 'speech',
+        chapterLabel: '第一章',
+        tts: {
+          active: true,
+          state: 'paused',
+          label: '正文句子',
+          chip: '2/3',
+          index: 1,
+          total: 3,
+          sentenceIndex: 1,
+          sentenceTotal: 3,
+        },
+      },
+      { onSpeakFromHere: restart, onSpeechToggle: toggle, onStopSpeech: stop },
+    );
+    expect(tree.querySelector('.tts-text')?.textContent).toBe('第一章');
+    tree.querySelector<HTMLButtonElement>('.tts-restart')!.click();
+    tree.querySelector<HTMLButtonElement>('[aria-label="继续朗读"]')!.click();
+    tree.querySelector<HTMLButtonElement>('[aria-label="停止"]')!.click();
+    expect(restart).toHaveBeenCalledTimes(1);
+    expect(toggle).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders empty speech progress safely and hides tuning when speech is unavailable', () => {
+    const tts = { ...chromeState().tts, active: true, state: 'paused' as const };
+    let tree = paint({ settingsOpen: true, settingsTab: 'speech', tts });
+    expect(tree.querySelector('.tts-position')?.textContent).toBe('第 0 / 0 句');
+    expect(tree.querySelector<HTMLInputElement>('.tts-range')?.max).toBe('0');
+    tree = paint({ settingsOpen: true, settingsTab: 'speech', speechUnavailable: true });
+    expect(tree.querySelector('.speech-start')).toBeNull();
+    expect(tree.querySelector('.speech-rate')).toBeNull();
+    expect(tree.textContent).toContain('当前环境没有可用的朗读引擎');
+    expect(tree.querySelector('.tts-bar')).toBeNull();
+  });
+
+  it('retains exact saved non-preset rates as selected chips without changing stored values', () => {
+    const change = vi.fn();
+    for (const rate of [1.3, 1.21]) {
+      const tree = paint({ settingsOpen: true, settingsTab: 'speech', ttsRate: rate }, { onSpeechSetting: change });
+      const selected = tree.querySelector<HTMLButtonElement>('.speech-rate [aria-pressed="true"]')!;
+      expect(selected.textContent).toBe(`${rate}×`);
+      expect(tree.querySelectorAll('.speech-rate button')).toHaveLength(6);
+      expect(tree.querySelector('.speech-rate label')?.textContent).toBe('语速');
+      expect(change).not.toHaveBeenCalled();
+      selected.click();
+      expect(change).toHaveBeenLastCalledWith({ ttsRate: rate });
+      change.mockClear();
+    }
   });
 });

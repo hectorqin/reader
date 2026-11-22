@@ -66,13 +66,13 @@ function PlayingArtwork({
               {failed ? '作品资料暂不可用' : null}
             </div>
           )}
-          {book && chapter && (
-            <p className="media-playing-chapter">
-              第 {edition!.parts.indexOf(chapter) + 1} / {edition!.parts.length} 章 · {item.title}
-            </p>
-          )}
           <div className="media-playing-copy">
             <div>
+              {book && chapter && (
+                <p className="media-playing-chapter">
+                  第 {edition!.parts.indexOf(chapter) + 1} / {edition!.parts.length} 章 · {item.title}
+                </p>
+              )}
               <h2 className="media-playing-title">{title}</h2>
               {credit && <p>{credit}</p>}
               {failed && (
@@ -392,6 +392,7 @@ export function PlaybackControls({
   onBack?: () => void;
   onFavoriteChange?: (id: string, favorite: boolean) => void;
 }) {
+  usePlayerChanges(player);
   const [localPanel, setLocalPanel] = useState<PlaybackPanel>('main');
   const [detail, setDetail] = useState<Detail | null>(null),
     [failed, setFailed] = useState(''),
@@ -469,8 +470,9 @@ export function PlaybackControls({
   }
   if (!player.active) return null;
   const speed = (
-    <label title="播放倍速">
+    <div className="media-speed-control" title="播放倍速">
       <Icon name="speed" size={18} />
+      <span className="media-speed-label">倍速</span>
       <MediaSelect
         aria-label="倍速"
         value={player.playbackRate}
@@ -482,7 +484,7 @@ export function PlaybackControls({
           </option>
         ))}
       </MediaSelect>
-    </label>
+    </div>
   );
   return (
     <>
@@ -713,6 +715,7 @@ export function PlaybackControls({
         {tool && (
           <AudioToolSheet
             key={tool}
+            compact={tool === 'more'}
             title={tool === 'sleep' ? '睡眠定时' : tool === 'more' ? '更多播放选项' : '播放版本'}
             onClose={() => {
               if (!busy) setTool(null);
@@ -751,49 +754,72 @@ export function PlaybackControls({
               </div>
             ) : (
               <>
-                <VolumeControl player={player} />
-                {channel !== 'audiobook' && <div className="media-audio-speed">{speed}</div>}
-                <div className="media-audio-shortcuts">
-                  <button aria-label="上一首 / 章" disabled={!player.canPrevious} onClick={() => void player.move(-1)}>
-                    <Icon name="step-backward" size={18} />
-                    上一{channel === 'music' ? '首' : '章'}
+                <section
+                  className={`media-audio-section${channel === 'audiobook' ? ' media-audio-volume-only' : ''}`}
+                  aria-label={channel === 'audiobook' ? '音量' : '音量与倍速'}
+                >
+                  <h3>{channel === 'audiobook' ? '音量' : '音量与倍速'}</h3>
+                  <VolumeControl player={player} />
+                  {channel !== 'audiobook' && <div className="media-audio-speed">{speed}</div>}
+                </section>
+                <section className="media-audio-section" aria-label="播放">
+                  <h3>播放</h3>
+                  <div className="media-audio-shortcuts">
+                    <button
+                      aria-label="上一首 / 章"
+                      disabled={!player.canPrevious}
+                      onClick={() => void player.move(-1)}
+                    >
+                      <Icon name="step-backward" size={18} />
+                      上一{channel === 'music' ? '首' : '章'}
+                    </button>
+                    <button aria-label="下一首 / 章" disabled={!player.canNext} onClick={() => void player.move(1)}>
+                      <Icon name="step-forward" size={18} />
+                      下一{channel === 'music' ? '首' : '章'}
+                    </button>
+                  </div>
+                  <div className="media-audio-shortcuts">
+                    <button
+                      aria-label="快退 15 秒"
+                      disabled={player.playbackUnavailable}
+                      onClick={() => player.skip(-15)}
+                    >
+                      <Icon name="rewind" size={18} />
+                      15 秒
+                    </button>
+                    <button
+                      aria-label="快进 30 秒"
+                      disabled={player.playbackUnavailable}
+                      onClick={() => player.skip(30)}
+                    >
+                      <Icon name="fast-forward" size={18} />
+                      30 秒
+                    </button>
+                  </div>
+                </section>
+                <section className="media-audio-section media-audio-queue" aria-label="队列">
+                  <h3>队列</h3>
+                  {channel === 'audiobook' && (
+                    <button
+                      aria-label="播放队列"
+                      onClick={() => {
+                        setTool(null);
+                        setView('queue');
+                      }}
+                    >
+                      当前播放队列
+                    </button>
+                  )}
+                  <SavePlaylist api={api} player={player} />
+                </section>
+                <section className="media-audio-section" aria-label="其他">
+                  <h3>其他</h3>
+                  {player.support && <p className="media-audio-support">{player.support}</p>}
+                  <button className="media-end-playback" onClick={() => void player.stop()}>
+                    <Icon name="stop" size={16} />
+                    结束播放
                   </button>
-                  <button aria-label="下一首 / 章" disabled={!player.canNext} onClick={() => void player.move(1)}>
-                    <Icon name="step-forward" size={18} />
-                    下一{channel === 'music' ? '首' : '章'}
-                  </button>
-                </div>
-                <div className="media-audio-shortcuts">
-                  <button
-                    aria-label="快退 15 秒"
-                    disabled={player.playbackUnavailable}
-                    onClick={() => player.skip(-15)}
-                  >
-                    <Icon name="rewind" size={18} />
-                    15 秒
-                  </button>
-                  <button aria-label="快进 30 秒" disabled={player.playbackUnavailable} onClick={() => player.skip(30)}>
-                    <Icon name="fast-forward" size={18} />
-                    30 秒
-                  </button>
-                </div>
-                {channel === 'audiobook' && (
-                  <button
-                    aria-label="播放队列"
-                    onClick={() => {
-                      setTool(null);
-                      setView('queue');
-                    }}
-                  >
-                    当前播放队列
-                  </button>
-                )}
-                <SavePlaylist api={api} player={player} />
-                {player.support && <p className="media-audio-support">{player.support}</p>}
-                <button className="media-end-playback" onClick={() => void player.stop()}>
-                  <Icon name="stop" size={16} />
-                  结束播放
-                </button>
+                </section>
               </>
             )}
             {(notice || player.error) && (

@@ -2543,97 +2543,109 @@ book-content {
   display: none;
 }
 
-/*
- * Two rows, stacked: the transport controls, then the sentence with its scrubber.
- *
- * A column rather than a single flex row because the single row could not fit —
- * see the comment on `.tts-bar`. The two rows take the full width of the bar, so
- * the five controls split it evenly and none of them is ever clipped.
- */
 .tts-bar .tts-row {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
   min-width: 0;
+  gap: var(--space-2);
 }
-
 .tts-bar .tts-controls {
-  /* Every control the same width, including the chip: a row whose cells are
-     sized by their contents leaves the widest one (the ✕, whose label is a
-     glyph) flush to the edge and the others bunched. Equal cells read as one
-     transport, which is what the row is. */
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  column-gap: 0;
+}
+.tts-transport {
+  grid-column: 2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   gap: var(--space-1);
 }
-
-.tts-bar .tts-controls > * {
-  flex: 1 1 0;
-  min-width: 0;
+.tts-bar .tts-controls .icon-button {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-ink);
 }
-
-/* The chip is a text control in a row of icons, so its own padding is dropped:
-   the cell's width is the equal share, not the label's. */
-.tts-bar .tts-chip {
-  appearance: none;
-  border: 1px solid color-mix(in srgb, var(--reader-line) 90%, transparent);
-  background: var(--reader-surface);
-  color: var(--reader-muted);
+.tts-bar .tts-controls svg {
+  width: 20px;
+  height: 20px;
+}
+.tts-bar .tts-controls .tts-toggle {
+  width: 56px;
+  height: 56px;
+  min-height: 56px;
   border-radius: var(--radius-pill);
-  height: 2.75rem;
-  min-width: 0;
-  padding: 0 0.4rem;
-  font: inherit;
-  font-size: var(--text-meta);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-  touch-action: manipulation;
+  background: var(--color-brand-text);
+  color: var(--color-bg);
 }
-
-.tts-bar .tts-chip:active {
-  background: color-mix(in srgb, var(--reader-ink) 8%, transparent);
+.tts-bar .tts-toggle svg {
+  width: 24px;
+  height: 24px;
 }
-
-/*
- * Stop is the one destructive control on the bar and it is drawn as such.
- *
- * It is not a warning colour: this is a reading app, and a red button in the
- * middle of a page is a louder statement than "stop the voice". The accent fill
- * is enough to separate it from the three transport buttons beside it, which is
- * the whole job — the reader who wants the voice to stop has to be able to pick
- * this control out of a row of five at a glance.
- */
-.tts-bar .tts-stop {
-  background: color-mix(in srgb, var(--reader-accent) 16%, transparent);
-  border-color: color-mix(in srgb, var(--reader-accent) 45%, transparent);
-  color: var(--reader-ink);
+.tts-bar .tts-controls .tts-restart {
+  color: var(--color-muted);
 }
-
-/* What is being read, on a line of its own, and the scrubber under it at full width. */
+.tts-bar .tts-controls .tts-stop {
+  grid-column: 3;
+  color: var(--color-muted);
+}
 .tts-bar .tts-progress {
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-1);
 }
-
+.tts-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
 .tts-bar .tts-text {
+  min-width: 0;
   font-size: var(--text-ui);
-  color: var(--reader-ink);
+  color: var(--color-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-/* Play/pause is the control the bar exists for, and is drawn as the primary one. */
-.tts-bar .tts-toggle {
-  background: var(--reader-primary);
-  color: var(--reader-on-primary);
+.tts-position {
+  flex: none;
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
 }
-
-.tts-bar .tts-controls .icon-button {
-  width: auto;
-  height: 2.75rem;
+.speech-rate {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+.reader-screen .sheet .speech-rate .field {
+  margin: 0;
+  padding-block: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+}
+.speech-rate .segmented {
+  flex-wrap: wrap;
+}
+.speech-rate .segmented button {
+  flex: 1 0 auto;
+  min-height: 44px;
+  padding-inline: var(--space-1);
+}
+.reader-screen .sheet.speech-sheet .field {
+  padding-block: 0;
+}
+.reader-screen .sheet.speech-sheet .tts-bar {
+  padding: var(--space-2);
+  margin-bottom: var(--space-2);
+  gap: var(--space-1);
 }
 
 /* The same track and thumb as the page scrubber: one kind of slider in the reader. */
@@ -2937,16 +2949,6 @@ book-content {
   margin: var(--space-2) 0 0;
   font-size: var(--text-meta);
   text-align: center;
-}
-
-/* The one action the read-aloud sheet exists for: full width, first, and tall enough to hit. */
-.speech-start {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 48px;
-  margin-bottom: var(--space-3);
 }
 
 /* ---- status ---- */

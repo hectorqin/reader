@@ -8,13 +8,15 @@ export function AudioToolSheet({
   title,
   onClose,
   children,
+  compact = false,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <Sheet className="media-audio-sheet" title={title} onClose={onClose}>
+    <Sheet className="media-audio-sheet" size={compact ? 'compact' : 'regular'} title={title} onClose={onClose}>
       {children}
     </Sheet>
   );

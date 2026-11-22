@@ -27,6 +27,7 @@ export function SectionTitle({ children }: { children: ReactNode }): JSX.Element
 export interface IconButtonProps {
   /** Accessible name. Required: an icon button has no text to fall back on. */
   label: string;
+  title?: string;
   /**
    * The glyph, by name.
    *
@@ -58,6 +59,7 @@ export interface IconButtonProps {
  */
 export function IconButton({
   label,
+  title,
   icon,
   onClick,
   disabled,
@@ -70,6 +72,7 @@ export function IconButton({
       type="button"
       className={className ? `icon-button ${className}` : 'icon-button'}
       aria-label={label}
+      title={title}
       aria-pressed={pressed}
       disabled={disabled ?? false}
       hidden={hidden ?? false}

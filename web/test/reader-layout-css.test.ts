@@ -29,8 +29,8 @@ const css = readFileSync(join(process.cwd(), 'src/styles/reader.css'), 'utf8');
  * Comments are stripped first: several of them contain braces, `.class` names and
  * even whole selectors.
  */
-function rule(selector: string): string {
-  const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+function rule(selector: string, source = css): string {
+  const text = source.replace(/\/\*[\s\S]*?\*\//g, '');
   let index = 0;
   let depth = 0;
   while (index < text.length) {
@@ -133,10 +133,54 @@ describe('the reading surface fills the screen', () => {
   });
 
   it('gives the read-aloud controls their own row so none of them is clipped', () => {
-    // One flex row of seven things gave the sentence `flex: 1`, so it was the only
-    // thing that shrank and the last control was pushed past the edge on a phone.
-    const controls = rule('.tts-bar .tts-controls > *');
-    expect(declaration(controls, 'flex')).toBe('1 1 0');
+    const controls = rule('.tts-bar .tts-controls');
+    expect(declaration(controls, 'display')).toBe('grid');
+    expect(declaration(controls, 'grid-template-columns')).toBe('44px minmax(0, 1fr) 44px');
+    expect(declaration(controls, 'column-gap')).toBe('0');
+    expect(declaration(rule('.tts-transport'), 'grid-column')).toBe('2');
+    expect(declaration(rule('.tts-bar .tts-controls .tts-toggle'), 'width')).toBe('56px');
+    expect(declaration(rule('.tts-bar .tts-controls .tts-toggle'), 'background')).toBe('var(--color-brand-text)');
+    expect(declaration(rule('.tts-bar .tts-controls .tts-toggle'), 'color')).toBe('var(--color-bg)');
+    expect(declaration(rule('.tts-bar .tts-controls .tts-stop'), 'grid-column')).toBe('3');
+    expect(declaration(rule('.speech-rate .segmented'), 'flex-wrap')).toBe('wrap');
+  });
+
+  it('uses strong primary audio controls and consistent More-sheet queue rows', () => {
+    const media = readFileSync(join(process.cwd(), 'src/features/media/styles/v2.css'), 'utf8');
+    expect(declaration(rule('.media-screen .media-toggle-play', media), 'background')).toBe('var(--color-brand-text)');
+    expect(declaration(rule('.media-screen .media-toggle-play', media), 'color')).toBe('var(--color-bg)');
+    expect(media).toMatch(
+      /\.media-mini \.media-mini-toggle \{[\s\S]*?background: var\(--color-brand-text\);[\s\S]*?color: var\(--color-bg\);/,
+    );
+    expect(media).toMatch(/\.media-mini \.media-mini-close \{[\s\S]*?background: transparent;/);
+    expect(media).toMatch(/\.media-audio-volume-only \.media-volume-label \{[\s\S]*?display: none;/);
+    expect(media).toMatch(
+      /\.media-audio-queue > button,[\s\S]*?\.media-audio-queue > section > button \{[\s\S]*?justify-content: flex-start;[\s\S]*?width: 100%;[\s\S]*?min-height: 44px;/,
+    );
+  });
+
+  it('centers equal-width visible audio tools in the transport width with full favorite targets', () => {
+    const media = readFileSync(join(process.cwd(), 'src/features/media/styles/v2.css'), 'utf8');
+    const tools = rule('.media-screen .media-playback-options', media);
+    expect(declaration(tools, 'grid-template-columns')).toBe('none');
+    expect(declaration(tools, 'grid-auto-flow')).toBe('column');
+    expect(declaration(tools, 'grid-auto-columns')).toBe('minmax(0, 1fr)');
+    expect(declaration(rule('.media-screen .media-playback-options > [hidden]', media), 'display')).toBe('none');
+    const transport = rule('.media-screen .media-audio-bottom .media-transport', media);
+    const options = rule('.media-screen .media-audio-bottom .media-playback-options', media);
+    expect(declaration(options, 'width')).toBe(declaration(transport, 'width'));
+    expect(declaration(options, 'width')).toContain('min(100%,');
+    expect(declaration(options, 'margin-inline')).toBe('auto');
+    const favorite = rule('.media-screen .media-playback-options .media-playback-favorite > button', media);
+    expect(declaration(favorite, 'align-items')).toBe('center');
+    expect(declaration(favorite, 'width')).toBe('100%');
+    expect(Number.parseInt(declaration(favorite, 'min-height')!)).toBeGreaterThanOrEqual(44);
+    expect(
+      declaration(
+        rule('.media-screen .media-playback-options .media-playback-favorite > button[aria-pressed="true"]', media),
+        'color',
+      ),
+    ).toBe('var(--color-brand-text)');
   });
 
   it('uses the same reading geometry with chrome visible and hidden', () => {

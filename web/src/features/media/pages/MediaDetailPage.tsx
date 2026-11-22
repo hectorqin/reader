@@ -235,7 +235,10 @@ function DetailContent({
         </section>
       </aside>
     ) : undefined;
-  const detailClass = 'media-detail-page' + (detail.kind === 'artist' ? ' media-person-detail' : '');
+  const detailClass =
+    'media-detail-page' +
+    (detail.kind === 'artist' ? ' media-person-detail' : '') +
+    (['album', 'audiobook'].includes(detail.kind) ? ' media-audio-detail' : '');
   const artistPlot = detail.kind === 'artist' ? plot : '';
   const playSeries = async () => {
     const result = await runtime.mediaApi.request<{ episodes: SeasonEpisode[] }>(

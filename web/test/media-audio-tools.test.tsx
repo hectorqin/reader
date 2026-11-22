@@ -109,3 +109,136 @@ it('offers one more-options entry point and keeps the book icon for chapters onl
     await act(async () => render(null, root));
   }
 });
+
+it('groups More tools in a compact sheet and labels speed without changing its action', async () => {
+  const speed = vi.fn(),
+    skip = vi.fn();
+  const api = {
+    detail: vi.fn().mockResolvedValue(work('song', 'track')),
+    request: vi.fn().mockResolvedValue({ favorite: false }),
+  } as unknown as MediaApi;
+  const player = {
+    active: true,
+    currentItemId: 'song',
+    currentPlaylist: [],
+    playbackRate: 1,
+    speed,
+    skip,
+  } as unknown as MediaPlayer;
+  await act(async () => render(<PlaybackControls api={api} player={player} onBack={() => {}} />, root));
+  await vi.waitFor(() => expect(root.querySelector('[data-channel]')?.getAttribute('data-channel')).toBe('music'));
+  await act(async () => root.querySelector<HTMLButtonElement>('[aria-label="更多播放选项"]')!.click());
+  const sheet = root.querySelector('.media-audio-sheet')!;
+  expect(sheet.getAttribute('data-size')).toBe('compact');
+  expect([...sheet.querySelectorAll('.media-audio-section > h3')].map((h) => h.textContent)).toEqual([
+    '音量与倍速',
+    '播放',
+    '队列',
+    '其他',
+  ]);
+  expect(sheet.querySelector('.media-speed-label')?.textContent).toBe('倍速');
+  expect(sheet.querySelector('.media-audio-volume-only')).toBeNull();
+  expect(sheet.querySelector('.media-audio-queue [aria-label="保存播放列表"]')).not.toBeNull();
+  const select = sheet.querySelector<HTMLSelectElement>('select[aria-label="倍速"]')!;
+  await act(async () => {
+    select.value = '1.5';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  expect(speed).toHaveBeenCalledWith(1.5);
+  await act(async () => sheet.querySelector<HTMLButtonElement>('[aria-label="快退 15 秒"]')!.click());
+  expect(skip).toHaveBeenCalledWith(-15);
+  expect(sheet.querySelector('[aria-label="保存播放列表"] button')?.hasAttribute('disabled')).toBe(true);
+});
+
+it('keeps the audiobook chapter eyebrow with its title and speed in a dedicated tool cell', async () => {
+  const book = {
+    ...work('book', 'audiobook'),
+    title: '夜航笔记',
+    editions: [{ id: 'edition', parts: [{ id: 'part', title: '第一章' }] }],
+  } as unknown as Detail;
+  const api = { detail: vi.fn().mockResolvedValue(book) } as unknown as MediaApi;
+  const toggle = vi.fn();
+  const player = {
+    active: true,
+    currentItemId: 'book',
+    currentPartId: 'part',
+    currentPlaylist: [],
+    playbackRate: 1,
+    toggle,
+  } as unknown as MediaPlayer;
+  await act(async () => render(<PlaybackControls api={api} player={player} />, root));
+  await vi.waitFor(() => expect(root.querySelector('.media-playing-chapter')).not.toBeNull());
+  const title = root.querySelector('.media-playing-title')!;
+  expect(title.previousElementSibling?.className).toBe('media-playing-chapter');
+  expect(title.previousElementSibling?.textContent).toContain('第 1 / 1 章');
+  expect(root.querySelector('.media-playing-copy')?.contains(title.previousElementSibling)).toBe(true);
+  expect(root.querySelector('.media-playback-options > .media-speed-control [role="combobox"]')).not.toBeNull();
+  await act(async () => root.querySelector<HTMLButtonElement>('.media-toggle-play')!.click());
+  expect(toggle).toHaveBeenCalledTimes(1);
+});
+
+it('groups the audiobook queue actions and hides only the redundant volume caption', async () => {
+  const api = { detail: vi.fn().mockResolvedValue(work('book', 'audiobook')) } as unknown as MediaApi;
+  const player = {
+    active: true,
+    currentItemId: 'book',
+    currentPlaylist: [],
+    playbackRate: 1,
+  } as unknown as MediaPlayer;
+  await act(async () => render(<PlaybackControls api={api} player={player} />, root));
+  await vi.waitFor(() => expect(root.querySelector('[data-channel]')?.getAttribute('data-channel')).toBe('audiobook'));
+  await act(async () => root.querySelector<HTMLButtonElement>('[aria-label="更多播放选项"]')!.click());
+  expect(root.querySelector('.media-audio-volume-only > h3')?.textContent).toBe('音量');
+  expect(root.querySelector('.media-audio-queue > [aria-label="播放队列"]')?.textContent).toBe('当前播放队列');
+  expect(root.querySelector('.media-audio-queue [aria-label="保存播放列表"] > button')?.textContent).toBe(
+    '保存为待播队列',
+  );
+});
+
+it('updates play and pause icons from player changes without a metadata reload', async () => {
+  const api = {
+    detail: vi.fn().mockResolvedValue(work('song', 'track')),
+    request: vi.fn().mockResolvedValue({ favorite: false }),
+  } as unknown as MediaApi;
+  const target = Object.assign(new EventTarget(), {
+    active: true,
+    currentItemId: 'song',
+    currentPlaylist: [],
+    paused: false,
+    toggle: vi.fn(),
+  });
+  const player = target as unknown as MediaPlayer;
+  await act(async () => render(<PlaybackControls api={api} player={player} />, root));
+  await vi.waitFor(() => expect(root.querySelector('[data-channel]')?.getAttribute('data-channel')).toBe('music'));
+  expect(root.querySelector('.media-toggle-play')?.getAttribute('aria-label')).toBe('暂停');
+  await act(async () => {
+    target.paused = true;
+    target.dispatchEvent(new Event('change'));
+  });
+  expect(root.querySelector('.media-toggle-play')?.getAttribute('aria-label')).toBe('继续');
+  expect(root.querySelector('.media-toggle-play svg')?.classList.contains('lucide-play')).toBe(true);
+  await act(async () => {
+    target.paused = false;
+    target.dispatchEvent(new Event('change'));
+  });
+  expect(root.querySelector('.media-toggle-play svg')?.classList.contains('lucide-pause')).toBe(true);
+  await act(async () => root.querySelector<HTMLButtonElement>('.media-toggle-play')!.click());
+  expect(target.toggle).toHaveBeenCalledTimes(1);
+  expect(api.detail).toHaveBeenCalledTimes(1);
+});
+
+it('keeps the active favorite in an equal tool cell alongside timer and lyrics', async () => {
+  const api = {
+    detail: vi.fn().mockResolvedValue(work('song', 'track')),
+    request: vi.fn().mockResolvedValue({ favorite: true }),
+  } as unknown as MediaApi;
+  const player = { active: true, currentItemId: 'song', currentPlaylist: [] } as unknown as MediaPlayer;
+  await act(async () => render(<PlaybackControls api={api} player={player} onBack={() => {}} />, root));
+  await vi.waitFor(() =>
+    expect(root.querySelector('.media-playback-favorite button')?.getAttribute('aria-pressed')).toBe('true'),
+  );
+  const options = root.querySelector('.media-playback-options')!;
+  expect(options.children).toHaveLength(3);
+  expect(options.querySelector('.media-playback-favorite > button')?.textContent).toBe('已收藏');
+  expect(options.querySelector('.media-playback-favorite > button svg')?.getAttribute('fill')).toBe('currentColor');
+});
