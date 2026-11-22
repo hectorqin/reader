@@ -51,6 +51,7 @@ export function registerWebRoutes(app: FastifyInstance, ctx: AppContext): void {
   }
 
   const sendFile = (filePath: string, reply: FastifyReply, cacheControl: string): FastifyReply => {
+    reply.header('x-content-type-options', 'nosniff');
     reply.header('content-type', MIME_BY_EXT[extname(filePath).toLowerCase()] ?? 'application/octet-stream');
     reply.header('cache-control', cacheControl);
     // A bundle served from disk can never change under the same name unless a

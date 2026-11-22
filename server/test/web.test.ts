@@ -96,6 +96,8 @@ describe('static client hosting', () => {
     assert.equal(res.statusCode, 200);
     assert.ok(res.rawPayload.byteLength > 0);
     assert.match(res.body, /<title>reader<\/title>/);
+    assert.equal(res.headers['x-content-type-options'], 'nosniff');
+    assert.equal(res.headers['content-security-policy'], undefined);
   });
 
   test('a client-side route falls back to index.html instead of 404', async () => {

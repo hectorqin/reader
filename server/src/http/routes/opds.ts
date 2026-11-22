@@ -9,7 +9,7 @@ import { FilePublications } from '../../publications/files.ts';
 import { allFileHandlers, contentTypeFor } from '../../indexer/formats/index.ts';
 import { badRequest, notFound } from '../../lib/errors.ts';
 import { assertSafeRel, resolveInside } from '../../lib/paths.ts';
-import { sendAssetPayload } from '../assets.ts';
+import { isolateBookResource, sendAssetPayload } from '../assets.ts';
 
 const feedType = 'application/atom+xml;profile=opds-catalog;kind=acquisition';
 
@@ -106,14 +106,14 @@ export function registerOpdsRoutes(app: FastifyInstance, ctx: AppContext): void 
         `<?xml version="1.0" encoding="utf-8"?><OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/"><ShortName>Reader</ShortName><Description>搜索个人书架</Description><Url type="${feedType}" template="${xml(root() + '?search={searchTerms}')}"/><InputEncoding>UTF-8</InputEncoding></OpenSearchDescription>`,
       ),
   );
-  app.get('/opds/books/:id/content', { preHandler: access }, async (request, reply) => {
+  app.get('/opds/books/:id/content', { onRequest: isolateBookResource, preHandler: access }, async (request, reply) => {
     const book = ctx.shelf.get(currentUser(request).id, (request.params as { id: string }).id);
     if (!formats.includes(book.format)) throw notFound('publication not available');
     const files = new FilePublications(ctx.db, ctx.config);
     await containedFile(files.context(book.id).absPath, [ctx.config.booksDir, ctx.config.dataDir]);
     return sendAssetPayload(request, reply, await files.content(book.id, book.format));
   });
-  app.get('/opds/books/:id/cover', { preHandler: access }, async (request, reply) => {
+  app.get('/opds/books/:id/cover', { onRequest: isolateBookResource, preHandler: access }, async (request, reply) => {
     const book = ctx.shelf.get(currentUser(request).id, (request.params as { id: string }).id);
     if (!formats.includes(book.format)) throw notFound('publication not available');
     const row = ctx.db.get<{ cover_path: string | null }>('SELECT cover_path FROM books WHERE id=?', book.id);

@@ -3,13 +3,7 @@ import type { BookDoc, Section, StagedBook } from '../formats/types.ts';
 import type { BookContent } from '../net/api.ts';
 import type { NativePageHost } from './native-page.ts';
 import { ResourceResolver, hydrateResources } from './resources.ts';
-import {
-  createBookHost,
-  extractBody,
-  extractInlineStyles,
-  sanitiseInjectedContent,
-  type BookShadowHost,
-} from './shadow.ts';
+import { createBookHost, extractBody, extractInlineStyles, type BookShadowHost } from './shadow.ts';
 import { escapeHtml, textToChapterHtml } from '../formats/segments.ts';
 import { bookPercentage, formatLocator, parseLocator } from './locator.ts';
 import { collectSpokenChunks, type SpokenChunk } from '../render/tts-text.ts';
@@ -1343,8 +1337,7 @@ export class ReaderView {
     // The chapter's own <style> blocks are prepended so the book's link-level
     // stylesheets (already in `doc.styles`) can still override them, matching
     // the cascade the book was authored against.
-    this.host.setContent(body, [...inlineStyles, ...this.doc.styles]);
-    sanitiseInjectedContent(this.host.shadow, {
+    this.host.setContent(body, [...inlineStyles, ...this.doc.styles], {
       ...(this.options.signAssetUrl ? { signAssetUrl: this.options.signAssetUrl } : {}),
     });
     this.options.transformText?.(this.host.flow, section.id);

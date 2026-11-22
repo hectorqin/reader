@@ -40,6 +40,11 @@ const MAX_SUFFIX_RANGE = 8 * 1024 * 1024;
 
 const RANGE_RE = /^bytes=(\d*)-(\d*)$/;
 
+export async function isolateBookResource(_request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  reply.header('x-content-type-options', 'nosniff');
+  reply.header('content-security-policy', "default-src 'none'; img-src data:; sandbox");
+}
+
 interface Range {
   start: number;
   end: number;

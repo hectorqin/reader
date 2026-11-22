@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createBookHost, extractBody, extractInlineStyles, sanitiseInjectedContent } from '../src/ui/shadow.ts';
 import { BOOK_RESOURCE_MARKER } from '../src/formats/book-resource.ts';
 
@@ -21,6 +21,79 @@ function parse(html: string): HTMLElement {
 }
 
 describe('sanitiseInjectedContent', () => {
+  it('removes active markup before connecting a chapter', () => {
+    const host = createBookHost();
+    document.body.append(host);
+    const flow = host.shadow.querySelector('.book-flow')!;
+    const replace = flow.replaceChildren.bind(flow);
+    const handler = vi.fn();
+    Object.assign(window, { bookPayload: handler });
+    const boundary = vi.spyOn(flow, 'replaceChildren').mockImplementation((...nodes) => {
+      const fragment = nodes[0] as DocumentFragment;
+      expect(fragment.isConnected).toBe(false);
+      expect(fragment.querySelector('iframe, object, embed, form, script, meta, base, noscript')).toBeNull();
+      expect(fragment.querySelector('[onerror], [srcdoc], [action], [formaction]')).toBeNull();
+      expect(fragment.querySelector('svg a')?.hasAttribute('xlink:href')).toBe(false);
+      fragment.querySelector('img')?.dispatchEvent(new Event('error'));
+      replace(...nodes);
+    });
+    try {
+      host.setContent(
+        `<iframe srcdoc="<script>parent.bookPayload()</script>"></iframe>
+        <iframe src="chapter.xhtml"></iframe><object data="chapter.xhtml"></object><embed src="chapter.xhtml">
+        <meta http-equiv="refresh" content="0;url=chapter.xhtml"><base href="https://evil.example/">
+        <noscript>hidden</noscript><svg><a xlink:href="java&#10;script:bookPayload()">link</a></svg>
+        <form action="javascript:bookPayload()"><button formaction="data:text/html,evil">text</button></form>
+        <img src="x" onerror="window.bookPayload()">`,
+        [],
+      );
+      expect(boundary).toHaveBeenCalledOnce();
+      host.shadow.querySelector('img')?.dispatchEvent(new Event('error'));
+      expect(handler).not.toHaveBeenCalled();
+      expect(flow.textContent).toContain('text');
+    } finally {
+      boundary.mockRestore();
+      host.remove();
+      Reflect.deleteProperty(window, 'bookPayload');
+    }
+  });
+
+  it('rewrites and signs EPUB links and SVG resources before attachment', () => {
+    const host = createBookHost();
+    host.setContent(
+      '<img src="images/p.png"><a href="chapter.xhtml">next</a><svg><image xlink:href="images/p.png"/><use href="icons.svg#mark"/></svg>',
+      [],
+      {
+        signAssetUrl: (url) => `${url}${url.includes('?') ? '&' : '?'}signed=1`,
+      },
+    );
+    for (const [selector, attr] of [
+      ['img', 'src'],
+      ['a', 'href'],
+      ['image', 'xlink:href'],
+      ['use', 'href'],
+    ]) {
+      expect(host.shadow.querySelector(selector!)?.getAttribute(attr!)).toContain('signed=1');
+    }
+  });
+
+  it('drops dangerous URL schemes in all attributes while preserving data images', () => {
+    const node = parse(
+      '<p background="vbscript:evil" data="data:text/html,evil"></p><svg><use href="data:application/xhtml+xml,evil"/></svg><img src="data:image/png;base64,AA">',
+    );
+    sanitiseInjectedContent(node);
+    expect(node.querySelector('p')?.hasAttribute('background')).toBe(false);
+    expect(node.querySelector('p')?.hasAttribute('data')).toBe(false);
+    expect(node.querySelector('use')?.hasAttribute('href')).toBe(false);
+    expect(node.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,AA');
+  });
+
+  it('accepts empty chapter content', () => {
+    const host = createBookHost();
+    host.setContent('', []);
+    expect(host.shadow.querySelector('.book-flow')?.childNodes.length).toBe(0);
+  });
+
   it('removes script elements', () => {
     const node = parse('<p>text</p><script>window.pwned = true</script>');
     sanitiseInjectedContent(node);

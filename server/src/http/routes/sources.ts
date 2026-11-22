@@ -5,6 +5,7 @@ import { authenticate, currentUser, requireAdmin } from '../auth.ts';
 import { badRequest } from '../../lib/errors.ts';
 import { SourceHost } from '../../services/source-host.ts';
 import { withSignal } from '../request-signal.ts';
+import { isolateBookResource } from '../assets.ts';
 import { searchResponse } from '../search-stream.ts';
 import { createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
@@ -165,7 +166,7 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
     const ref = parameter(q.ref, 'ref', true)!;
     return withSignal(request, reply, (signal) => host.detail(user.id, id, ref, signal));
   });
-  app.get('/api/v1/sources/:id/cover', { preHandler: auth }, async (request, reply) => {
+  app.get('/api/v1/sources/:id/cover', { onRequest: isolateBookResource, preHandler: auth }, async (request, reply) => {
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     const q = request.query as { entryRef?: string; coverRef?: string };
@@ -177,20 +178,24 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
     reply.header('cache-control', 'private, max-age=86400');
     return reply.send(image.bytes);
   });
-  app.get('/api/v1/books/:id/cover-candidate', { preHandler: auth }, async (request, reply) => {
-    const user = currentUser(request);
-    const { id } = request.params as { id: string };
-    const q = request.query as { entryRef?: string; coverRef?: string };
-    const entryRef = parameter(q.entryRef, 'entryRef', true)!,
-      coverRef = parameter(q.coverRef, 'coverRef', true)!;
-    const image = await withSignal(request, reply, (signal) =>
-      host.candidateCover(user.id, id, entryRef, coverRef, signal),
-    );
-    reply.header('content-type', image.type);
-    reply.header('x-content-type-options', 'nosniff');
-    reply.header('cache-control', 'private, max-age=86400');
-    return reply.send(image.bytes);
-  });
+  app.get(
+    '/api/v1/books/:id/cover-candidate',
+    { onRequest: isolateBookResource, preHandler: auth },
+    async (request, reply) => {
+      const user = currentUser(request);
+      const { id } = request.params as { id: string };
+      const q = request.query as { entryRef?: string; coverRef?: string };
+      const entryRef = parameter(q.entryRef, 'entryRef', true)!,
+        coverRef = parameter(q.coverRef, 'coverRef', true)!;
+      const image = await withSignal(request, reply, (signal) =>
+        host.candidateCover(user.id, id, entryRef, coverRef, signal),
+      );
+      reply.header('content-type', image.type);
+      reply.header('x-content-type-options', 'nosniff');
+      reply.header('cache-control', 'private, max-age=86400');
+      return reply.send(image.bytes);
+    },
+  );
   app.post('/api/v1/books/:id/cover-source', { preHandler: auth }, async (request, reply) => {
     const user = currentUser(request);
     const { id } = request.params as { id: string };
@@ -226,24 +231,28 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
     const params = request.params as { id: string; publicationRef: string };
     return withSignal(request, reply, (signal) => host.manifest(user.id, params.id, params.publicationRef, signal));
   });
-  app.get('/api/v1/sources/:id/publications/:publicationRef/resource', { preHandler: auth }, async (request, reply) => {
-    const user = currentUser(request);
-    const params = request.params as { id: string; publicationRef: string };
-    const ref = parameter((request.query as { ref?: string }).ref, 'ref', true)!;
-    const resource = await withSignal(request, reply, (signal) =>
-      host.resource(user.id, params.id, params.publicationRef, ref, signal),
-    );
-    // Development endpoint: JSON only. Untrusted HTML is never served as an app-origin document.
-    if (resource.stream) {
-      resource.stream.destroy();
-      throw badRequest('streaming preview is not supported');
-    }
-    return {
-      mediaType: resource.mediaType,
-      ...(resource.text !== undefined ? { text: resource.text } : {}),
-      ...(resource.data ? { base64: Buffer.from(resource.data).toString('base64') } : {}),
-    };
-  });
+  app.get(
+    '/api/v1/sources/:id/publications/:publicationRef/resource',
+    { onRequest: isolateBookResource, preHandler: auth },
+    async (request, reply) => {
+      const user = currentUser(request);
+      const params = request.params as { id: string; publicationRef: string };
+      const ref = parameter((request.query as { ref?: string }).ref, 'ref', true)!;
+      const resource = await withSignal(request, reply, (signal) =>
+        host.resource(user.id, params.id, params.publicationRef, ref, signal),
+      );
+      // Development endpoint: JSON only. Untrusted HTML is never served as an app-origin document.
+      if (resource.stream) {
+        resource.stream.destroy();
+        throw badRequest('streaming preview is not supported');
+      }
+      return {
+        mediaType: resource.mediaType,
+        ...(resource.text !== undefined ? { text: resource.text } : {}),
+        ...(resource.data ? { base64: Buffer.from(resource.data).toString('base64') } : {}),
+      };
+    },
+  );
   app.get('/api/v1/sources/:id/search-filters', { preHandler: auth }, async (request, reply) => {
     return withSignal(request, reply, (signal) =>
       host.searchFilters(currentUser(request).id, (request.params as { id: string }).id, signal),

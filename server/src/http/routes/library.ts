@@ -15,7 +15,7 @@ import {
   type ContentItem,
   type HandlerContext,
 } from '../../indexer/formats/index.ts';
-import { sendAssetPayload } from '../assets.ts';
+import { isolateBookResource, sendAssetPayload } from '../assets.ts';
 import { FilePublications } from '../../publications/files.ts';
 import { withSignal } from '../request-signal.ts';
 import { searchBookPage } from '../../services/book-search.ts';
@@ -271,7 +271,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
    * every format can be downloaded for local reading: a comic archive or a PDF
    * is exactly what the client wants to store on device.
    */
-  app.get('/api/v1/books/:id/content', { preHandler: auth }, async (request, reply) => {
+  app.get('/api/v1/books/:id/content', { onRequest: isolateBookResource, preHandler: auth }, async (request, reply) => {
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     const book = ctx.shelf.get(user.id, id);
@@ -428,7 +428,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     return new BookViewModes(ctx.db).set(user.id, id, body.pdfMode === undefined ? null : body.pdfMode);
   });
 
-  app.get('/api/v1/books/:id/assets', { preHandler: auth }, async (request, reply) => {
+  app.get('/api/v1/books/:id/assets', { onRequest: isolateBookResource, preHandler: auth }, async (request, reply) => {
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     const book = ctx.shelf.get(user.id, id);
@@ -440,8 +440,6 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
       const payload = await withSignal(request, reply, (signal) =>
         ctx.sources!.chapters.asset(user.id, id, ref, signal),
       );
-      reply.header('x-content-type-options', 'nosniff');
-      reply.header('content-security-policy', "default-src 'none'; img-src data:; sandbox");
       return sendAssetPayload(request, reply, payload);
     }
 
@@ -466,7 +464,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
    * lookup is by `book_files.rel_path`, never by constructing a path from the
    * query, so a traversal attempt simply matches no row.
    */
-  app.get('/api/v1/books/:id/file', { preHandler: auth }, async (request, reply) => {
+  app.get('/api/v1/books/:id/file', { onRequest: isolateBookResource, preHandler: auth }, async (request, reply) => {
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     const query = request.query as { path?: string };
@@ -556,7 +554,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     return reply.send(createReadStream(abs));
   });
 
-  app.get('/api/v1/books/:id/cover', { preHandler: auth }, async (request, reply) => {
+  app.get('/api/v1/books/:id/cover', { onRequest: isolateBookResource, preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const coverPath = ctx.shelf.coverPath(id);
     if (!coverPath) throw notFound('no cover for this book', 'NO_COVER');
