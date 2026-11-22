@@ -179,7 +179,11 @@ test('a drawing becomes a figure in the text where it sits, taking the labels in
   const html = book.chapters[0]!.html;
   assert.deepEqual(regions(html), [['figure', 1, '150,520,450,700']]);
   assert.doesNotMatch(html, /<p>坐标轴<\/p>/);
-  assert.match(html, /alt="第 1 页的插图：坐标轴"/);
+  // Its text is laid over it, transparent, where it is on the page: selectable, searchable, read aloud.
+  assert.match(
+    html,
+    /<img alt="第 1 页的插图" [^>]*\/><span class="pdf-region-text" style="left:16\.67%;top:[\d.]+%;font-size:[\d.]+cqw">坐标轴<\/span><\/figure>/,
+  );
   // In order: the text before, the figure, its caption, the text after.
   assert.ok(
     html.indexOf('图片前面') < html.indexOf('<figure') && html.indexOf('<figure') < html.indexOf('图 1 示意图'),
@@ -243,8 +247,60 @@ test('a displayed formula is drawn; mathematics inside a sentence stays text', (
     regions(html).map(([kind]) => kind),
     ['formula'],
   );
-  assert.match(html, /alt="第 1 页的公式：lim 𝑃\(𝑋 ⩽ 𝑧\) = 𝛷\(𝑧\) \(3\.4\)"/);
+  assert.match(html, /alt="第 1 页的公式"/);
+  assert.match(html, />lim<\/span><span class="pdf-region-text" [^>]*>𝑃\(𝑋 ⩽ 𝑧\) = 𝛷\(𝑧\) \(3\.4\)<\/span>/);
   assert.match(body(html), /<p>设随机变量 𝑋 服从正态分布，记𝑋𝑛 = 1<\/p>/);
+});
+
+test('a fraction inside a sentence is drawn inline with the mathematics before it, on the baseline', () => {
+  const book = buildPdfBook({
+    version: 1,
+    outline: [],
+    pages: [
+      page([
+        {
+          t: '有限的方差，记𝑋𝑛 = 1',
+          r: 352,
+          y: 456,
+          s: 12,
+          ms: [[7, 15, 325, 352, 452, 468]],
+        },
+        { t: '𝑛 ∑', x: 348, r: 366, y: 450, s: 9, f: 1, lo: 447, hi: 458 },
+        { t: '𝑖+1 𝑋𝑖', x: 366, r: 410, y: 452, s: 9, f: 1, lo: 449, hi: 460 },
+        { t: '，则下一句话从这里开始写满。', x: 410, r: 520, y: 456, s: 12 },
+      ]),
+    ],
+  });
+  const html = body(book.chapters[0]!.html);
+  assert.match(
+    html,
+    /^<p>有限的方差，记<span class="pdf-math"><img class="pdf-inline" data-page="1" data-box="324,446,411,469" alt="𝑋𝑛 = 1 𝑛 ∑ 𝑖\+1 𝑋𝑖" width="174" height="46" style="height:[\d.]+em;vertical-align:-[\d.]+em"\/><\/span>，则下一句话从这里开始写满。<\/p>$/,
+  );
+});
+
+test('lines whose columns line up make a table even without rules; a sentence naming code is not code', () => {
+  const book = buildPdfBook({
+    version: 1,
+    outline: [],
+    pages: [
+      page([
+        '前面的一段正文写满了整整一行文字内容。',
+        { t: 'PI 聚酰亚胺', r: 232, c: [72, 184] },
+        { t: 'MPI 聚酰亚胺模型化合物', r: 400, c: [72, 184] },
+        { t: 'PBI 聚苯并咪唑', r: 244, c: [72, 184.5] },
+        { t: '则用于正文中恢复为主要语言 \\thu@reset@main@language 之后', m: 0.7 },
+        '后面的一段正文也写满了整整一行文字内容。',
+      ]),
+    ],
+  });
+  const html = book.chapters[0]!.html;
+  assert.deepEqual(
+    regions(html).map(([kind]) => kind),
+    ['table'],
+  );
+  assert.match(html, />MPI 聚酰亚胺模型化合物<\/span>/);
+  assert.doesNotMatch(body(html), /pdf-code/);
+  assert.match(body(html), /<p>则用于正文中恢复为主要语言/);
 });
 
 test('code keeps its lines and indentation; a shaded box behind it is not a figure', () => {

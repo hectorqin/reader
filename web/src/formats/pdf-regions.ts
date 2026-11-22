@@ -23,12 +23,17 @@ export class PdfRegionPainter {
 
   /** Fills every empty placeholder under `root`. Returns when all have been tried. */
   paint(root: ParentNode): Promise<void> {
-    const work = [...root.querySelectorAll<HTMLElement>('figure.pdf-region')].map((figure) => this.fill(figure));
+    // A figure holds its image; a formula inside a sentence is an image of its own.
+    const work = [
+      ...[...root.querySelectorAll<HTMLElement>('figure.pdf-region')].map((figure) =>
+        this.fill(figure, figure.querySelector('img')),
+      ),
+      ...[...root.querySelectorAll<HTMLImageElement>('img.pdf-inline')].map((img) => this.fill(img, img)),
+    ];
     return Promise.all(work).then(() => undefined);
   }
 
-  private async fill(figure: HTMLElement): Promise<void> {
-    const img = figure.querySelector('img');
+  private async fill(figure: HTMLElement, img: HTMLImageElement | null): Promise<void> {
     const page = Number(figure.dataset.page);
     const box = (figure.dataset.box ?? '').split(',').map(Number) as [number, number, number, number];
     if (
@@ -59,7 +64,8 @@ export class PdfRegionPainter {
     } catch {
       if (this.controller.signal.aborted) return;
       figure.dataset.state = 'unavailable';
-      figure.dataset.unavailable = '这里有一幅图，联网或下载整本 PDF 后显示';
+      // A figure says so under it; an inline formula keeps its text as the image's alt.
+      if (figure !== img) figure.dataset.unavailable = '这里有一幅图，联网或下载整本 PDF 后显示';
     }
   }
 

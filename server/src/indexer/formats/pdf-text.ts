@@ -15,7 +15,7 @@
  */
 
 /** Bump when the extracted shape or the structuring rules change: cached results are keyed by it. */
-export const PDF_TEXT_VERSION = 4;
+export const PDF_TEXT_VERSION = 6;
 
 /** One line of text on a page, in PDF units (origin bottom-left). */
 export interface PdfLine {
@@ -33,6 +33,10 @@ export interface PdfLine {
   /** The line's ink, top and bottom (ascenders, descenders, raised and lowered parts). */
   hi?: number;
   lo?: number;
+  /** Where its columns start, when a gap of more than an em splits it; absent for one column. */
+  c?: number[];
+  /** Its runs in a mathematics font: first char, end char (in `t`), x0, x1, bottom, top. */
+  ms?: Array<[number, number, number, number, number, number]>;
 }
 /** A drawn box: x0, y0, x1, y1, and what drew it — 0 image, 1 embedded figure, 2 filled shape, 3 stroked line. */
 export type PdfGraphic = [number, number, number, number, number];
@@ -248,6 +252,17 @@ export function buildPdfBook(text: PdfText): PdfBook {
               page: pageIndex + 1,
               ...(titled ? { tag: titled.entry.level <= chapterLevel ? ('h2' as const) : ('h3' as const) } : {}),
             };
+      } else if (
+        sameRow &&
+        (line.f ?? 0) >= 0.5 &&
+        // Stacked: a fraction's part or a sum's limits, half a line off the baseline (a
+        // subscript, a third off, stays text) — or touching a formula already being drawn.
+        (Math.abs(line.y - prev!.row.y) > prev!.row.s * 0.4 || touchesInline(open!, line))
+      ) {
+        // A raised or lowered piece of mathematics (a fraction's denominator, a sum's
+        // limits): it and the formula it belongs to are drawn inline from the page,
+        // because as text they would read as a jumble.
+        inlineMath(open!, line, prev!.row, pageIndex + 1);
       } else {
         if (newPage) open!.parts.push(...pageMark(pageIndex + 1));
         join(open!, line.t.trim());
@@ -280,7 +295,15 @@ export function buildPdfBook(text: PdfText): PdfBook {
   };
 }
 
-type Part = string | { page: number } | { anchor: string };
+/** A formula inside a sentence: drawn inline from the page. */
+interface InlineMath {
+  page: number;
+  box: [number, number, number, number];
+  /** The text line's baseline, so the drawing sits on it. */
+  base: number;
+  text: string;
+}
+type Part = string | { page: number } | { anchor: string } | { inline: InlineMath };
 interface Block {
   /** A heading's tag, when a bookmark decided it rather than the font size. */
   tag?: 'h2' | 'h3';
@@ -291,6 +314,49 @@ interface Block {
   parts: Part[];
   size: number;
   page: number;
+}
+
+function touchesInline(block: Block, piece: PdfLine): boolean {
+  const last = block.parts[block.parts.length - 1];
+  return !!last && typeof last !== 'string' && 'inline' in last && piece.x <= last.inline.box[2] + piece.s;
+}
+
+/**
+ * Adds a stacked piece of an inline formula to the paragraph: onto the formula being
+ * drawn when it touches it, or as a new one that also takes the mathematics at the
+ * end of its line (the part on the baseline: "X̄ = 1" of "X̄ = 1/n ∑").
+ */
+function inlineMath(block: Block, piece: PdfLine, row: PdfLine, page: number): void {
+  const lo = piece.lo ?? piece.y - piece.s * 0.25,
+    hi = piece.hi ?? piece.y + piece.s * 0.85;
+  const last = block.parts[block.parts.length - 1];
+  if (last && typeof last !== 'string' && 'inline' in last && piece.x <= last.inline.box[2] + piece.s) {
+    const box = last.inline.box;
+    last.inline.box = [
+      Math.min(box[0], piece.x - 1),
+      Math.min(box[1], lo - 1),
+      Math.max(box[2], piece.r + 1),
+      Math.max(box[3], hi + 1),
+    ];
+    last.inline.text += ' ' + piece.t.trim();
+    return;
+  }
+  const box: [number, number, number, number] = [piece.x - 1, lo - 1, piece.r + 1, hi + 1];
+  let text = piece.t.trim();
+  const span = row.ms?.[row.ms.length - 1];
+  const tail = block.parts.length - 1;
+  if (span && span[3] >= piece.x - piece.s && typeof block.parts[tail] === 'string') {
+    const spanText = row.t.slice(span[0], span[1]).trim();
+    const before = block.parts[tail] as string;
+    if (spanText && before.trimEnd().endsWith(spanText)) {
+      block.parts[tail] = before.trimEnd().slice(0, -spanText.length);
+      box[0] = Math.min(box[0], span[2] - 1);
+      box[1] = Math.min(box[1], span[4] - 1);
+      box[3] = Math.max(box[3], span[5] + 1);
+      text = `${spanText} ${text}`;
+    }
+  }
+  block.parts.push({ inline: { page, box, base: row.y, text } });
 }
 
 /** Joins a line onto a paragraph: no space between CJK, hyphenated Latin rejoined. */
@@ -316,7 +382,7 @@ function chapterHtml(title: string, blocks: Block[], body: number): string {
   const out: string[] = [];
   for (const block of blocks) {
     const marks = block.parts
-      .filter((part): part is { page: number } | { anchor: string } => typeof part !== 'string')
+      .filter((part): part is { page: number } | { anchor: string } => typeof part !== 'string' && !('inline' in part))
       .map((part) =>
         'page' in part
           ? `<span class="pdf-page" id="pdf-page-${part.page}" data-page="${part.page}"></span>`
@@ -337,7 +403,9 @@ function chapterHtml(title: string, blocks: Block[], body: number): string {
           ? escapeHtml(part)
           : 'page' in part
             ? `<span class="pdf-page" id="pdf-page-${part.page}" data-page="${part.page}"></span>`
-            : `<span id="${part.anchor}"></span>`,
+            : 'inline' in part
+              ? inlineHtml(part.inline, body)
+              : `<span id="${part.anchor}"></span>`,
       )
       .join('');
     const tag = block.tag ?? (block.size >= body * 1.6 ? 'h2' : 'h3');
@@ -354,7 +422,9 @@ function chapterHtml(title: string, blocks: Block[], body: number): string {
  * the page is laid out once and does not move when the drawing arrives.
  */
 const CHAPTER_STYLE = [
-  'figure.pdf-region{margin:1em auto;max-width:100%}',
+  'figure.pdf-region{position:relative;container-type:inline-size;margin:1em auto;max-width:100%}',
+  '.pdf-region-text{position:absolute;white-space:pre;color:transparent;line-height:1;margin:0}',
+  'img.pdf-inline{display:inline;width:auto;max-width:100%}',
   'figure.pdf-region[data-kind="formula"]{margin:.5em auto}',
   'figure.pdf-region img{display:block;width:100%;height:auto;background:#fff;border-radius:2px}',
   'figure.pdf-region[data-state="unavailable"]::after{content:attr(data-unavailable);display:block;font-size:.85em;opacity:.7;text-align:center}',
@@ -363,12 +433,37 @@ const CHAPTER_STYLE = [
 
 const KIND_NAMES: Record<PdfRegion['kind'], string> = { figure: '插图', table: '表格', formula: '公式' };
 
+/**
+ * A region's placeholder, and over it its text, laid where it is on the page and
+ * transparent — as PDF.js lays a text layer over a page. The drawing is what is
+ * seen; the text is what is selected, highlighted, searched and read aloud. Its
+ * size follows the figure's own width (`cqw`), so it lines up at any width.
+ */
 function regionHtml(region: PdfRegion): string {
   const [x0, y0, x1, y1] = region.box;
-  const label = `第 ${region.page} 页的${KIND_NAMES[region.kind]}${region.text ? `：${region.text.slice(0, 300)}` : ''}`;
+  const w = Math.max(1, x1 - x0),
+    h = Math.max(1, y1 - y0);
+  const pct = (v: number) => Math.round(v * 100) / 100;
+  const layer = [...region.lines]
+    .map(
+      (line) =>
+        `<span class="pdf-region-text" style="left:${pct(((line.x - x0) / w) * 100)}%;top:${pct(((y1 - (line.hi ?? line.y + line.s * 0.85)) / h) * 100)}%;font-size:${pct((line.s / w) * 100)}cqw">${escapeHtml(line.t.trim())}</span>`,
+    )
+    .join('');
   return (
     `<figure class="pdf-region" data-kind="${region.kind}" data-page="${region.page}" data-box="${x0},${y0},${x1},${y1}" style="width:${region.width}em">` +
-    `<img alt="${escapeHtml(label)}" width="${Math.round((x1 - x0) * 2)}" height="${Math.round((y1 - y0) * 2)}"/></figure>`
+    `<img alt="第 ${region.page} 页的${KIND_NAMES[region.kind]}" width="${Math.round(w * 2)}" height="${Math.round(h * 2)}"/>${layer}</figure>`
+  );
+}
+
+/** A formula inside a sentence, drawn at the height of its line and set on the text's baseline. */
+function inlineHtml(math: InlineMath, body: number): string {
+  const [x0, y0, x1, y1] = math.box;
+  const em = (v: number) => Math.round((v / body) * 1000) / 1000;
+  // Wrapped: a paragraph whose only element is an image is a picture, and the reader centres it.
+  return (
+    `<span class="pdf-math"><img class="pdf-inline" data-page="${math.page}" data-box="${x0},${y0},${x1},${y1}" alt="${escapeHtml(math.text)}" ` +
+    `width="${Math.round((x1 - x0) * 2)}" height="${Math.round((y1 - y0) * 2)}" style="height:${em(y1 - y0)}em;vertical-align:${-em(math.base - y0)}em"/></span>`
   );
 }
 
@@ -397,6 +492,7 @@ export interface PdfRegion {
 }
 
 type Box = [number, number, number, number];
+const PROSE = /[\u4e00-\u9fff]{6,}/;
 const CAPTION = /^\s*(?:表|table|tab\.)\s*[\d一二三四五六七八九十ivxA-Z]/i;
 
 /**
@@ -424,7 +520,10 @@ export function findRegions(
   // font is still a sentence. A run of lines partly in a code font is code when, on
   // average, most of it is; a lone line only when nearly all of it is.
   const code = new Set<PdfLine>();
-  const codeish = (line: PdfLine) => line.s <= body * 1.3 && ((line.m ?? 0) >= 0.6 || straggler(line));
+  // A line with a run of Chinese prose in it is a sentence that names code, not code
+  // (unless it sits on a code block's background, below).
+  const codeish = (line: PdfLine) =>
+    line.s <= body * 1.3 && !PROSE.test(line.t) && ((line.m ?? 0) >= 0.6 || straggler(line));
   let runStart = 0;
   page.lines.forEach((line, index) => {
     const next = page.lines[index + 1];
@@ -528,6 +627,47 @@ export function findRegions(
       box,
       page.lines.filter((line) => inside(line, box) && !regions.some((region) => region.lines.has(line))),
     );
+
+  // Tables without rules: three or more lines in a row, each in columns, whose inner
+  // columns start at the same places.
+  {
+    const taken = new Set(regions.flatMap((region) => [...region.lines]));
+    const columned = (line: PdfLine) =>
+      !taken.has(line) && !code.has(line) && (line.c?.length ?? 0) >= 2 && line.s <= body * 1.3 && (line.f ?? 0) < 0.5;
+    let run: PdfLine[] = [];
+    const close = () => {
+      if (run.length >= 3) {
+        const inner = run.flatMap((line) => line.c!.slice(1)).sort((a, b) => a - b);
+        const tolerance = body * 0.8;
+        let aligned = 0;
+        for (let i = 0; i < inner.length;) {
+          let j = i;
+          while (j + 1 < inner.length && inner[j + 1]! - inner[i]! <= tolerance) j += 1;
+          if (j - i + 1 >= Math.max(2, run.length * 0.6)) aligned += 1;
+          i = j + 1;
+        }
+        if (aligned >= 1) {
+          const box: Box = [
+            Math.min(...run.map((line) => line.x)) - 2,
+            Math.min(...run.map((line) => line.lo ?? line.y - line.s * 0.25)) - 2,
+            Math.max(...run.map((line) => line.r)) + 2,
+            Math.max(...run.map((line) => line.hi ?? line.y + line.s * 0.85)) + 2,
+          ];
+          add('table', box, run);
+        }
+      }
+      run = [];
+    };
+    page.lines.forEach((line) => {
+      const last = run[run.length - 1];
+      if (columned(line) && (!last || Math.abs(last.y - line.y) <= Math.max(last.s, line.s) * 2.5)) run.push(line);
+      else {
+        close();
+        if (columned(line)) run.push(line);
+      }
+    });
+    close();
+  }
 
   // Formulas.
   const taken = new Set(regions.flatMap((region) => [...region.lines]));

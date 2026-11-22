@@ -116,6 +116,10 @@ function lines(
   let mono = 0,
     math = 0,
     chars = 0;
+  // Where the line's columns start (a gap of more than an em between runs), and its
+  // runs set in a mathematics font: [first char, end char, x0, x1, bottom, top].
+  let starts: number[] = [];
+  let spans: Array<[number, number, number, number, number, number]> = [];
   // A line's size is the one most of its characters are set in: a word in a code
   // font or a footnote mark on the line must not make it look like a heading.
   let sizes = new Map<number, number>();
@@ -130,29 +134,59 @@ function lines(
     if (chars && math) line.f = Math.round((math / chars) * 100) / 100;
     line.hi = Math.round(line.hi! * 10) / 10;
     line.lo = Math.round(line.lo! * 10) / 10;
+    const r = (v: number) => Math.round(v * 10) / 10;
+    if (starts.length >= 2) line.c = starts.map(r);
+    if (spans.length) line.ms = spans.map(([a, b, x0, x1, lo, hi]) => [a, b, r(x0), r(x1), r(lo), r(hi)]);
     out.push(line);
     line = null;
     sizes = new Map();
     mono = math = chars = 0;
+    starts = [];
+    spans = [];
   };
   for (const item of items) {
     if (typeof item.str !== 'string') continue;
     const [a = 1, b = 0, c = 0, d = 1, x = 0, y = 0] = item.transform;
     const size = Math.hypot(c, d) || Math.hypot(a, b) || item.height || 10;
+    // A run of spaces is a space, not ink: it must not stretch the line across a gap
+    // between columns, or the columns could not be seen.
+    if (item.str && !item.str.trim()) {
+      if (line && !/\s$/.test(line.t)) line.t += ' ';
+      if (item.hasEOL && line) finish();
+      continue;
+    }
     if (item.str) {
       // A superscript, a subscript or a fraction's parts sit off the baseline but on the line.
       if (line && (Math.abs(y - line.y) > Math.max(size, line.s) * 0.6 || x < line.x - size)) finish();
       const style = styles[item.fontName];
       const top = y + (style?.ascent ?? 0.85) * size,
         bottom = y + (style?.descent ?? -0.25) * size;
-      if (!line) line = { t: item.str, x, y, r: x + item.width, s: size, hi: top, lo: bottom };
-      else {
+      let at = 0;
+      if (!line) {
+        line = { t: item.str, x, y, r: x + item.width, s: size, hi: top, lo: bottom };
+        starts = [x];
+      } else {
         const gap = x - line.r;
         const latin = /[\x21-\x7e]$/.test(line.t) && /^[\x21-\x7e]/.test(item.str);
-        line.t += (gap > size * 0.25 && latin ? ' ' : '') + item.str;
+        if (gap > Math.max(size, line.s) * 1.2) starts.push(x);
+        line.t += gap > size * 0.25 && latin ? ' ' : '';
+        at = line.t.length;
+        line.t += item.str;
         line.r = Math.max(line.r, x + item.width);
         line.hi = Math.max(line.hi ?? top, top);
         line.lo = Math.min(line.lo ?? bottom, bottom);
+      }
+      if (kindOf(item.fontName) === 'math' && item.str.trim()) {
+        const last = spans[spans.length - 1];
+        // Runs of mathematics a thin space apart are one formula.
+        if (last && x - last[3] < size * 0.6) {
+          last[1] = at + item.str.length;
+          // A combining mark (the bar of x̄) may come first but sit further right.
+          last[2] = Math.min(last[2], x);
+          last[3] = Math.max(last[3], x + item.width);
+          last[4] = Math.min(last[4], bottom);
+          last[5] = Math.max(last[5], top);
+        } else spans.push([at, at + item.str.length, x, x + item.width, bottom, top]);
       }
       const rounded = Math.round(size * 10) / 10;
       sizes.set(rounded, (sizes.get(rounded) ?? 0) + item.str.length);

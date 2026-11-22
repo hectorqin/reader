@@ -46,6 +46,17 @@ describe('PdfRegionPainter', () => {
     await vi.waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2));
   });
 
+  it('draws a formula inside a sentence too', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:inline');
+    const renderRegion = vi.fn(async (_page: number, _box: number[], _scale: number) => new Blob(['png']));
+    const painter = new PdfRegionPainter(async () => ({ renderRegion, dispose: vi.fn() }) as unknown as PdfRenderer);
+    const root = document.createElement('p');
+    root.innerHTML = '记<img class="pdf-inline" data-page="24" data-box="325,447,420,469" alt="X = 1/n"/>，则';
+    await painter.paint(root);
+    expect(renderRegion.mock.calls[0]!.slice(0, 2)).toEqual([24, [325, 447, 420, 469]]);
+    expect(root.querySelector('img')!.getAttribute('src')).toBe('blob:inline');
+  });
+
   it('says where a figure is when the PDF cannot be read, and tries again next time', async () => {
     const open = vi.fn(async () => {
       throw new Error('offline');
