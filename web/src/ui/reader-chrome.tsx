@@ -641,12 +641,15 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
 
       {state.settingsOpen ? (
         <Sheet
+          className={tab === 'speech' ? 'speech-sheet' : ''}
           title={tab === 'appearance' ? '外观' : tab === 'speech' ? '朗读' : '阅读设置'}
           onClose={() => handlers.toggleSettings(tab)}
         >
           {tab === 'speech' ? (
             <>
-              {state.tts.active ? <SpeechBar state={state.tts} handlers={handlers} /> : null}
+              {state.tts.active ? (
+                <SpeechBar state={state.tts} chapterLabel={state.chapterLabel} handlers={handlers} />
+              ) : null}
               <SpeechSettings state={state} handlers={handlers} />
             </>
           ) : (
@@ -1037,9 +1040,13 @@ function SpeechSettings({ state, handlers }: { state: ChromeState; handlers: Chr
   const RATE_PRESETS = [0.8, 1, 1.2, 1.5, 2];
   return (
     <>
-      {/* The thing a reader opens this sheet to do comes first; the tuning follows. */}
-      <button type="button" className="button primary speech-start" onClick={handlers.onSpeakFromHere}>
-        从当前位置朗读
+      <button
+        type="button"
+        className={`button speech-start ${state.tts.active ? 'speech-restart' : 'primary'}`}
+        onClick={handlers.onSpeakFromHere}
+      >
+        {state.tts.active && <Icon name="refresh" size={18} />}
+        {state.tts.active ? '从本页重新朗读' : '从当前位置朗读'}
       </button>
       {/* The engine picker only appears when there is a choice to make. One
           engine is not a setting. */}
@@ -1051,21 +1058,23 @@ function SpeechSettings({ state, handlers }: { state: ChromeState; handlers: Chr
           onChange={(value) => handlers.onSwitchEngine(value as AppSettings['ttsEngine'])}
         />
       ) : null}
-      <SliderRow
-        label="语速"
-        value={state.ttsRate}
-        min={0.5}
-        max={2.5}
-        step={0.1}
-        format={(value) => `${value.toFixed(1)}×`}
-        onChange={(value) => handlers.onSpeechSetting({ ttsRate: value })}
-      />
-      <SegmentedRow
-        label="常用"
-        options={RATE_PRESETS.map((value) => ({ value: String(value), label: `${value.toFixed(1)}×` }))}
-        value={String(RATE_PRESETS.find((value) => Math.abs(value - state.ttsRate) < 0.05) ?? '')}
-        onChange={(value) => handlers.onSpeechSetting({ ttsRate: Number(value) })}
-      />
+      <div className="speech-rate">
+        <SliderRow
+          label="语速"
+          value={state.ttsRate}
+          min={0.5}
+          max={2.5}
+          step={0.1}
+          format={(value) => `${value.toFixed(1)}×`}
+          onChange={(value) => handlers.onSpeechSetting({ ttsRate: value })}
+        />
+        <SegmentedRow
+          label="常用"
+          options={RATE_PRESETS.map((value) => ({ value: String(value), label: `${value.toFixed(1)}×` }))}
+          value={String(RATE_PRESETS.find((value) => Math.abs(value - state.ttsRate) < 0.05) ?? '')}
+          onChange={(value) => handlers.onSpeechSetting({ ttsRate: Number(value) })}
+        />
+      </div>
       {state.showVoiceRow ? (
         <SelectRow label="语音" options={state.voices} value={state.ttsVoice} onChange={handlers.onVoice} />
       ) : null}
@@ -1113,32 +1122,30 @@ function SpeechSettings({ state, handlers }: { state: ChromeState; handlers: Chr
  * the header covering the text. The bar is therefore tied to the *engine's*
  * state, not to the chrome's.
  */
-function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: ChromeHandlers }): JSX.Element {
-  const max = Math.max(0, (state.sentenceTotal || state.total) - 1);
+function SpeechBar({
+  state,
+  chapterLabel,
+  handlers,
+}: {
+  state: SpeechBarState;
+  chapterLabel: string;
+  handlers: ChromeHandlers;
+}): JSX.Element {
+  const total = Math.max(0, state.sentenceTotal || state.total);
+  const max = Math.max(0, total - 1);
   const value = Math.max(0, state.sentenceIndex >= 0 ? state.sentenceIndex : state.index);
   const playing = state.state === 'playing';
   return (
     <div className="tts-bar" data-state={state.state} role="group" aria-label="朗读控制">
-      {/* Two rows, like any player: what is being read with its scrubber, then the
-          transport.
-
-          The bar used to be a single row: previous, play/pause, next, the sentence
-          and its range, the count chip, and an ✕ — seven things across a phone.
-          The flex row gave the sentence `flex: 1`, so *it* was the only thing that
-          shrank, and on a 360px screen the last control (停止) was pushed past the
-          right edge and clipped. The reader's report is the honest description of
-          the result: "没法停止" — there was a stop button, and it was off the
-          screen. Two rows rather than a scrollable one, because a control the
-          reader has to go looking for is a control that does not exist (the same
-          argument the rail's own scrollbar is built on).
-
-          Every control is `flex: 1` so they divide the width evenly and the row
-          always fits: no fixed widths to run out of, and the targets grow with the
-          screen instead of huddling in the middle of a tablet. */}
       <div className="tts-row tts-progress">
-        <span className="tts-text" title={state.label}>
-          {state.label}
-        </span>
+        <div className="tts-heading">
+          <span className="tts-text" title={chapterLabel || state.label}>
+            {chapterLabel || state.label}
+          </span>
+          <span className="tts-position">
+            第 {total ? Math.min(value + 1, total) : 0} / {total} 句
+          </span>
+        </div>
         <input
           className="tts-range"
           type="range"
@@ -1151,30 +1158,17 @@ function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: Chrom
         />
       </div>
       <div className="tts-row tts-controls">
-        <IconButton label="上一句" icon="step-backward" onClick={handlers.onSpeechPrevious} />
-        <IconButton
-          label={playing ? '暂停朗读' : '继续朗读'}
-          icon={playing ? 'pause' : 'play'}
-          className="tts-toggle"
-          onClick={handlers.onSpeechToggle}
-        />
-        <IconButton label="下一句" icon="step-forward" onClick={handlers.onSpeechNext} />
-        <button
-          type="button"
-          className="tts-chip"
-          aria-label={`${state.chip}，从当前页重新朗读`}
-          title="从当前页重新朗读"
-          onClick={handlers.onSpeakFromHere}
-        >
-          {state.chip}
-        </button>
-        {/* Stop is last and it is the one destructive control, so it is separated
-            by its own colour rather than by position alone. `stop` rather than
-            `close`: the ✕ read as "close this bar", which is what pause does not
-            do — the reader who wanted the voice to stop pressed it, got a hidden
-            bar, and heard the book keep reading. Stop is now a square, which is
-            the universal transport glyph for exactly this. */}
-        <IconButton label="停止朗读" icon="stop" className="tts-stop" onClick={handlers.onStopSpeech} />
+        <div className="tts-transport">
+          <IconButton label="上一句" icon="step-backward" onClick={handlers.onSpeechPrevious} />
+          <IconButton
+            label={playing ? '暂停朗读' : '继续朗读'}
+            icon={playing ? 'pause' : 'play'}
+            className="tts-toggle"
+            onClick={handlers.onSpeechToggle}
+          />
+          <IconButton label="下一句" icon="step-forward" onClick={handlers.onSpeechNext} />
+        </div>
+        <IconButton label="停止" title="停止" icon="stop" className="tts-stop" onClick={handlers.onStopSpeech} />
       </div>
     </div>
   );

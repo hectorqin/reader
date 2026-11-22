@@ -133,10 +133,13 @@ describe('the reading surface fills the screen', () => {
   });
 
   it('gives the read-aloud controls their own row so none of them is clipped', () => {
-    // One flex row of seven things gave the sentence `flex: 1`, so it was the only
-    // thing that shrank and the last control was pushed past the edge on a phone.
-    const controls = rule('.tts-bar .tts-controls > *');
-    expect(declaration(controls, 'flex')).toBe('1 1 0');
+    const controls = rule('.tts-bar .tts-controls');
+    expect(declaration(controls, 'display')).toBe('grid');
+    expect(declaration(controls, 'grid-template-columns')).toBe('44px minmax(0, 1fr) 44px');
+    expect(declaration(rule('.tts-transport'), 'grid-column')).toBe('2');
+    expect(declaration(rule('.tts-bar .tts-controls .tts-toggle'), 'width')).toBe('56px');
+    expect(declaration(rule('.tts-bar .tts-controls .tts-toggle'), 'background')).toBe('var(--color-brand)');
+    expect(declaration(rule('.tts-bar .tts-controls .tts-stop'), 'grid-column')).toBe('3');
   });
 
   it('uses the same reading geometry with chrome visible and hidden', () => {

@@ -608,6 +608,8 @@
   width: 64px;
   height: 64px;
   min-height: 64px;
+  background: var(--color-brand);
+  color: var(--color-on-brand);
 }
 .media-toggle-play svg {
   width: 28px;
@@ -668,11 +670,12 @@
   min-width: 44px;
   height: 44px;
   min-height: 44px;
-  background: transparent;
-  color: var(--media-accent);
+  background: var(--color-brand);
+  color: var(--color-on-brand);
 }
 .media-mini .media-mini-close {
-  color: var(--muted);
+  background: transparent;
+  color: var(--color-muted);
 }
 .media-player:not(.media-player-expanded) {
   background: var(--media-paper);
@@ -1983,7 +1986,8 @@
   width: 100%;
   padding: 24px 12px 0;
   margin: auto;
-  gap: 0;
+  gap: var(--space-3);
+  justify-content: center;
 }
 .media-screen .media-playback-status[data-panel="main"] .media-playing-artwork {
   display: contents;
@@ -1991,7 +1995,7 @@
 .media-screen .media-playback-status[data-panel="main"] .media-playing-artwork > .media-cover {
   width: min(74%, 264px);
   max-width: 264px;
-  margin: auto auto 24px;
+  margin: 0 auto;
   border-radius: var(--radius-sm);
 }
 .media-screen
@@ -2000,14 +2004,14 @@
   > .media-cover {
   width: 135px;
   aspect-ratio: 2/3;
-  margin: 10px auto 22px;
+  margin: 0 auto;
 }
 .media-screen .media-playing-copy {
   display: flex;
   width: 100%;
   align-items: center;
   gap: 8px;
-  margin: 0 0 16px;
+  margin: 0;
   text-align: left;
 }
 .media-playing-copy > div {
@@ -2028,14 +2032,14 @@
 }
 .media-screen .media-playing-chapter {
   font-size: var(--text-meta);
-  color: var(--muted);
-  text-align: center;
-  margin: 0 0 12px;
+  color: var(--color-muted);
+  text-align: left;
+  margin: 0 0 var(--space-1);
 }
 .media-screen .media-audio-bottom {
   width: 100%;
-  margin-top: auto;
-  padding-top: 18px;
+  margin-top: 0;
+  padding-top: 0;
   padding-bottom: 14px;
   flex: none;
 }
@@ -2065,7 +2069,7 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
-.media-screen .media-playback-options > :is(button, label) {
+.media-screen .media-playback-options > :is(button, label, .media-speed-control) {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -2075,6 +2079,86 @@
   padding: 0;
   color: var(--muted);
   font-size: var(--text-meta);
+}
+.media-speed-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.media-playback-options .media-speed-control > .media-speed-label {
+  display: none;
+}
+.media-playback-options > .media-speed-control {
+  width: 100%;
+  min-width: 0;
+}
+.media-playback-options .media-speed-control > .icon {
+  position: absolute;
+  top: var(--space-1);
+  pointer-events: none;
+}
+.media-playback-options .media-speed-control .media-select-control {
+  width: 100%;
+  min-width: 100%;
+}
+.media-screen .media-playback-options .media-speed-control .media-select-trigger {
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-4) var(--space-1) 0;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  font-size: var(--text-title);
+}
+.media-audio-speed .media-select-control {
+  flex: 1;
+}
+.media-audio-section {
+  display: grid;
+  gap: var(--space-2);
+}
+.media-audio-section + .media-audio-section {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-line);
+}
+.media-audio-section h3 {
+  margin: 0;
+  font-size: var(--text-label);
+  font-weight: 600;
+  color: var(--color-muted);
+}
+.media-audio-section .media-audio-shortcuts,
+.media-audio-section .media-audio-support {
+  margin: 0;
+}
+.media-screen .media-audio-detail .media-detail-columns {
+  display: block;
+  max-width: none;
+}
+@media (max-width: 700px) {
+  .media-screen .media-grid[data-channel="audiobook"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 900px) {
+  .media-screen .media-audio-detail {
+    max-width: 940px;
+    margin-inline: auto;
+  }
+  .media-audio-detail .media-album-columns {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+  .media-screen .media-audio-detail .media-album-actions {
+    max-width: none;
+  }
+  .media-screen .media-audio-detail :is(.media-detail-actions, .media-album-actions) > .media-primary {
+    flex: none;
+    width: auto;
+    min-width: 0;
+  }
 }
 .media-screen .media-playback-options select {
   appearance: none;
@@ -2259,7 +2343,7 @@
     min-height: calc(100dvh - 96px);
     padding: 45px 20px;
     align-items: center;
-    align-content: stretch;
+    align-content: center;
   }
   .media-screen .media-playback-status[data-panel="main"] .media-playing-artwork > .media-cover {
     grid-column: 1;
@@ -2284,7 +2368,7 @@
     grid-column: 2;
     grid-row: 2;
     align-self: end;
-    margin-top: 30px;
+    margin-top: 0;
   }
   .media-screen .media-playback-status[data-panel="main"] .media-audio-bottom {
     grid-column: 2;

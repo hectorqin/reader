@@ -19,7 +19,7 @@ export function MediaItemGrid({
   const { mediaApi } = useRuntime();
   if (!items.length) return <p className="media-empty muted">暂无内容</p>;
   return (
-    <div className="media-grid" data-density={density}>
+    <div className="media-grid" data-density={density} data-channel={channel}>
       {items.map((item) => {
         const subtitle = itemLabel(item);
         return (
