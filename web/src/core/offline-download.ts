@@ -146,6 +146,13 @@ export class OfflineDownload {
           await this.update({ completed: this.state.completed + 1 });
         }
       }
+      // A PDF read as text draws its figures from the PDF itself, so the file comes along.
+      if (chapters && book.format === 'pdf' && !(await this.cache.resource(book.id, OFFLINE_FILE))) {
+        await this.update({ message: '正在下载插图所需的原文件' });
+        const bytes = await this.api.bookBytes(book.id, { signal });
+        signal.throwIfAborted();
+        await this.cache.putResource(book.id, OFFLINE_FILE, bytes);
+      }
       signal.throwIfAborted();
       await this.update({ status: 'complete', message: chapters ? '所选章节已可离线阅读' : '整书已可离线阅读' });
     } catch (error) {

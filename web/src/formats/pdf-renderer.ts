@@ -176,6 +176,34 @@ export async function openPdf(
         if (page !== currentPage) page.cleanup();
       }
     },
+    async renderRegion(pageNumber, box, scale, regionSignal) {
+      regionSignal?.throwIfAborted();
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale });
+      // The rectangle in the viewport's pixels (it handles the page's rotation and offset).
+      const [ax, ay] = viewport.convertToViewportPoint(box[0], box[1]) as [number, number];
+      const [bx, by] = viewport.convertToViewportPoint(box[2], box[3]) as [number, number];
+      const left = Math.min(ax, bx),
+        top = Math.min(ay, by);
+      const width = Math.max(1, Math.ceil(Math.abs(bx - ax))),
+        height = Math.max(1, Math.ceil(Math.abs(by - ay)));
+      const area = document.createElement('canvas');
+      area.width = width;
+      area.height = height;
+      const task = page.render({ canvas: area, viewport, transform: [1, 0, 0, 1, -left, -top] });
+      const stop = () => task.cancel();
+      regionSignal?.addEventListener('abort', stop, { once: true });
+      try {
+        await task.promise;
+      } finally {
+        regionSignal?.removeEventListener('abort', stop);
+        if (page !== currentPage) page.cleanup();
+      }
+      const blob = await new Promise<Blob | null>((resolve) => area.toBlob(resolve, 'image/png'));
+      area.width = area.height = 0;
+      if (!blob) throw new Error('无法生成图片');
+      return blob;
+    },
     async outline() {
       const entries: Array<{ title: string; page: number; depth: number }> = [];
       type Item = { title: string; dest: unknown; items: Item[] };

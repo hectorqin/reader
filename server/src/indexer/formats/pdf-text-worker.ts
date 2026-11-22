@@ -19,7 +19,17 @@ interface TextItem {
   width: number;
   height: number;
   hasEOL: boolean;
+  fontName: string;
 }
+
+/** What a font is for, as far as reading goes: code, mathematics, or text. */
+type FontKind = 'mono' | 'math' | 'text';
+const MONO_NAME =
+  /mono|courier|cursor|consol|menlo|inconsolata|sourcecode|typewriter|cmtt|sftt|lmmono|dejavusansm|firacode|jetbrains/i;
+/** CJK fonts are all fixed-pitch, so pdf.js's own monospace flag says nothing about them. */
+const CJK_NAME =
+  /song|hei|kai|fang|ming|mincho|gothic|cjk|sim|yahei|han|noto.*(sc|tc|jp|kr)|source.*(sc|tc|cn)|fandol|uming|ukai|wenquanyi|droid.*fallback/i;
+const MATH_NAME = /math|(?:^|\+)(?:cmmi|cmsy|cmex|cmbsy|cmmib|msam|msbm|eufm|eusm|rsfs|esint|stmary|wasy)\d*|symbol/i;
 
 async function extract(path: string): Promise<PdfText> {
   // pdf.js announces, on load, that it cannot draw without its optional canvas
@@ -32,6 +42,8 @@ async function extract(path: string): Promise<PdfText> {
   const data = new Uint8Array(await readFile(path));
   const task = pdfjs.getDocument({
     data,
+    // Keeps each font's real name, which is how code and mathematics are told apart from text.
+    fontExtraProperties: true,
     // CJK text in CID fonts is only Unicode through these maps.
     cMapUrl: join(root, 'cmaps') + '/',
     cMapPacked: true,
@@ -46,8 +58,36 @@ async function extract(path: string): Promise<PdfText> {
     for (let number = 1; number <= pdf.numPages; number += 1) {
       const page = await pdf.getPage(number);
       const view = page.getViewport({ scale: 1 });
+      // The drawing operations first: they load the fonts, whose names the text needs.
+      const operators = await page.getOperatorList();
       const content = await page.getTextContent();
-      pages.push({ w: view.width, h: view.height, lines: lines(content.items as TextItem[]) });
+      const kinds = new Map<string, FontKind>();
+      const kindOf = (name: string): FontKind => {
+        let kind = kinds.get(name);
+        if (!kind) {
+          const font = page.commonObjs.has(name) ? (page.commonObjs.get(name) as { name?: string }) : undefined;
+          const real = font?.name ?? '';
+          const family = (content.styles as Record<string, { fontFamily?: string }>)[name]?.fontFamily;
+          kind = MATH_NAME.test(real)
+            ? 'math'
+            : MONO_NAME.test(real) || (family === 'monospace' && !CJK_NAME.test(real))
+              ? 'mono'
+              : 'text';
+          kinds.set(name, kind);
+        }
+        return kind;
+      };
+      const graphics = drawn(operators, pdfjs.OPS as Record<string, number>, view.width * view.height);
+      pages.push({
+        w: view.width,
+        h: view.height,
+        lines: lines(
+          content.items as TextItem[],
+          kindOf,
+          content.styles as Record<string, { ascent?: number; descent?: number }>,
+        ),
+        ...(graphics.length ? { g: graphics } : {}),
+      });
       page.cleanup();
     }
     const outline: PdfOutlineEntry[] = [];
@@ -66,9 +106,16 @@ async function extract(path: string): Promise<PdfText> {
 }
 
 /** Text runs in content order, gathered into lines: a new line where the baseline moves or pdf.js says so. */
-function lines(items: TextItem[]): PdfLine[] {
+function lines(
+  items: TextItem[],
+  kindOf: (fontName: string) => FontKind,
+  styles: Record<string, { ascent?: number; descent?: number }>,
+): PdfLine[] {
   const out: PdfLine[] = [];
   let line: PdfLine | null = null;
+  let mono = 0,
+    math = 0,
+    chars = 0;
   // A line's size is the one most of its characters are set in: a word in a code
   // font or a footnote mark on the line must not make it look like a heading.
   let sizes = new Map<number, number>();
@@ -78,30 +125,143 @@ function lines(items: TextItem[]): PdfLine[] {
       most = -1;
     for (const [size, count] of sizes) if (count > most) [best, most] = [size, count];
     line.s = best;
+    // How much of the line is set in a code font, or a mathematics font (0–1, left out when none).
+    if (chars && mono) line.m = Math.round((mono / chars) * 100) / 100;
+    if (chars && math) line.f = Math.round((math / chars) * 100) / 100;
+    line.hi = Math.round(line.hi! * 10) / 10;
+    line.lo = Math.round(line.lo! * 10) / 10;
     out.push(line);
     line = null;
     sizes = new Map();
+    mono = math = chars = 0;
   };
   for (const item of items) {
     if (typeof item.str !== 'string') continue;
     const [a = 1, b = 0, c = 0, d = 1, x = 0, y = 0] = item.transform;
     const size = Math.hypot(c, d) || Math.hypot(a, b) || item.height || 10;
     if (item.str) {
-      if (line && (Math.abs(y - line.y) > size * 0.5 || x < line.x - size)) finish();
-      if (!line) line = { t: item.str, x, y, r: x + item.width, s: size };
+      // A superscript, a subscript or a fraction's parts sit off the baseline but on the line.
+      if (line && (Math.abs(y - line.y) > Math.max(size, line.s) * 0.6 || x < line.x - size)) finish();
+      const style = styles[item.fontName];
+      const top = y + (style?.ascent ?? 0.85) * size,
+        bottom = y + (style?.descent ?? -0.25) * size;
+      if (!line) line = { t: item.str, x, y, r: x + item.width, s: size, hi: top, lo: bottom };
       else {
         const gap = x - line.r;
         const latin = /[\x21-\x7e]$/.test(line.t) && /^[\x21-\x7e]/.test(item.str);
         line.t += (gap > size * 0.25 && latin ? ' ' : '') + item.str;
         line.r = Math.max(line.r, x + item.width);
+        line.hi = Math.max(line.hi ?? top, top);
+        line.lo = Math.min(line.lo ?? bottom, bottom);
       }
       const rounded = Math.round(size * 10) / 10;
       sizes.set(rounded, (sizes.get(rounded) ?? 0) + item.str.length);
+      const visible = item.str.replace(/\s+/g, '').length;
+      const kind = kindOf(item.fontName);
+      chars += visible;
+      if (kind === 'mono') mono += visible;
+      else if (kind === 'math') math += visible;
     }
     if (item.hasEOL && line) finish();
   }
   finish();
   return out.filter((entry) => entry.t.trim());
+}
+
+type Matrix = [number, number, number, number, number, number];
+const multiply = (m: Matrix, n: number[]): Matrix => [
+  m[0] * n[0]! + m[2] * n[1]!,
+  m[1] * n[0]! + m[3] * n[1]!,
+  m[0] * n[2]! + m[2] * n[3]!,
+  m[1] * n[2]! + m[3] * n[3]!,
+  m[0] * n[4]! + m[2] * n[5]! + m[4],
+  m[1] * n[4]! + m[3] * n[5]! + m[5],
+];
+const apply = (m: Matrix, x: number, y: number): [number, number] => [
+  m[0] * x + m[2] * y + m[4],
+  m[1] * x + m[3] * y + m[5],
+];
+
+/**
+ * The boxes the page draws, in page units: images, embedded figures and painted
+ * paths (a table's rules, a plot's lines, a code block's background). Painted in
+ * white or covering the page, a shape is background, and left out.
+ */
+export function drawn(
+  operators: { fnArray: number[]; argsArray: unknown[][] },
+  OPS: Record<string, number>,
+  pageArea: number,
+): Array<[number, number, number, number, number]> {
+  const out: Array<[number, number, number, number, number]> = [];
+  const stack: Matrix[] = [];
+  let ctm: Matrix = [1, 0, 0, 1, 0, 0];
+  let fill = '#000000';
+  const box = (corners: Array<[number, number]>, kind: number) => {
+    const xs = corners.map(([x]) => x),
+      ys = corners.map(([, y]) => y);
+    const x0 = Math.min(...xs),
+      x1 = Math.max(...xs),
+      y0 = Math.min(...ys),
+      y1 = Math.max(...ys);
+    if (!Number.isFinite(x0 + x1 + y0 + y1) || (x1 - x0) * (y1 - y0) > pageArea * 0.8) return;
+    if (x1 - x0 < 1 && y1 - y0 < 1) return;
+    const r = (v: number) => Math.round(v * 10) / 10;
+    out.push([r(x0), r(y0), r(x1), r(y1), kind]);
+  };
+  const square = (m: Matrix) => [apply(m, 0, 0), apply(m, 1, 0), apply(m, 0, 1), apply(m, 1, 1)];
+  const images = new Set(
+    [
+      'paintImageXObject',
+      'paintInlineImageXObject',
+      'paintImageMaskXObject',
+      'paintImageXObjectRepeat',
+      'paintSolidColorImageMask',
+      'paintInlineImageXObjectGroup',
+      'paintImageMaskXObjectGroup',
+    ].map((name) => OPS[name]),
+  );
+  operators.fnArray.forEach((fn, index) => {
+    const args = operators.argsArray[index] ?? [];
+    if (fn === OPS.save) stack.push(ctm);
+    else if (fn === OPS.restore) ctm = stack.pop() ?? ctm;
+    else if (fn === OPS.transform) ctm = multiply(ctm, args as number[]);
+    else if (fn === OPS.setFillRGBColor) fill = String(args[0] ?? fill).toLowerCase();
+    else if (fn === OPS.paintFormXObjectBegin) {
+      stack.push(ctm);
+      if (Array.isArray(args[0]) || ArrayBuffer.isView(args[0]))
+        ctm = multiply(ctm, Array.from(args[0] as ArrayLike<number>));
+      const bbox = args[1] as ArrayLike<number> | null;
+      if (bbox && bbox.length === 4)
+        box(
+          [
+            apply(ctm, bbox[0]!, bbox[1]!),
+            apply(ctm, bbox[2]!, bbox[1]!),
+            apply(ctm, bbox[0]!, bbox[3]!),
+            apply(ctm, bbox[2]!, bbox[3]!),
+          ],
+          1,
+        );
+    } else if (fn === OPS.paintFormXObjectEnd) ctm = stack.pop() ?? ctm;
+    else if (images.has(fn)) box(square(ctm), 0);
+    else if (fn === OPS.constructPath) {
+      const paint = args[0] as number;
+      const minMax = args[2] as ArrayLike<number> | undefined;
+      // A clipping path is not drawn, and a white fill is a page's background.
+      if (paint === OPS.endPath || !minMax || minMax.length < 4) return;
+      const filled = paint === OPS.fill || paint === OPS.eoFill;
+      if (filled && fill === '#ffffff') return;
+      box(
+        [
+          apply(ctm, minMax[0]!, minMax[1]!),
+          apply(ctm, minMax[2]!, minMax[1]!),
+          apply(ctm, minMax[0]!, minMax[3]!),
+          apply(ctm, minMax[2]!, minMax[3]!),
+        ],
+        filled ? 2 : 3,
+      );
+    }
+  });
+  return out;
 }
 
 async function destination(

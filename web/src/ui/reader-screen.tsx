@@ -24,6 +24,7 @@ import { attachGestures } from './gestures.ts';
 import { READOUT_FIELDS, type AppSettings } from '../store/settings.ts';
 import { createStagedDoc, isStagedKind, windowIndexOf } from '../formats/windowed.ts';
 import { pdfPageOf, pdfSectionId } from '../formats/pdf.ts';
+import { PdfRegionPainter } from '../formats/pdf-regions.ts';
 import type { BookDoc } from '../formats/types.ts';
 import type { ContentItem, TocEntry } from '../api/types.ts';
 
@@ -127,6 +128,8 @@ interface LoadedBook {
  */
 export class ReaderScreen {
   private pdfLoading: AbortController | null = null;
+  /** Draws a text-mode PDF's figures, tables and formulas from the PDF itself. */
+  private pdfRegions: PdfRegionPainter | null = null;
   readonly element: HTMLDivElement;
   private readonly stage: HTMLDivElement;
   private readonly ui: Root;
@@ -680,6 +683,8 @@ export class ReaderScreen {
   async open(book: Book, at = ''): Promise<void> {
     this.pdfLoading?.abort();
     this.doc?.pdf?.dispose();
+    this.pdfRegions?.dispose();
+    this.pdfRegions = null;
     const pdfLoading = new AbortController();
     this.pdfLoading = pdfLoading;
     this.closeAlternatives();
@@ -721,6 +726,14 @@ export class ReaderScreen {
       if (book.format === 'pdf') {
         const content = this.manifest.content;
         this.patch({ pdfMode: content?.kind === 'reflowable' || content?.notice ? 'enhanced' : 'pdfjs' });
+        if (content?.kind === 'reflowable')
+          this.pdfRegions = new PdfRegionPainter(async (signal) => {
+            // The downloaded file when there is one; otherwise byte ranges, as the pages mode reads.
+            const cached = await this.publicationCache.resource(book.id, OFFLINE_FILE);
+            const source = cached?.byteLength ? cached : await this.options.api.pdfSource(book.id, { signal });
+            const { openPdf } = await import('../formats/pdf-renderer.ts');
+            return (await openPdf(source, signal)).renderer;
+          });
       }
       if (token !== this.loadingToken) return;
       const storedOverrides = (await this.publicationCache.overrides(book.id)) ?? emptyOverrides();
@@ -978,6 +991,8 @@ export class ReaderScreen {
   dispose(): void {
     this.pdfLoading?.abort();
     this.doc?.pdf?.dispose();
+    this.pdfRegions?.dispose();
+    this.pdfRegions = null;
     this.themeOff?.();
     this.closeAlternatives();
     this.chapterRefresh?.abort();
@@ -1762,6 +1777,7 @@ export class ReaderScreen {
       },
       transformText: (root, sectionId) => {
         applyCorrections(root, sectionId, this.overrides);
+        void this.pdfRegions?.paint(root);
       },
       container: this.stage,
       doc,

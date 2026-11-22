@@ -8,6 +8,7 @@ export const openPdf = vi.fn(async () => ({
       canvas.setAttribute('aria-label', `第 ${page} 页`);
       container.append(canvas);
     }),
+    renderRegion: vi.fn(async () => new Blob(['png'], { type: 'image/png' })),
     pageText: vi.fn(async (page: number) => (page === 2 ? '第二页里有要找的词。' : `第 ${page} 页的文字。`)),
     outline: vi.fn(async () => [
       { title: '序', page: 1, depth: 0 },

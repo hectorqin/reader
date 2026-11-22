@@ -15,7 +15,7 @@
  */
 
 /** Bump when the extracted shape or the structuring rules change: cached results are keyed by it. */
-export const PDF_TEXT_VERSION = 2;
+export const PDF_TEXT_VERSION = 4;
 
 /** One line of text on a page, in PDF units (origin bottom-left). */
 export interface PdfLine {
@@ -26,11 +26,22 @@ export interface PdfLine {
   y: number;
   r: number;
   s: number;
+  /** Share of the line set in a code font (0–1); absent when none. */
+  m?: number;
+  /** Share of the line set in a mathematics font (0–1); absent when none. */
+  f?: number;
+  /** The line's ink, top and bottom (ascenders, descenders, raised and lowered parts). */
+  hi?: number;
+  lo?: number;
 }
+/** A drawn box: x0, y0, x1, y1, and what drew it — 0 image, 1 embedded figure, 2 filled shape, 3 stroked line. */
+export type PdfGraphic = [number, number, number, number, number];
 export interface PdfPage {
   w: number;
   h: number;
   lines: PdfLine[];
+  /** What the page draws besides text; absent when nothing. */
+  g?: PdfGraphic[];
 }
 /** A bookmark, resolved to a page (0-based) and, when the bookmark says so, a height on it. */
 export interface PdfOutlineEntry {
@@ -96,7 +107,6 @@ export function buildPdfBook(text: PdfText): PdfBook {
     }
   }
   const lineGap = median(gaps) || body * 1.4;
-
   // Where each bookmark lands: the first line at or below its height on its page.
   const outline = text.outline.filter((entry) => entry.page >= 0 && entry.page < pages.length && entry.title.trim());
   const chapterLevel = pickChapterLevel(outline);
@@ -113,7 +123,8 @@ export function buildPdfBook(text: PdfText): PdfBook {
   const chapters: Array<{ title: string; page: number; blocks: Block[] }> = [];
   const placed: Array<{ index: number; entry: PdfOutlineEntry; chapter: number; anchor: string }> = [];
   let current: Block | null = null;
-  let previous: { line: PdfLine; page: number; right: number } | null = null;
+  // `row` is the line a run of split-off pieces belongs to: their shared baseline.
+  let previous: { line: PdfLine; page: number; right: number; row: PdfLine } | null = null;
   // A page marker goes where a page begins in the text, once per page and chapter.
   let marked = 0;
   const pageMark = (page: number): Part[] => {
@@ -144,16 +155,31 @@ export function buildPdfBook(text: PdfText): PdfBook {
       const last = Math.min(pages.length, pageIndex + PAGES_PER_CHAPTER);
       startChapter(last - pageIndex === 1 ? `第 ${pageIndex + 1} 页` : `第 ${pageIndex + 1}–${last} 页`, pageIndex + 1);
     }
-    if (!page.lines.length) {
-      flush();
-      chapter().blocks.push({ kind: 'note', parts: [], size: body, page: pageIndex + 1 });
-      marked = pageIndex + 1;
-      previous = null;
-      return;
+    // Figures, tables and formulas are drawn by the reader from the page itself; each
+    // takes the place in the text of the first line it covers. Code stays text.
+    const { regions, code } = findRegions(page, pageIndex + 1, body, left, right);
+    const absorbed = new Set(regions.flatMap((region) => [...region.lines]));
+    const at = new Map<number, PdfRegion[]>();
+    const tail: PdfRegion[] = [];
+    for (const region of regions) {
+      if (region.anchor >= 0) at.set(region.anchor, [...(at.get(region.anchor) ?? []), region]);
+      else tail.push(region);
     }
+    const place = (region: PdfRegion) => {
+      flush();
+      chapter().blocks.push({
+        kind: 'region',
+        parts: [...pageMark(pageIndex + 1)],
+        size: body,
+        page: pageIndex + 1,
+        region,
+      });
+      previous = null;
+    };
     page.lines.forEach((line, lineIndex) => {
       const here = marks.get(`${pageIndex}:${lineIndex}`) ?? [];
-      if (!here.length && notes.has(line)) return;
+      for (const region of at.get(lineIndex) ?? []) place(region);
+      if (!here.length && (absorbed.has(line) || notes.has(line))) return;
       const opening = byOutline ? here.find((mark) => mark.entry.level === chapterLevel) : undefined;
       if (opening) startChapter(opening.entry.title.trim(), pageIndex + 1);
       const prev = previous;
@@ -165,15 +191,39 @@ export function buildPdfBook(text: PdfText): PdfBook {
       const indented = line.x > left + line.s * 0.9;
       const prevShort = prev !== null && prev.line.r < prev.right - prev.line.s * 1.5;
       const open = current as Block | null;
+      // A code block that runs on to the next page keeps its stragglers (a closing brace).
+      const isCode = (code.has(line) || (open?.kind === 'code' && straggler(line))) && !heading;
+      // A code block runs on line by line: its lines are short and indented on purpose.
+      const continuesCode =
+        open?.kind === 'code' && isCode && !here.length && !(prev && !newPage && prev.line.y - line.y > lineGap * 2.5);
+      if (continuesCode) {
+        if (newPage) open.parts.push(...pageMark(pageIndex + 1));
+        open.code!.push(line);
+        previous = { line, page: pageIndex, right, row: line };
+        return;
+      }
+      // The rest of a line pdf.js split off (a raised or lowered part of an inline
+      // formula) continues the line it sits beside, whatever its size or indent.
+      const sameRow =
+        prev !== null &&
+        !newPage &&
+        open?.kind === 'p' &&
+        !isCode &&
+        !here.length &&
+        Math.abs(prev.row.y - line.y) < prev.row.s * 1.1 &&
+        line.x >= prev.line.r - line.s;
       const breaks =
-        open === null ||
-        here.length > 0 ||
-        heading !== (open.kind === 'h') ||
-        Math.abs(line.s - open.size) > open.size * 0.12 ||
-        (!newPage && prev !== null && prev.line.y - line.y > lineGap * 1.5) ||
-        indented ||
-        prevShort ||
-        (heading && newPage);
+        !sameRow &&
+        (open === null ||
+          isCode ||
+          open.kind === 'code' ||
+          here.length > 0 ||
+          heading !== (open.kind === 'h') ||
+          Math.abs(line.s - open.size) > open.size * 0.12 ||
+          (!newPage && prev !== null && prev.line.y - line.y > lineGap * 1.5) ||
+          indented ||
+          prevShort ||
+          (heading && newPage));
       if (breaks) {
         flush();
         chapter();
@@ -183,19 +233,28 @@ export function buildPdfBook(text: PdfText): PdfBook {
           if (anchor) anchors.push({ anchor });
           placed.push({ index: mark.index, entry: mark.entry, chapter: chapters.length - 1, anchor });
         }
-        current = {
-          kind: heading ? 'h' : 'p',
-          parts: [...anchors, ...pageMark(pageIndex + 1), line.t.trim()],
-          size: line.s,
-          page: pageIndex + 1,
-          ...(titled ? { tag: titled.entry.level <= chapterLevel ? ('h2' as const) : ('h3' as const) } : {}),
-        };
+        current = isCode
+          ? {
+              kind: 'code',
+              parts: [...anchors, ...pageMark(pageIndex + 1)],
+              size: line.s,
+              page: pageIndex + 1,
+              code: [line],
+            }
+          : {
+              kind: heading ? 'h' : 'p',
+              parts: [...anchors, ...pageMark(pageIndex + 1), line.t.trim()],
+              size: line.s,
+              page: pageIndex + 1,
+              ...(titled ? { tag: titled.entry.level <= chapterLevel ? ('h2' as const) : ('h3' as const) } : {}),
+            };
       } else {
         if (newPage) open!.parts.push(...pageMark(pageIndex + 1));
         join(open!, line.t.trim());
       }
-      previous = { line, page: pageIndex, right };
+      previous = { line, page: pageIndex, right, row: sameRow ? prev!.row : line };
     });
+    for (const region of tail) place(region);
   });
   flush();
   const last = chapters[chapters.length - 1];
@@ -225,7 +284,10 @@ type Part = string | { page: number } | { anchor: string };
 interface Block {
   /** A heading's tag, when a bookmark decided it rather than the font size. */
   tag?: 'h2' | 'h3';
-  kind: 'p' | 'h' | 'note';
+  kind: 'p' | 'h' | 'code' | 'region';
+  /** A code block's lines, kept apart so their indentation can be recovered. */
+  code?: PdfLine[];
+  region?: PdfRegion;
   parts: Part[];
   size: number;
   page: number;
@@ -253,10 +315,20 @@ function join(block: Block, text: string): void {
 function chapterHtml(title: string, blocks: Block[], body: number): string {
   const out: string[] = [];
   for (const block of blocks) {
-    if (block.kind === 'note') {
-      out.push(
-        `<p class="pdf-no-text" id="pdf-page-${block.page}" data-page="${block.page}">第 ${block.page} 页没有可提取的文字（可能是插图或扫描页），可切换到「原版页面」查看。</p>`,
-      );
+    const marks = block.parts
+      .filter((part): part is { page: number } | { anchor: string } => typeof part !== 'string')
+      .map((part) =>
+        'page' in part
+          ? `<span class="pdf-page" id="pdf-page-${part.page}" data-page="${part.page}"></span>`
+          : `<span id="${part.anchor}"></span>`,
+      )
+      .join('');
+    if (block.kind === 'region') {
+      out.push(marks + regionHtml(block.region!));
+      continue;
+    }
+    if (block.kind === 'code') {
+      out.push(`${marks}<pre class="pdf-code"><code>${escapeHtml(codeText(block.code!))}</code></pre>`);
       continue;
     }
     const inner = block.parts
@@ -272,7 +344,282 @@ function chapterHtml(title: string, blocks: Block[], body: number): string {
     if (block.kind === 'h') out.push(`<${tag}>${inner}</${tag}>`);
     else out.push(`<p>${inner}</p>`);
   }
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${escapeHtml(title)}</title></head><body>${out.join('\n')}</body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>${escapeHtml(title)}</title><style>${CHAPTER_STYLE}</style></head><body>${out.join('\n')}</body></html>`;
+}
+
+/**
+ * How the reader shows what the server cannot: a figure, a table or a formula is a
+ * placeholder the client fills by drawing that part of the page with PDF.js
+ * (`data-page` and `data-box`, in page units). Its width and height are set now, so
+ * the page is laid out once and does not move when the drawing arrives.
+ */
+const CHAPTER_STYLE = [
+  'figure.pdf-region{margin:1em auto;max-width:100%}',
+  'figure.pdf-region[data-kind="formula"]{margin:.5em auto}',
+  'figure.pdf-region img{display:block;width:100%;height:auto;background:#fff;border-radius:2px}',
+  'figure.pdf-region[data-state="unavailable"]::after{content:attr(data-unavailable);display:block;font-size:.85em;opacity:.7;text-align:center}',
+  'pre.pdf-code{white-space:pre-wrap;overflow-wrap:anywhere;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.86em;line-height:1.5;padding:.6em .8em;border-radius:4px;background:rgba(127,127,127,.12)}',
+].join('');
+
+const KIND_NAMES: Record<PdfRegion['kind'], string> = { figure: '插图', table: '表格', formula: '公式' };
+
+function regionHtml(region: PdfRegion): string {
+  const [x0, y0, x1, y1] = region.box;
+  const label = `第 ${region.page} 页的${KIND_NAMES[region.kind]}${region.text ? `：${region.text.slice(0, 300)}` : ''}`;
+  return (
+    `<figure class="pdf-region" data-kind="${region.kind}" data-page="${region.page}" data-box="${x0},${y0},${x1},${y1}" style="width:${region.width}em">` +
+    `<img alt="${escapeHtml(label)}" width="${Math.round((x1 - x0) * 2)}" height="${Math.round((y1 - y0) * 2)}"/></figure>`
+  );
+}
+
+/** A code block's lines, indented as they were set: one space per half em of offset from the block's left. */
+function codeText(lines: PdfLine[]): string {
+  const left = Math.min(...lines.map((line) => line.x));
+  return lines
+    .map((line) => ' '.repeat(Math.max(0, Math.round((line.x - left) / (line.s * 0.5)))) + line.t.replace(/\s+$/, ''))
+    .join('\n');
+}
+
+/** A figure, a table or a display formula: drawn from the page rather than read as text. */
+export interface PdfRegion {
+  kind: 'figure' | 'table' | 'formula';
+  /** 1-based page. */
+  page: number;
+  /** x0, y0, x1, y1 in page units, origin bottom-left. */
+  box: [number, number, number, number];
+  /** The text inside, as a description. */
+  text: string;
+  /** Width in ems of the book's body text, so the drawing scales with the reader's font size. */
+  width: number;
+  /** The first line it covers (index on the page), where it goes in the text; -1 when it covers none. */
+  anchor: number;
+  lines: Set<PdfLine>;
+}
+
+type Box = [number, number, number, number];
+const CAPTION = /^\s*(?:表|table|tab\.)\s*[\d一二三四五六七八九十ivxA-Z]/i;
+
+/**
+ * Where a page's figures, tables, formulas and code are.
+ *
+ * - **Figures**: images, embedded figures and drawn shapes, merged where they touch.
+ *   A shape behind code lines is a code block's background, not a figure; a shape
+ *   behind most of the page's text is the page's background.
+ * - **Tables**: horizontal rules of the same width, one under another — a three-line
+ *   table has three, a ruled one more. A caption between two such rules starts a
+ *   new table.
+ * - **Formulas**: lines set mostly in a mathematics font and standing apart from
+ *   the text (indented, centred or short), with the fraction bars beside them.
+ * - **Code**: lines set mostly in a code font. They stay text.
+ */
+export function findRegions(
+  page: PdfPage,
+  pageNumber: number,
+  body: number,
+  left: number,
+  right: number,
+): { regions: PdfRegion[]; code: Set<PdfLine> } {
+  // Code is judged by the run, not the line: a listing's line numbers and a lone
+  // closing brace are set in a text font, and a sentence that names a file in a code
+  // font is still a sentence. A run of lines partly in a code font is code when, on
+  // average, most of it is; a lone line only when nearly all of it is.
+  const code = new Set<PdfLine>();
+  const codeish = (line: PdfLine) => line.s <= body * 1.3 && ((line.m ?? 0) >= 0.6 || straggler(line));
+  let runStart = 0;
+  page.lines.forEach((line, index) => {
+    const next = page.lines[index + 1];
+    const continues =
+      next && codeish(line) && codeish(next) && Math.abs(line.y - next.y) <= Math.max(line.s, next.s) * 3;
+    if (continues) return;
+    const run = page.lines.slice(runStart, index + 1).filter(codeish);
+    const mean = run.reduce((sum, item) => sum + (item.m ?? 0), 0) / Math.max(1, run.length);
+    if (run.length && mean >= 0.6 && (run.length >= 2 || (run[0]!.m ?? 0) >= 0.85))
+      for (const item of run) code.add(item);
+    runStart = index + 1;
+  });
+  const graphics = page.g ?? [];
+  const width = (b: Box) => b[2] - b[0],
+    height = (b: Box) => b[3] - b[1],
+    area = (b: Box) => width(b) * height(b);
+  const ruleH = (b: number[]) => b[3]! - b[1]! < 2 && b[2]! - b[0]! >= 20;
+  const ruleV = (b: number[]) => b[2]! - b[0]! < 2 && b[3]! - b[1]! >= 20;
+  const pageArea = page.w * page.h;
+  const inside = (line: PdfLine, b: Box) =>
+    line.y >= b[1] - 1 && line.y <= b[3] + 1 && (line.x + line.r) / 2 >= b[0] - 2 && (line.x + line.r) / 2 <= b[2] + 2;
+
+  // Figures.
+  const shapes: Box[] = graphics
+    .filter((g) => !ruleH(g) && !ruleV(g) && (g[4] <= 1 || (g[2] - g[0] >= 4 && g[3] - g[1] >= 4)))
+    .map((g) => [g[0], g[1], g[2], g[3]]);
+  const figures = merge(shapes, 8).filter((b) => {
+    const covered = page.lines.filter((line) => inside(line, b));
+    // A shaded box behind code is the code block's background: every line on it is code
+    // (a comment in another script included), and the box is not a figure.
+    if (covered.length && covered.some((line) => (line.m ?? 0) >= 0.6 && line.s <= body * 1.3)) {
+      const share = covered.filter((line) => (line.m ?? 0) >= 0.6 && line.s <= body * 1.3).length / covered.length;
+      if (share >= 0.5) {
+        for (const line of covered) code.add(line);
+        return false;
+      }
+    }
+    if (width(b) < 12 || height(b) < 12 || area(b) < 400) return false;
+    return !(area(b) > pageArea * 0.7 && covered.length > 5);
+  });
+
+  // Tables.
+  const rules = graphics
+    .filter(ruleH)
+    .filter((g) => !figures.some((b) => g[1] >= b[1] - 2 && g[1] <= b[3] + 2 && g[0] >= b[0] - 2 && g[2] <= b[2] + 2))
+    .sort((a, b) => b[1] - a[1]);
+  const groups: number[][][] = [];
+  for (const rule of rules) {
+    const group = groups[groups.length - 1];
+    const last = group?.[group.length - 1];
+    const captionBetween =
+      last && page.lines.some((line) => line.y < last[1]! && line.y > rule[1]! && CAPTION.test(line.t));
+    if (
+      group &&
+      last &&
+      Math.abs(last[0]! - rule[0]!) < 6 &&
+      Math.abs(last[2]! - rule[2]!) < 6 &&
+      last[1]! - rule[1]! <= 400 &&
+      !captionBetween
+    )
+      group.push(rule);
+    else groups.push([rule]);
+  }
+  const tables: Box[] = groups
+    .filter((group) => group.length >= 2)
+    .map((group): Box => [
+      Math.min(...group.map((g) => g[0]!)) - 2,
+      group[group.length - 1]![1]! - 2,
+      Math.max(...group.map((g) => g[2]!)) + 2,
+      group[0]![1]! + 2,
+    ])
+    .filter((b) => page.lines.some((line) => line.y > b[1] && line.y < b[3]));
+
+  const regions: PdfRegion[] = [];
+  const add = (kind: PdfRegion['kind'], box: Box, lines: PdfLine[]) => {
+    const order = new Map(page.lines.map((line, index) => [line, index]));
+    const sorted = [...lines].sort((a, b) => order.get(a)! - order.get(b)!);
+    let anchor = sorted.length ? order.get(sorted[0]!)! : -1;
+    // Nothing of the text inside (a photograph): it goes before the first line below it.
+    if (anchor < 0) anchor = page.lines.findIndex((line) => line.y < box[1]);
+    const r = (v: number) => Math.round(v * 10) / 10;
+    regions.push({
+      kind,
+      page: pageNumber,
+      box: [r(box[0]), r(box[1]), r(box[2]), r(box[3])],
+      text: sorted.map((line) => line.t.trim()).join(' '),
+      width: Math.round((width(box) / Math.max(1, body)) * 100) / 100,
+      anchor,
+      lines: new Set(sorted),
+    });
+  };
+  for (const box of figures)
+    add(
+      'figure',
+      box,
+      page.lines.filter((line) => inside(line, box)),
+    );
+  for (const box of tables)
+    add(
+      'table',
+      box,
+      page.lines.filter((line) => inside(line, box) && !regions.some((region) => region.lines.has(line))),
+    );
+
+  // Formulas.
+  const taken = new Set(regions.flatMap((region) => [...region.lines]));
+  // A display formula has its line to itself: the raised tail of an inline formula
+  // shares its baseline with the sentence it is part of.
+  const alone = (line: PdfLine) =>
+    !page.lines.some(
+      (other) =>
+        other !== line &&
+        (other.f ?? 0) < 0.5 &&
+        !code.has(other) &&
+        Math.abs(other.y - line.y) < Math.max(other.s, line.s) * 0.6 &&
+        (other.r < line.x + line.s || other.x > line.r - line.s) &&
+        other.t.trim().length > 3,
+    );
+  const display = page.lines.filter(
+    (line) =>
+      !taken.has(line) &&
+      !code.has(line) &&
+      (line.f ?? 0) >= 0.5 &&
+      (line.x > left + line.s || line.r - line.x < (right - left) * 0.85) &&
+      alone(line),
+  );
+  const runs: PdfLine[][] = [];
+  for (const line of [...display].sort((a, b) => b.y - a.y)) {
+    const run = runs[runs.length - 1];
+    const last = run?.[run.length - 1];
+    if (run && last && last.y - line.y <= Math.max(last.s, line.s) * 2.6) run.push(line);
+    else runs.push([line]);
+  }
+  for (const run of runs) {
+    const box: Box = [
+      Math.min(...run.map((line) => line.x)),
+      Math.min(...run.map((line) => line.lo ?? line.y - line.s * 0.25)),
+      Math.max(...run.map((line) => line.r)),
+      Math.max(...run.map((line) => line.hi ?? line.y + line.s * 0.85)),
+    ];
+    // Fraction bars and radicals drawn beside the symbols belong to the formula.
+    for (const g of graphics)
+      if (ruleH(g) || (g[3] - g[1] < 2 && g[2] - g[0] >= 2))
+        if (g[1] >= box[1] - 2 && g[1] <= box[3] + 2 && g[2] >= box[0] - 2 && g[0] <= box[2] + 2) {
+          box[0] = Math.min(box[0], g[0]);
+          box[2] = Math.max(box[2], g[2]);
+        }
+    const padded: Box = [box[0] - 2, box[1] - 2, box[2] + 2, box[3] + 2];
+    // An operator set in a text font ("lim", "max") inside the formula's box, or just
+    // beside it on its baseline, is part of it.
+    const within = page.lines.filter(
+      (line) =>
+        !taken.has(line) &&
+        !run.includes(line) &&
+        line.y >= padded[1] &&
+        line.y <= padded[3] &&
+        ((line.x >= padded[0] - 1 && line.r <= padded[2] + 1) ||
+          (line.t.trim().length <= 6 && line.r >= padded[0] - line.s && line.x <= padded[2] + line.s)),
+    );
+    for (const line of within) {
+      padded[0] = Math.min(padded[0], line.x - 2);
+      padded[2] = Math.max(padded[2], line.r + 2);
+      padded[1] = Math.min(padded[1], (line.lo ?? line.y - line.s * 0.25) - 2);
+      padded[3] = Math.max(padded[3], (line.hi ?? line.y + line.s * 0.85) + 2);
+    }
+    add('formula', padded, [...run, ...within]);
+  }
+  return { regions, code };
+}
+
+/** A short line partly in a code font — a listing's closing brace with its line number. */
+function straggler(line: PdfLine): boolean {
+  const flat = line.t.replace(/\s+/g, '');
+  return ((line.m ?? 0) >= 0.25 && flat.length <= 12) || ((line.m ?? 0) > 0 && /^\d{0,5}[{}()[\];,%]+$/.test(flat));
+}
+
+/** Boxes merged where they overlap or come within `gap` of each other. */
+function merge(boxes: Box[], gap: number): Box[] {
+  const out = boxes.map((b): Box => [...b]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 0; i < out.length; i += 1)
+      for (let j = i + 1; j < out.length; j += 1) {
+        const a = out[i]!,
+          b = out[j]!;
+        if (a[0] - gap <= b[2] && b[0] - gap <= a[2] && a[1] - gap <= b[3] && b[1] - gap <= a[3]) {
+          out[i] = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
+          out.splice(j, 1);
+          changed = true;
+          j -= 1;
+        }
+      }
+  }
+  return out;
 }
 
 function escapeHtml(text: string): string {

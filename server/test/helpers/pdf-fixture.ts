@@ -8,6 +8,8 @@ export interface FixtureLine {
   x?: number;
   y: number;
   size?: number;
+  /** Set in Courier, a code font, instead of Helvetica. */
+  mono?: boolean;
 }
 export interface FixtureBookmark {
   title: string;
@@ -20,7 +22,11 @@ export interface FixtureBookmark {
 
 const escape = (text: string) => text.replace(/[\\()]/g, (c) => `\\${c}`);
 
-export function buildPdf(pages: FixtureLine[][], outline: FixtureBookmark[] = []): Buffer {
+/**
+ * `drawings[i]` is raw drawing operators for page i (e.g. `0 0 0 rg 100 400 200 150 re f`
+ * fills a box; `0.5 w 100 300 m 400 300 l S` draws a rule).
+ */
+export function buildPdf(pages: FixtureLine[][], outline: FixtureBookmark[] = [], drawings: string[] = []): Buffer {
   const objects: string[] = [];
   const add = (body: string) => {
     objects.push(body);
@@ -29,18 +35,23 @@ export function buildPdf(pages: FixtureLine[][], outline: FixtureBookmark[] = []
   const catalog = add('');
   const pagesId = add('');
   const font = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
+  const mono = add('<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>');
   const pageIds: number[] = [];
-  for (const lines of pages) {
-    const content = lines
-      .map((line) => `BT /F1 ${line.size ?? 11} Tf ${line.x ?? 72} ${line.y} Td (${escape(line.text)}) Tj ET`)
-      .join('\n');
+  pages.forEach((lines, index) => {
+    const content = [
+      drawings[index] ?? '',
+      ...lines.map(
+        (line) =>
+          `BT /${line.mono ? 'F2' : 'F1'} ${line.size ?? 11} Tf ${line.x ?? 72} ${line.y} Td (${escape(line.text)}) Tj ET`,
+      ),
+    ].join('\n');
     const contentId = add(`<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`);
     pageIds.push(
       add(
-        `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${font} 0 R >> >> /Contents ${contentId} 0 R >>`,
+        `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${font} 0 R /F2 ${mono} 0 R >> >> /Contents ${contentId} 0 R >>`,
       ),
     );
-  }
+  });
   objects[pagesId - 1] =
     `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`;
 

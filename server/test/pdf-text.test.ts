@@ -135,7 +135,7 @@ test('one top-level bookmark wrapping the book makes its children the chapters',
   );
 });
 
-test('without bookmarks, chapters are runs of pages; a page with no text says so', () => {
+test('without bookmarks, chapters are runs of pages; a blank page adds nothing', () => {
   const pages = Array.from({ length: PAGES_PER_CHAPTER + 3 }, (_, index) =>
     index === 4
       ? { w: 595, h: 842, lines: [] }
@@ -146,7 +146,130 @@ test('without bookmarks, chapters are runs of pages; a page with no text says so
     book.chapters.map((chapter) => chapter.title),
     [`第 1–${PAGES_PER_CHAPTER} 页`, `第 ${PAGES_PER_CHAPTER + 1}–${PAGES_PER_CHAPTER + 3} 页`],
   );
-  assert.match(book.chapters[0]!.html, /<p class="pdf-no-text" id="pdf-page-5" data-page="5">第 5 页没有可提取的文字/);
+  assert.doesNotMatch(book.chapters[0]!.html, /pdf-page-5/);
+});
+
+/** A region's placeholder: kind, page and box. */
+const regions = (html: string) =>
+  [...html.matchAll(/<figure class="pdf-region" data-kind="(\w+)" data-page="(\d+)" data-box="([^"]+)"/g)].map((m) => [
+    m[1],
+    Number(m[2]),
+    m[3],
+  ]);
+
+test('a drawing becomes a figure in the text where it sits, taking the labels inside it along', () => {
+  const book = buildPdfBook({
+    version: 1,
+    outline: [],
+    pages: [
+      {
+        ...page([
+          '图片前面的一段正文写满了整整一行。',
+          { t: '坐标轴', x: 200, y: 600, s: 9 },
+          { t: '图 1 示意图', x: 230, r: 330, y: 500 },
+          '图片后面的一段正文也写满一整行。',
+        ]),
+        g: [
+          [150, 520, 450, 700, 1],
+          [160, 530, 440, 690, 3],
+        ],
+      },
+    ],
+  });
+  const html = book.chapters[0]!.html;
+  assert.deepEqual(regions(html), [['figure', 1, '150,520,450,700']]);
+  assert.doesNotMatch(html, /<p>坐标轴<\/p>/);
+  assert.match(html, /alt="第 1 页的插图：坐标轴"/);
+  // In order: the text before, the figure, its caption, the text after.
+  assert.ok(
+    html.indexOf('图片前面') < html.indexOf('<figure') && html.indexOf('<figure') < html.indexOf('图 1 示意图'),
+  );
+  // Sized in ems of the body text (300 units at 11 a line), so it grows with the reader's font.
+  assert.match(html, /style="width:27.27em"><img alt="[^"]*" width="600" height="360"\/>/);
+});
+
+test('rules of one width make a table; a caption between them starts the next table', () => {
+  const rule = (y: number): [number, number, number, number, number] => [150, y, 450, y + 0.4, 3];
+  const book = buildPdfBook({
+    version: 1,
+    outline: [],
+    pages: [
+      {
+        ...page([
+          { t: '表 1 第一张表', x: 250, y: 740 },
+          { t: '列一 列二', x: 200, y: 715 },
+          { t: '甲 乙', x: 200, y: 690 },
+          { t: '表 2 第二张表', x: 250, y: 640 },
+          { t: '列三 列四', x: 200, y: 615 },
+          { t: '丙 丁', x: 200, y: 590 },
+          '表格后面的正文写满了整整一行文字。',
+        ]),
+        g: [rule(730), rule(705), rule(680), rule(630), rule(605), rule(580), [72, 300, 520, 300.5, 3]],
+      },
+    ],
+  });
+  const html = book.chapters[0]!.html;
+  assert.deepEqual(
+    regions(html).map(([kind, , box]) => [kind, box]),
+    [
+      ['table', '148,678,452,732'],
+      ['table', '148,578,452,632'],
+    ],
+  );
+  // Captions stay text; the cells are drawn, not repeated as text.
+  assert.match(body(html), /<p>表 1 第一张表<\/p>/);
+  assert.doesNotMatch(html, /<p>甲 乙<\/p>/);
+});
+
+test('a displayed formula is drawn; mathematics inside a sentence stays text', () => {
+  const book = buildPdfBook({
+    version: 1,
+    outline: [],
+    pages: [
+      {
+        ...page([
+          { t: '设随机变量 𝑋 服从正态分布，记', r: 300, f: 0.2 },
+          { t: '𝑋𝑛 = 1', x: 300, r: 350, y: 776, f: 0.9 },
+          { t: 'lim', x: 220, r: 240, y: 700 },
+          { t: '𝑃(𝑋 ⩽ 𝑧) = 𝛷(𝑧) (3.4)', x: 245, r: 520, y: 700, f: 0.8, hi: 712, lo: 694 },
+          '其中 𝛷 是标准正态分布的分布函数写满一整行。',
+        ]),
+        g: [[260, 705, 300, 705.4, 3]],
+      },
+    ],
+  });
+  const html = book.chapters[0]!.html;
+  assert.deepEqual(
+    regions(html).map(([kind]) => kind),
+    ['formula'],
+  );
+  assert.match(html, /alt="第 1 页的公式：lim 𝑃\(𝑋 ⩽ 𝑧\) = 𝛷\(𝑧\) \(3\.4\)"/);
+  assert.match(body(html), /<p>设随机变量 𝑋 服从正态分布，记𝑋𝑛 = 1<\/p>/);
+});
+
+test('code keeps its lines and indentation; a shaded box behind it is not a figure', () => {
+  const book = buildPdfBook({
+    version: 1,
+    outline: [],
+    pages: [
+      {
+        ...page([
+          '下面是一段示例代码写满了整整一行文字。',
+          { t: '% 注释', x: 100, y: 700, m: 0.2 },
+          { t: 'function f() {', x: 100, y: 686, m: 1 },
+          { t: 'return 1;', x: 110, y: 672, m: 1 },
+          { t: '}', x: 100, y: 658, m: 1 },
+          // A listing's closing brace with its line number in a text font.
+          { t: '12 }', x: 100, y: 644, m: 0.33 },
+          '代码后面的正文写满了整整一行文字内容。',
+        ]),
+        g: [[95, 650, 520, 712, 2]],
+      },
+    ],
+  });
+  const html = book.chapters[0]!.html;
+  assert.deepEqual(regions(html), []);
+  assert.match(html, /<pre class="pdf-code"><code>% 注释\nfunction f\(\) \{\n  return 1;\n\}\n12 \}<\/code><\/pre>/);
 });
 
 test('a note in the margin does not split the sentence beside it; a second column is kept', () => {
@@ -272,6 +395,38 @@ test('the handler serves pages by default and chapters when asked for the text, 
   assert.equal((await handler.asset(ctx, { ref: 'document' })).contentType, 'application/pdf');
   // The extraction is kept in DATA_DIR for the next start.
   assert.equal((await readdir(join(dir, 'derived', 'pdf-text'))).filter((name) => name.endsWith('.json')).length, 1);
+});
+
+test('the worker finds what a real PDF draws, and which lines are code', async (t) => {
+  const pdf = buildPdf(
+    [
+      [
+        { text: 'A paragraph before the figure that fills its line.', y: 760 },
+        { text: 'function main() {', y: 380, mono: true },
+        { text: 'A paragraph after the code that also fills its line.', y: 340 },
+      ],
+    ],
+    [],
+    ['0 0 0 rg 150 450 300 200 re f\n0.5 w 1 1 1 RG 0 0 0 RG 150 420 m 450 420 l S'],
+  );
+  const { ctx } = await onDisk(t, pdf);
+  const { pdfTextFor } = await import('../src/indexer/formats/pdf-text-runner.ts');
+  const { text } = await pdfTextFor(ctx.absPath);
+  const graphics = text.pages[0]!.g!.map((g) => [
+    Math.round(g[0]),
+    Math.round(g[1]),
+    Math.round(g[2]),
+    Math.round(g[3]),
+    g[4],
+  ]);
+  assert.deepEqual(graphics, [
+    [150, 450, 450, 650, 2],
+    [150, 420, 450, 420, 3],
+  ]);
+  const lines = text.pages[0]!.lines;
+  assert.equal(lines.find((line) => line.t.startsWith('function'))!.m, 1);
+  assert.equal(lines.find((line) => line.t.startsWith('A paragraph before'))!.m, undefined);
+  assert.ok(lines[0]!.hi! > lines[0]!.y && lines[0]!.lo! < lines[0]!.y);
 });
 
 test('a scanned PDF asked for as text opens as pages, and says why', async (t) => {
