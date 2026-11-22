@@ -136,11 +136,13 @@ describe('the reading surface fills the screen', () => {
     const controls = rule('.tts-bar .tts-controls');
     expect(declaration(controls, 'display')).toBe('grid');
     expect(declaration(controls, 'grid-template-columns')).toBe('44px minmax(0, 1fr) 44px');
+    expect(declaration(controls, 'column-gap')).toBe('0');
     expect(declaration(rule('.tts-transport'), 'grid-column')).toBe('2');
     expect(declaration(rule('.tts-bar .tts-controls .tts-toggle'), 'width')).toBe('56px');
     expect(declaration(rule('.tts-bar .tts-controls .tts-toggle'), 'background')).toBe('var(--color-brand-text)');
     expect(declaration(rule('.tts-bar .tts-controls .tts-toggle'), 'color')).toBe('var(--color-bg)');
     expect(declaration(rule('.tts-bar .tts-controls .tts-stop'), 'grid-column')).toBe('3');
+    expect(declaration(rule('.speech-rate .segmented'), 'flex-wrap')).toBe('wrap');
   });
 
   it('uses strong primary audio controls and consistent More-sheet queue rows', () => {
@@ -155,6 +157,30 @@ describe('the reading surface fills the screen', () => {
     expect(media).toMatch(
       /\.media-audio-queue > button,[\s\S]*?\.media-audio-queue > section > button \{[\s\S]*?justify-content: flex-start;[\s\S]*?width: 100%;[\s\S]*?min-height: 44px;/,
     );
+  });
+
+  it('centers equal-width visible audio tools in the transport width with full favorite targets', () => {
+    const media = readFileSync(join(process.cwd(), 'src/features/media/styles/v2.css'), 'utf8');
+    const tools = rule('.media-screen .media-playback-options', media);
+    expect(declaration(tools, 'grid-template-columns')).toBe('none');
+    expect(declaration(tools, 'grid-auto-flow')).toBe('column');
+    expect(declaration(tools, 'grid-auto-columns')).toBe('minmax(0, 1fr)');
+    expect(declaration(rule('.media-screen .media-playback-options > [hidden]', media), 'display')).toBe('none');
+    const transport = rule('.media-screen .media-audio-bottom .media-transport', media);
+    const options = rule('.media-screen .media-audio-bottom .media-playback-options', media);
+    expect(declaration(options, 'width')).toBe(declaration(transport, 'width'));
+    expect(declaration(options, 'width')).toContain('min(100%,');
+    expect(declaration(options, 'margin-inline')).toBe('auto');
+    const favorite = rule('.media-screen .media-playback-options .media-playback-favorite > button', media);
+    expect(declaration(favorite, 'align-items')).toBe('center');
+    expect(declaration(favorite, 'width')).toBe('100%');
+    expect(Number.parseInt(declaration(favorite, 'min-height')!)).toBeGreaterThanOrEqual(44);
+    expect(
+      declaration(
+        rule('.media-screen .media-playback-options .media-playback-favorite > button[aria-pressed="true"]', media),
+        'color',
+      ),
+    ).toBe('var(--color-brand-text)');
   });
 
   it('uses the same reading geometry with chrome visible and hidden', () => {

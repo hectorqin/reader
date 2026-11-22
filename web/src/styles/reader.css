@@ -2552,13 +2552,14 @@ book-content {
 .tts-bar .tts-controls {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) 44px;
+  column-gap: 0;
 }
 .tts-transport {
   grid-column: 2;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }
 .tts-bar .tts-controls .icon-button {
   flex: none;
@@ -2585,6 +2586,9 @@ book-content {
 .tts-bar .tts-toggle svg {
   width: 24px;
   height: 24px;
+}
+.tts-bar .tts-controls .tts-restart {
+  color: var(--color-muted);
 }
 .tts-bar .tts-controls .tts-stop {
   grid-column: 3;
@@ -2616,15 +2620,6 @@ book-content {
   font-variant-numeric: tabular-nums;
   color: var(--color-muted);
 }
-.reader-screen .sheet .speech-restart {
-  width: auto;
-  align-self: flex-start;
-  min-height: 44px;
-  gap: var(--space-1);
-  margin: 0 0 var(--space-1);
-  background: var(--color-brand-soft);
-  color: var(--color-brand-text);
-}
 .speech-rate {
   display: grid;
   gap: var(--space-1);
@@ -2633,12 +2628,16 @@ book-content {
 .reader-screen .sheet .speech-rate .field {
   margin: 0;
   padding-block: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
 }
-.speech-rate .field:last-child > label {
-  display: none;
+.speech-rate .segmented {
+  flex-wrap: wrap;
 }
-.speech-rate .field:last-child > .segmented {
-  grid-column: 1 / -1;
+.speech-rate .segmented button {
+  flex: 1 0 auto;
+  min-height: 44px;
+  padding-inline: var(--space-1);
 }
 .reader-screen .sheet.speech-sheet .field {
   padding-block: 0;
@@ -2950,16 +2949,6 @@ book-content {
   margin: var(--space-2) 0 0;
   font-size: var(--text-meta);
   text-align: center;
-}
-
-/* The one action the read-aloud sheet exists for: full width, first, and tall enough to hit. */
-.speech-start {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 48px;
-  margin-bottom: var(--space-3);
 }
 
 /* ---- status ---- */

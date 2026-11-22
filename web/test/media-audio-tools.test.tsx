@@ -226,3 +226,19 @@ it('updates play and pause icons from player changes without a metadata reload',
   expect(target.toggle).toHaveBeenCalledTimes(1);
   expect(api.detail).toHaveBeenCalledTimes(1);
 });
+
+it('keeps the active favorite in an equal tool cell alongside timer and lyrics', async () => {
+  const api = {
+    detail: vi.fn().mockResolvedValue(work('song', 'track')),
+    request: vi.fn().mockResolvedValue({ favorite: true }),
+  } as unknown as MediaApi;
+  const player = { active: true, currentItemId: 'song', currentPlaylist: [] } as unknown as MediaPlayer;
+  await act(async () => render(<PlaybackControls api={api} player={player} onBack={() => {}} />, root));
+  await vi.waitFor(() =>
+    expect(root.querySelector('.media-playback-favorite button')?.getAttribute('aria-pressed')).toBe('true'),
+  );
+  const options = root.querySelector('.media-playback-options')!;
+  expect(options.children).toHaveLength(3);
+  expect(options.querySelector('.media-playback-favorite > button')?.textContent).toBe('已收藏');
+  expect(options.querySelector('.media-playback-favorite > button svg')?.getAttribute('fill')).toBe('currentColor');
+});

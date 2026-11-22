@@ -646,12 +646,7 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
           onClose={() => handlers.toggleSettings(tab)}
         >
           {tab === 'speech' ? (
-            <>
-              {state.tts.active ? (
-                <SpeechBar state={state.tts} chapterLabel={state.chapterLabel} handlers={handlers} />
-              ) : null}
-              <SpeechSettings state={state} handlers={handlers} />
-            </>
+            <SpeechSettings state={state} handlers={handlers} />
           ) : (
             <SettingsBody state={state} handlers={handlers} />
           )}
@@ -1038,16 +1033,12 @@ function SpeechSettings({ state, handlers }: { state: ChromeState; handlers: Chr
     );
   }
   const RATE_PRESETS = [0.8, 1, 1.2, 1.5, 2];
+  const rates = RATE_PRESETS.includes(state.ttsRate)
+    ? RATE_PRESETS
+    : [...RATE_PRESETS, state.ttsRate].sort((a, b) => a - b);
   return (
     <>
-      <button
-        type="button"
-        className={`button speech-start ${state.tts.active ? 'speech-restart' : 'primary'}`}
-        onClick={handlers.onSpeakFromHere}
-      >
-        {state.tts.active && <Icon name="refresh" size={18} />}
-        {state.tts.active ? '从本页重新朗读' : '从当前位置朗读'}
-      </button>
+      <SpeechBar state={state.tts} chapterLabel={state.chapterLabel} handlers={handlers} />
       {/* The engine picker only appears when there is a choice to make. One
           engine is not a setting. */}
       {state.showEngineRow ? (
@@ -1059,19 +1050,13 @@ function SpeechSettings({ state, handlers }: { state: ChromeState; handlers: Chr
         />
       ) : null}
       <div className="speech-rate">
-        <SliderRow
-          label="语速"
-          value={state.ttsRate}
-          min={0.5}
-          max={2.5}
-          step={0.1}
-          format={(value) => `${value.toFixed(1)}×`}
-          onChange={(value) => handlers.onSpeechSetting({ ttsRate: value })}
-        />
         <SegmentedRow
-          label="常用"
-          options={RATE_PRESETS.map((value) => ({ value: String(value), label: `${value.toFixed(1)}×` }))}
-          value={String(RATE_PRESETS.find((value) => Math.abs(value - state.ttsRate) < 0.05) ?? '')}
+          label="语速"
+          options={rates.map((value) => ({
+            value: String(value),
+            label: `${RATE_PRESETS.includes(value) ? value.toFixed(1) : value}×`,
+          }))}
+          value={String(state.ttsRate)}
           onChange={(value) => handlers.onSpeechSetting({ ttsRate: Number(value) })}
         />
       </div>
@@ -1154,21 +1139,42 @@ function SpeechBar({
           step={1}
           value={value}
           aria-label="朗读进度"
+          disabled={!state.active || total === 0}
           onInput={(event) => handlers.onSpeechScrub(Number((event.currentTarget as HTMLInputElement).value))}
         />
       </div>
       <div className="tts-row tts-controls">
+        <IconButton
+          label="从本页重新朗读"
+          title="从本页重新朗读"
+          icon="refresh"
+          className="tts-restart"
+          disabled={!state.active}
+          onClick={handlers.onSpeakFromHere}
+        />
         <div className="tts-transport">
-          <IconButton label="上一句" icon="step-backward" onClick={handlers.onSpeechPrevious} />
           <IconButton
-            label={playing ? '暂停朗读' : '继续朗读'}
+            label="上一句"
+            icon="step-backward"
+            disabled={!state.active}
+            onClick={handlers.onSpeechPrevious}
+          />
+          <IconButton
+            label={!state.active ? '从当前位置朗读' : playing ? '暂停朗读' : '继续朗读'}
             icon={playing ? 'pause' : 'play'}
             className="tts-toggle"
-            onClick={handlers.onSpeechToggle}
+            onClick={state.active ? handlers.onSpeechToggle : handlers.onSpeakFromHere}
           />
-          <IconButton label="下一句" icon="step-forward" onClick={handlers.onSpeechNext} />
+          <IconButton label="下一句" icon="step-forward" disabled={!state.active} onClick={handlers.onSpeechNext} />
         </div>
-        <IconButton label="停止" title="停止" icon="stop" className="tts-stop" onClick={handlers.onStopSpeech} />
+        <IconButton
+          label="停止"
+          title="停止"
+          icon="stop"
+          className="tts-stop"
+          disabled={!state.active}
+          onClick={handlers.onStopSpeech}
+        />
       </div>
     </div>
   );
