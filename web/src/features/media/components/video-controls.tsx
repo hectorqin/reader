@@ -144,8 +144,7 @@ function SubtitlePanel({ player }: { player: MediaPlayer }) {
   );
 }
 
-function SpeedOptions({ player, onDone }: { player: MediaPlayer; onDone?: () => void }) {
-  const [rate, setRate] = useState(player.playbackRate ?? 1);
+function SpeedOptions({ player, rate, onDone }: { player: MediaPlayer; rate: number; onDone?: () => void }) {
   return (
     <div className="media-video-speeds" role="group" aria-label="播放速度">
       {speeds.map((value) => (
@@ -155,7 +154,6 @@ function SpeedOptions({ player, onDone }: { player: MediaPlayer; onDone?: () => 
           aria-pressed={rate === value}
           onClick={() => {
             player.speed(value);
-            setRate(value);
             onDone?.();
           }}
         >
@@ -206,6 +204,13 @@ function ToolSheet({
 
 /** Rendered in the permanent player's controls host, alongside the live video. */
 export function VideoControls({ player, api, onBack }: { player: MediaPlayer; api: MediaApi; onBack?: () => void }) {
+  const rate = useSyncExternalStore(
+    (notify) => {
+      player.addEventListener('change', notify);
+      return () => player.removeEventListener('change', notify);
+    },
+    () => player.playbackRate ?? 1,
+  );
   const [tool, setTool] = useState<Tool | null>(null),
     [detail, setDetail] = useState<Detail | null>(null),
     [plot, setPlot] = useState(''),
@@ -399,7 +404,7 @@ export function VideoControls({ player, api, onBack }: { player: MediaPlayer; ap
                 )}
                 <button type="button" onClick={() => open('speed')}>
                   <Icon name="speed" size={18} />
-                  倍速 {speedLabel(player.playbackRate ?? 1)}
+                  倍速 {speedLabel(rate)}
                 </button>
                 <button type="button" aria-pressed={fill} onClick={() => setFill((value) => !value)}>
                   {fill ? <Icon name="fit-whole" size={18} /> : <Icon name="fit-fill" size={18} />}
@@ -487,7 +492,7 @@ export function VideoControls({ player, api, onBack }: { player: MediaPlayer; ap
           ) : tool === 'tracks' ? (
             <TrackOptions player={player} kind={tool} />
           ) : tool === 'speed' ? (
-            <SpeedOptions player={player} onDone={() => setTool(null)} />
+            <SpeedOptions player={player} rate={rate} onDone={() => setTool(null)} />
           ) : tool === 'episodes' ? (
             <>
               <p>本次播放列表 · {entries.length} 项</p>
@@ -570,8 +575,8 @@ export function VideoControls({ player, api, onBack }: { player: MediaPlayer; ap
               {entries.length > 1 && item?.kind !== 'episode' && (
                 <button onClick={() => open('episodes')}>本次播放列表 · {entries.length} 项</button>
               )}
-              <p className="media-video-more-label">倍速 · {speedLabel(player.playbackRate ?? 1)}</p>
-              <SpeedOptions player={player} />
+              <p className="media-video-more-label">倍速 · {speedLabel(rate)}</p>
+              <SpeedOptions player={player} rate={rate} />
               <div className="media-video-seek">
                 <button disabled={player.playbackUnavailable} onClick={() => player.skip(-15)}>
                   快退 15 秒
