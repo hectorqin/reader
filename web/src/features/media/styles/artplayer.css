@@ -5,17 +5,17 @@
 }
 .artplayer-host .art-video-player {
   --art-theme: var(--color-brand);
-  --art-font-color: var(--color-ink);
+  --art-font-color: var(--reader-viewer-ink);
   --art-background-color: var(--color-surface);
   --art-text-shadow-color: transparent;
   --art-transition-duration: var(--motion-duration);
   --art-padding: var(--space-3);
   --art-border-radius: var(--radius-sm);
-  --art-progress-color: var(--color-line);
-  --art-loaded-color: var(--color-muted);
-  --art-hover-color: var(--color-brand-soft);
-  --art-widget-background: var(--color-surface);
-  --art-tip-background: var(--color-surface-2);
+  --art-progress-color: var(--reader-viewer-edge);
+  --art-loaded-color: var(--reader-viewer-ink);
+  --art-hover-color: var(--reader-viewer-edge);
+  --art-widget-background: var(--reader-viewer-control);
+  --art-tip-background: var(--reader-viewer-control);
   --art-control-height: calc(var(--space-4) * 2);
   --art-control-icon-size: var(--space-4);
   --art-control-icon-scale: 1;
@@ -32,7 +32,8 @@
 .artplayer-host .art-video-player .art-bottom {
   padding-left: max(var(--space-3), var(--safe-left));
   padding-right: max(var(--space-3), var(--safe-right));
-  background: none;
+  background: linear-gradient(to top, var(--reader-viewer-bed), var(--color-scrim), transparent) bottom / 100%
+    var(--art-bottom-height) no-repeat;
 }
 .media-player:fullscreen .art-bottom {
   padding-bottom: var(--safe-bottom);
@@ -41,7 +42,10 @@
   font: inherit;
 }
 .artplayer-host :is(.art-controls, .art-progress) {
-  background: var(--color-surface);
+  background: transparent;
+}
+.artplayer-host .art-progress-indicator svg {
+  fill: var(--color-brand);
 }
 .artplayer-host .art-control-time {
   font-size: var(--text-meta);
@@ -57,6 +61,6 @@
 }
 @media (hover: hover) and (pointer: fine) {
   .artplayer-host .art-control:hover {
-    background: var(--color-brand-soft);
+    background: var(--reader-viewer-edge);
   }
 }

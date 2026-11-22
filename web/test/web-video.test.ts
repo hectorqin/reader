@@ -31,6 +31,7 @@ describe('web video enhancement', () => {
     const enhanced = enhanceVideo(video, toggle);
     const player = Artplayer.instances[0]!;
     expect(player.video).toBe(video);
+    expect(player.template.$player.style.getPropertyValue('--art-theme')).toBe('var(--color-brand)');
     expect(video.controls).toBe(false);
     expect(video.src).toContain('/signed-stream');
     expect(video.currentTime).toBe(42);

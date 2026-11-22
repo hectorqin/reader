@@ -19,6 +19,7 @@ export function enhanceVideo(video: HTMLVideoElement, onToggle: () => void) {
       proxy: () => video,
       url: '',
       lang: 'zh-cn',
+      theme: 'var(--color-brand)',
       autoplay: false,
       mutex: false,
       hotkey: true,

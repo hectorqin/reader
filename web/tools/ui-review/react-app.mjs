@@ -650,9 +650,15 @@ async function runMediaReview(browser, fixture, checks, errors) {
   }
   await page.goto(`${origin}/#/me/settings`);
   await waitMediaHeading(page, '偏好设置');
+  const appThemes = page.getByRole('group', { name: '应用主题', exact: true });
+  const originalThemeLabel = await appThemes.locator('[aria-pressed="true"]').getAttribute('aria-label');
+  const originalTheme = await page.locator('html').getAttribute('data-theme');
   await page.locator('.theme-grid [aria-pressed="false"]').first().click();
   await page.locator('.notyf .global-notice').filter({ hasText: '主题已保存' }).waitFor({ state: 'visible' });
   assert.equal(await page.locator('.settings-section [role=status]').count(), 0, 'theme feedback must not be inline');
+  assert.notEqual(await page.locator('html').getAttribute('data-theme'), originalTheme);
+  await appThemes.getByRole('button', { name: originalThemeLabel, exact: true }).click();
+  await page.waitForFunction((theme) => document.documentElement.dataset.theme === theme, originalTheme);
 
   // The browse fixture includes one playable, partially watched video.  Keep
   // this assertion close to the route sweep so the recent continuation card
@@ -798,12 +804,33 @@ async function runMediaReview(browser, fixture, checks, errors) {
   assert.equal((await playback).status(), 201);
   await page.waitForURL(/#\/media\/video\/player/);
   await page.locator('.media-playback-page').waitFor({ state: 'attached' });
+  assert.equal(await page.locator('html').getAttribute('data-theme'), originalTheme);
+  assert.equal(await page.locator('.media-player').getAttribute('data-theme'), null, 'video inherits the app theme');
   const videoPlayback = await assertLoadedAndAdvancingVideo(page);
   assert.ok(
     videoPlayback.after.currentTime > videoPlayback.before.currentTime,
     'video playback session did not advance',
   );
   await capture(page, 'media-player', checks, errors);
+  const chrome = await page.locator('.art-video-player').evaluate((player) => {
+    const style = getComputedStyle(player);
+    const bottom = player.querySelector('.art-bottom');
+    return {
+      controlsBackground: getComputedStyle(player.querySelector('.art-controls')).backgroundColor,
+      scrim: getComputedStyle(bottom).backgroundImage,
+      overlayWidth: bottom.getBoundingClientRect().width,
+      playerWidth: player.getBoundingClientRect().width,
+      ink: style.getPropertyValue('--art-font-color').trim(),
+      expectedInk: style.getPropertyValue('--reader-viewer-ink').trim(),
+      accent: style.getPropertyValue('--art-theme').trim(),
+      brand: style.getPropertyValue('--color-brand').trim(),
+    };
+  });
+  assert.equal(chrome.controlsBackground, 'rgba(0, 0, 0, 0)');
+  assert.match(chrome.scrim, /linear-gradient/);
+  assert.equal(chrome.overlayWidth, chrome.playerWidth, 'scrim spans the stage');
+  assert.equal(chrome.ink, chrome.expectedInk, 'chrome uses the existing on-dark viewer ink');
+  assert.equal(chrome.accent, chrome.brand, 'progress uses the active app brand');
   assert.equal(await page.locator('.art-video-player').count(), 1);
   assert.equal(await page.locator('.art-control-fullscreen').count(), 0, 'Reader owns fullscreen');
   const sessionVideo = await page.locator('.media-player video').elementHandle();
