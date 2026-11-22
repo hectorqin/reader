@@ -197,10 +197,11 @@ async function backBox(page) {
   });
 }
 
-async function capture(page, name, checks, errors) {
-  for (const width of widths) {
+async function capture(page, name, checks, errors, captureWidths = widths) {
+  for (const width of captureWidths) {
     const height = heightFor(width);
-    await page.setViewportSize({ width, height });
+    if (page.viewportSize()?.width !== width || page.viewportSize()?.height !== height)
+      await page.setViewportSize({ width, height });
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(120);
     const metrics = await page.evaluate(() => {
@@ -846,27 +847,34 @@ async function runMediaReview(browser, fixture, checks, errors) {
   await page.emulateMedia({ colorScheme: 'dark' });
   await capture(page, 'media-player-dark', checks, errors);
   await page.emulateMedia({ colorScheme: 'light' });
-  await page.getByRole('button', { name: '横屏全屏播放' }).click();
-  await page.waitForFunction(() => document.fullscreenElement?.classList.contains('media-player'));
-  assert.equal(
-    await page.locator('.media-video-stage').evaluate((stage) => Math.round(stage.getBoundingClientRect().height)),
-    await page.evaluate(() => innerHeight),
-    'fullscreen stage must fill the viewport',
-  );
-  await capture(page, 'media-player-fullscreen', checks, errors);
-  await page.getByRole('button', { name: '适应屏幕', exact: true }).click();
-  assert.equal(
-    await page.locator('.media-player video').evaluate((video) => getComputedStyle(video).objectFit),
-    'cover',
-  );
-  await page.getByRole('button', { name: '锁定', exact: true }).click();
-  await page.keyboard.press('Space');
-  assert.equal(await page.locator('.media-player video').evaluate((video) => video.paused), true);
-  assert.equal(await page.locator('.artplayer-host').evaluate((host) => getComputedStyle(host).pointerEvents), 'none');
-  await capture(page, 'media-player-locked', checks, errors);
-  await page.getByRole('button', { name: '解除锁定' }).click();
-  await page.getByRole('button', { name: '完整画面', exact: true }).click();
-  await page.getByRole('button', { name: '退出全屏', exact: true }).click();
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: heightFor(width) });
+    await page.getByRole('button', { name: '横屏全屏播放' }).click();
+    await page.waitForFunction(() => document.fullscreenElement?.classList.contains('media-player'));
+    assert.equal(
+      await page.locator('.media-video-stage').evaluate((stage) => Math.round(stage.getBoundingClientRect().height)),
+      await page.evaluate(() => innerHeight),
+      'fullscreen stage must fill the viewport',
+    );
+    await capture(page, 'media-player-fullscreen', checks, errors, [width]);
+    await page.getByRole('button', { name: '适应屏幕', exact: true }).click();
+    assert.equal(
+      await page.locator('.media-player video').evaluate((video) => getComputedStyle(video).objectFit),
+      'cover',
+    );
+    await page.getByRole('button', { name: '锁定', exact: true }).click();
+    await page.keyboard.press('Space');
+    assert.equal(await page.locator('.media-player video').evaluate((video) => video.paused), true);
+    assert.equal(
+      await page.locator('.artplayer-host').evaluate((host) => getComputedStyle(host).pointerEvents),
+      'none',
+    );
+    await capture(page, 'media-player-locked', checks, errors, [width]);
+    await page.getByRole('button', { name: '解除锁定' }).click();
+    await page.getByRole('button', { name: '完整画面', exact: true }).click();
+    await page.getByRole('button', { name: '退出全屏', exact: true }).click();
+    await page.waitForFunction(() => !document.fullscreenElement);
+  }
   assert.equal(await sessionVideo.evaluate((video) => video === document.querySelector('.media-player video')), true);
 
   // The player is a runtime-owned session. Navigate away and return through the
