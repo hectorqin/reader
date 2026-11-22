@@ -164,6 +164,70 @@ export async function openPdf(
       });
       observer.observe(container);
     },
+    async pageText(pageNumber, pageSignal) {
+      pageSignal?.throwIfAborted();
+      const page = await pdf.getPage(pageNumber);
+      try {
+        const content = await page.getTextContent();
+        pageSignal?.throwIfAborted();
+        // A line break where the text layer has one, so a phrase is not found across two lines' ends.
+        return content.items.map((item) => ('str' in item ? item.str + (item.hasEOL ? '\n' : '') : '')).join('');
+      } finally {
+        if (page !== currentPage) page.cleanup();
+      }
+    },
+    async renderRegion(pageNumber, box, scale, regionSignal) {
+      regionSignal?.throwIfAborted();
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale });
+      // The rectangle in the viewport's pixels (it handles the page's rotation and offset).
+      const [ax, ay] = viewport.convertToViewportPoint(box[0], box[1]) as [number, number];
+      const [bx, by] = viewport.convertToViewportPoint(box[2], box[3]) as [number, number];
+      const left = Math.min(ax, bx),
+        top = Math.min(ay, by);
+      const width = Math.max(1, Math.ceil(Math.abs(bx - ax))),
+        height = Math.max(1, Math.ceil(Math.abs(by - ay)));
+      const area = document.createElement('canvas');
+      area.width = width;
+      area.height = height;
+      const task = page.render({ canvas: area, viewport, transform: [1, 0, 0, 1, -left, -top] });
+      const stop = () => task.cancel();
+      regionSignal?.addEventListener('abort', stop, { once: true });
+      try {
+        await task.promise;
+      } finally {
+        regionSignal?.removeEventListener('abort', stop);
+        if (page !== currentPage) page.cleanup();
+      }
+      const blob = await new Promise<Blob | null>((resolve) => area.toBlob(resolve, 'image/png'));
+      area.width = area.height = 0;
+      if (!blob) throw new Error('无法生成图片');
+      return blob;
+    },
+    async outline() {
+      const entries: Array<{ title: string; page: number; depth: number }> = [];
+      type Item = { title: string; dest: unknown; items: Item[] };
+      const walk = async (items: Item[] | null, depth: number): Promise<void> => {
+        for (const item of items ?? []) {
+          try {
+            const dest = typeof item.dest === 'string' ? await pdf.getDestination(item.dest) : item.dest;
+            const target = Array.isArray(dest) ? dest[0] : null;
+            const index =
+              typeof target === 'number'
+                ? target
+                : target
+                  ? await pdf.getPageIndex(target as Parameters<PDFDocumentProxy['getPageIndex']>[0])
+                  : -1;
+            if (index >= 0 && item.title?.trim()) entries.push({ title: item.title.trim(), page: index + 1, depth });
+          } catch {
+            /* a bookmark that points nowhere is left out */
+          }
+          await walk(item.items, depth + 1);
+        }
+      };
+      await walk((await pdf.getOutline().catch(() => null)) as Item[] | null, 0);
+      return entries;
+    },
     cancel,
     dispose() {
       cancel();

@@ -38,7 +38,12 @@ export class FilePublications {
     const file = useLocal ? local : (managed ?? local);
     if (!file) throw notFound('no available file for this book', 'FILE_MISSING');
     const relPath = assertSafeRel(file.rel_path);
-    return { bookId, relPath, absPath: resolveInside(useLocal ? this.config.booksDir : this.config.dataDir, relPath) };
+    return {
+      bookId,
+      relPath,
+      absPath: resolveInside(useLocal ? this.config.booksDir : this.config.dataDir, relPath),
+      cacheDir: resolveInside(this.config.dataDir, 'derived'),
+    };
   }
 
   async files(bookId: string, format: string) {

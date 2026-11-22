@@ -5988,6 +5988,14 @@ svg.icon {
   height: 3px;
   accent-color: var(--reader-accent);
 }
+/* The line under a settings row that says what its choice does (e.g. PDF 解析). */
+.reader-setting-hint {
+  margin: calc(var(--space-1) * -1) 0 var(--space-2);
+  color: var(--reader-muted);
+  font-size: var(--text-meta);
+  line-height: 1.5;
+}
+
 .source-switch-hint {
   margin: 0.65rem 0 1rem;
   color: var(--reader-muted);

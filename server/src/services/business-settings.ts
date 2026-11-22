@@ -34,7 +34,7 @@ export interface BusinessValues {
   scraping: { timeoutMs: number; retries: number };
   access: { publicUrl: string; corsOrigins: string; accessTokenTtl: number; refreshTokenTtl: number };
   webdav: { url: string; username: string; password: string; maxBytes: number };
-  library: { memberUpload: boolean; autoShelf: boolean };
+  library: { memberUpload: boolean; autoShelf: boolean; pdfMode: 'pdfjs' | 'enhanced' };
 }
 export type SettingsGroup = keyof BusinessValues;
 type Field = {
@@ -269,6 +269,17 @@ export const SETTINGS_SCHEMA: Record<SettingsGroup, { label: string; fields: Fie
         type: 'checkbox',
         default: false,
         help: '开启后，扫描到的新书会加到每个账号的书架，新建的账号也会带上书库里的全部书。关闭时书只进入书库（上传的书也一样，包括上传者自己的书架），由各人在书库或发现里自行加入',
+      },
+      {
+        key: 'pdfMode',
+        label: 'PDF 默认解析模式',
+        type: 'select',
+        default: 'pdfjs',
+        options: [
+          { value: 'pdfjs', label: 'PDF.js：原版页面' },
+          { value: 'enhanced', label: '增强解析：提取正文重排' },
+        ],
+        help: '原版页面保留排版、插图和公式；增强解析按书签把文字层整理成章节，可调字号、主题、朗读、批注和书内搜索，但不保留版式，扫描版 PDF 没有文字层时自动回到原版页面。读者可在阅读器里为单本书另选',
       },
     ],
   },

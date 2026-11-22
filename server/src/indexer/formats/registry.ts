@@ -85,6 +85,8 @@ export interface ContentItem {
   volume?: string;
   /** A short line under the title, such as when a chapter was updated. */
   note?: string;
+  /** For text read out of a PDF: the page (1-based) this item's text begins on. */
+  page?: number;
 }
 
 /** A named group of items; volumes for comics, or a single implicit one. */
@@ -129,6 +131,11 @@ export interface Manifest {
   sourceName?: string;
   /** Snapshot identity for mutable publications. */
   revision?: string;
+  /**
+   * Something the reader should be told about how this book is being shown — e.g.
+   * a PDF asked for as text that has no text layer, and is shown as pages instead.
+   */
+  notice?: string;
   kind: BookKind;
   total: number;
   groups: ContentGroup[];
@@ -203,6 +210,18 @@ export interface HandlerContext {
    * the API (the EPUB chapter rewriter) need it to build absolute URLs.
    */
   bookId?: string;
+  /**
+   * How the reader asked to see this book, when a format can be read more than one
+   * way. Only PDF does today: `pdfjs` (the pages as drawn) or `enhanced` (the text
+   * layer as reflowable chapters). Absent means the format's own default.
+   */
+  variant?: string;
+  /**
+   * A directory in DATA_DIR for work derived from this book's file — an extracted
+   * text layer, say — that is worth keeping across restarts. Absent in tests and
+   * tooling; a handler then works without a persistent cache.
+   */
+  cacheDir?: string;
 }
 
 export interface FileFormatHandler {

@@ -83,6 +83,8 @@ function chromeState(overrides: Partial<ChromeState> = {}): ChromeState {
     ttsAutoAdvance: true,
     ttsEngine: 'auto',
     showFitRow: false,
+    pdfMode: 'none',
+    pdfModeBusy: false,
     showDirectionRow: false,
     showEncodingRow: false,
     showTxtRows: false,
@@ -253,6 +255,32 @@ describe('ReaderChrome', () => {
     expect(pressed()).toBe('开');
     act(() => [...row()!.querySelectorAll('button')].find((button) => button.textContent === '关')!.click());
     expect(onSetting).toHaveBeenLastCalledWith({ focus: false });
+  });
+
+  it('offers 原版页面 and 增强解析 for a PDF only, and holds still while a switch is saved', () => {
+    const onPdfMode = vi.fn();
+    const row = () => container.querySelector<HTMLElement>('.segmented[aria-label="PDF 解析"]');
+    const show = (state: Partial<ChromeState>, withHandler = true) =>
+      render(
+        h(ReaderChrome, {
+          state: chromeState({ settingsOpen: true, settingsTab: 'behavior', ...state }),
+          stage: document.createElement('div'),
+          handlers: { ...handlers(), ...(withHandler ? { onPdfMode } : {}) },
+        }),
+        container,
+      );
+    show({ pdfMode: 'none' });
+    expect(row()).toBeNull();
+    show({ pdfMode: 'pdfjs', layout: 'fixed' });
+    expect(row()!.querySelector('[aria-pressed="true"]')?.textContent).toBe('原版页面');
+    expect(container.textContent).toContain('保留原书版式');
+    act(() => [...row()!.querySelectorAll('button')].find((button) => button.textContent === '增强解析')!.click());
+    expect(onPdfMode).toHaveBeenLastCalledWith('enhanced');
+    show({ pdfMode: 'enhanced', pdfModeBusy: true });
+    expect([...row()!.querySelectorAll('button')].every((button) => button.disabled)).toBe(true);
+    expect(container.textContent).toContain('插图、表格和公式请切回原版页面');
+    show({ pdfMode: 'pdfjs' }, false);
+    expect(row()).toBeNull();
   });
 
   it('sets each of the nine tap cells, and keeps the last 菜单 cell a menu', () => {

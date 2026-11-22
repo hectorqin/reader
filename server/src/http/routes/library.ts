@@ -13,12 +13,14 @@ import {
   contentTypeFor,
   directoryHandlerForFormat,
   type ContentItem,
+  type HandlerContext,
 } from '../../indexer/formats/index.ts';
 import { sendAssetPayload } from '../assets.ts';
 import { FilePublications } from '../../publications/files.ts';
 import { withSignal } from '../request-signal.ts';
 import { searchBookPage } from '../../services/book-search.ts';
 import { ReadingOverrideService } from '../../services/reading-overrides.ts';
+import { BookViewModes } from '../../services/book-view-modes.ts';
 import { READING_STATES, type ReadingState } from '../../services/shelf.ts';
 
 /**
@@ -36,11 +38,21 @@ function sourceContext(ctx: AppContext, bookId: string) {
   return new FilePublications(ctx.db, ctx.config).context(bookId);
 }
 
+/**
+ * The context a handler reads one reader's view of a book in: where the file is,
+ * and — for a format that can be read more than one way — which way this reader
+ * asked for (a PDF as pages or as text; see BookViewModes).
+ */
+function readerContext(ctx: AppContext, userId: string, bookId: string, format: string): HandlerContext {
+  const base = { ...sourceContext(ctx, bookId), bookId };
+  return format === 'pdf' ? { ...base, variant: new BookViewModes(ctx.db).get(userId, bookId).pdfMode } : base;
+}
+
 /** Stored chapter snapshots and local files share the reader's content contract. */
 async function contentManifest(ctx: AppContext, userId: string, bookId: string, format: string) {
   if (ctx.sources?.chapters.has(bookId)) return ctx.sources.chapters.manifest(userId, bookId);
   const handler = resolveHandler(ctx, bookId, format);
-  return handler ? handler.manifest({ ...sourceContext(ctx, bookId), bookId }) : null;
+  return handler ? handler.manifest(readerContext(ctx, userId, bookId, format)) : null;
 }
 
 /**
@@ -331,7 +343,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const handler = resolveHandler(ctx, id, book.format);
     if (!handler) return { toc: [] };
 
-    const context = { ...sourceContext(ctx, id), bookId: id };
+    const context = readerContext(ctx, user.id, id, book.format);
     if (handler.toc) return { toc: await handler.toc(context) };
 
     // Default: the format has no navigation of its own, so its items are its
@@ -364,6 +376,10 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     if (query.cursor !== undefined && typeof query.cursor !== 'string') throw badRequest('无效的搜索游标');
     const manifest = await contentManifest(ctx, user.id, id, book.format);
     if (!manifest) throw badRequest('此格式暂不支持正文搜索', 'UNSUPPORTED_FORMAT');
+    // A PDF read as pages is searched by the reader in each page's text layer, which
+    // it already has open; reading the whole file here would cost more than it saves.
+    if (book.format === 'pdf' && manifest.kind === 'document')
+      throw badRequest('PDF 原版页面在阅读器里逐页搜索', 'SEARCH_LOCAL_PDF');
     const overrides = new ReadingOverrideService(ctx.db).get(user.id, id);
     if (overrides.headingPrefix) throw badRequest('自定义 TXT 目录使用本地搜索', 'SEARCH_LOCAL_LAYOUT');
     const chapters = ctx.sources?.chapters.has(id) ? ctx.sources.chapters : undefined;
@@ -389,6 +405,27 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
         chapters ? 1 : 8,
       ),
     );
+  });
+
+  /**
+   * How this reader sees this book, for a format that can be read more than one way
+   * (today PDF: its pages, or its text as chapters). PUT `{ pdfMode: null }` returns
+   * the book to the site default. The client re-opens the book after a change.
+   */
+  app.get('/api/v1/books/:id/view-mode', { preHandler: auth }, async (request) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    ctx.shelf.get(user.id, id);
+    return new BookViewModes(ctx.db).get(user.id, id);
+  });
+
+  app.put('/api/v1/books/:id/view-mode', { preHandler: auth }, async (request) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    const book = ctx.shelf.get(user.id, id);
+    if (book.format !== 'pdf') throw badRequest('only PDF books can be viewed more than one way', 'UNSUPPORTED_FORMAT');
+    const body = (request.body ?? {}) as { pdfMode?: unknown };
+    return new BookViewModes(ctx.db).set(user.id, id, body.pdfMode === undefined ? null : body.pdfMode);
   });
 
   app.get('/api/v1/books/:id/assets', { preHandler: auth }, async (request, reply) => {

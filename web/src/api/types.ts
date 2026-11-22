@@ -123,6 +123,8 @@ export interface ContentItem {
   volume?: string;
   /** A short line under the title, such as when the chapter was updated. */
   note?: string;
+  /** For text read out of a PDF (增强解析): the page (1-based) this item's text begins on. */
+  page?: number;
 }
 
 /** A group of items: a comic volume, or a window of chapters. */
@@ -155,6 +157,8 @@ export interface BookContent {
   groups: ContentGroup[];
   items: ContentItem[];
   group?: number;
+  /** Something to tell the reader about how the book is shown (e.g. a PDF without a text layer shown as pages). */
+  notice?: string;
 }
 
 /**

@@ -120,6 +120,16 @@ export interface PdfSource {
 
 export interface PdfRenderer {
   render(page: number, container: HTMLElement, fit: 'contain' | 'width'): Promise<void>;
+  /** A page's text layer as plain text, for in-book search. Reads that page's bytes if not yet read. */
+  pageText(page: number, signal?: AbortSignal): Promise<string>;
+  /**
+   * One rectangle of a page — `box` is x0, y0, x1, y1 in page units, origin bottom-left —
+   * drawn at `scale` pixels per unit, as a PNG. How 增强解析 shows a figure, a table or a
+   * formula: the server says where it is, the client draws it from the page.
+   */
+  renderRegion(page: number, box: [number, number, number, number], scale: number, signal?: AbortSignal): Promise<Blob>;
+  /** The book's bookmarks, with the page (1-based) each points at; empty when it has none. */
+  outline(): Promise<Array<{ title: string; page: number; depth: number }>>;
   cancel(): void;
   dispose(): void;
 }

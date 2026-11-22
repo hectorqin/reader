@@ -588,6 +588,20 @@ export class ReaderApi {
     return this.get<Manifest>(`/api/v1/books/${encodeURIComponent(id)}/manifest`, options);
   }
 
+  /** How this reader sees this book, for a PDF: its pages or its text (and the site default). */
+  async viewMode(id: string, options: RequestOptions = {}): Promise<BookViewMode> {
+    return this.call<BookViewMode>(`/api/v1/books/${encodeURIComponent(id)}/view-mode`, 'GET', undefined, options);
+  }
+
+  /** Chooses how this reader sees this PDF; `null` returns it to the site default. */
+  async setViewMode(
+    id: string,
+    pdfMode: 'pdfjs' | 'enhanced' | null,
+    options: RequestOptions = {},
+  ): Promise<BookViewMode> {
+    return this.call<BookViewMode>(`/api/v1/books/${encodeURIComponent(id)}/view-mode`, 'PUT', { pdfMode }, options);
+  }
+
   async refreshPublication(id: string, options: RequestOptions = {}): Promise<BookContent> {
     return this.call<BookContent>(`/api/v1/books/${encodeURIComponent(id)}/refresh`, 'POST', undefined, options);
   }
@@ -1395,6 +1409,12 @@ export function notesParams(query: NotesLibraryQuery): string {
   if (query.page && query.page > 1) params.set('page', String(query.page));
   if (query.pageSize) params.set('pageSize', String(query.pageSize));
   return params.toString();
+}
+
+export interface BookViewMode {
+  pdfMode: 'pdfjs' | 'enhanced';
+  chosen: 'pdfjs' | 'enhanced' | null;
+  defaultPdfMode: 'pdfjs' | 'enhanced';
 }
 
 export function statsParams(query: TimeStatsQuery): string {

@@ -13,7 +13,7 @@ import {
   findText,
   searchableText,
 } from '../src/ui/text-anchor.ts';
-import { PublicationCache } from '../src/store/publications.ts';
+import { OFFLINE_FILE, PublicationCache } from '../src/store/publications.ts';
 import { OfflineDownload } from '../src/core/offline-download.ts';
 import { MemoryKv, MemoryBlobs } from './helpers/env.ts';
 import type { Manifest } from '../src/api/types.ts';
@@ -202,6 +202,34 @@ describe('scoped quota and offline tasks', () => {
     await again.start();
     expect(asset).toHaveBeenCalledTimes(2);
   });
+  it('downloads a PDF read as text by chapter, and its file for the figures', async () => {
+    const cache = new PublicationCache(new MemoryKv(), new MemoryBlobs(), 'pdf-text');
+    const items = [0, 1].map((seq) => ({
+      id: String(seq),
+      seq,
+      title: String(seq),
+      href: `xhtml:pdf/part000${seq}.xhtml`,
+      kind: 'chapter',
+      mediaType: 'text/html',
+      page: seq * 5 + 1,
+    }));
+    const content = {
+      kind: 'reflowable',
+      total: 2,
+      revision: 'pdf-text:k',
+      groups: [{ id: 'spine:0', seq: 0, offset: 0, count: 2, title: '0 – 1' }],
+      items,
+    };
+    const manifest = { book: { id: 'p', format: 'pdf' }, files: [], content } as unknown as Manifest;
+    const asset = vi.fn(async (_id: string, ref: string) => new NodeBlob([ref]));
+    const bookBytes = vi.fn(async () => new Uint8Array([37, 80, 68, 70]));
+    const task = new OfflineDownload({ asset, bookBytes } as unknown as ReaderApi, cache, manifest, () => {});
+    await task.start();
+    expect(task.state).toMatchObject({ status: 'complete', from: 1, to: 2 });
+    expect(asset.mock.calls.map((call) => call[1])).toEqual(['xhtml:pdf/part0000.xhtml', 'xhtml:pdf/part0001.xhtml']);
+    expect(await cache.resource('p', OFFLINE_FILE)).toEqual(new Uint8Array([37, 80, 68, 70]));
+  });
+
   it('aborts an in-flight task without marking incomplete bytes as cached', async () => {
     const cache = new PublicationCache(new MemoryKv(), new MemoryBlobs(), 'pause');
     const manifest = { book: { id: 'b', format: 'epub' }, files: [] } as unknown as Manifest;
