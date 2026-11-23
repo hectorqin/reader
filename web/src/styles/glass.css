@@ -1,0 +1,337 @@
+[data-theme="glass"] {
+  --glass-fill: color-mix(in srgb, var(--color-surface) 68%, transparent);
+  --glass-fill-strong: color-mix(in srgb, var(--color-surface) 85%, transparent);
+  --glass-border: color-mix(in srgb, var(--color-ink) 16%, transparent);
+  --glass-outline: 1px solid var(--glass-border);
+  --glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 22%), transparent 55%);
+  --glass-blur: blur(26px) saturate(190%);
+  --glass-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 65%), inset 0 0 0 0.5px rgb(255 255 255 / 35%),
+    inset 0 -1px 0 color-mix(in srgb, var(--color-ink) 6%, transparent),
+    0 1px 2px color-mix(in srgb, var(--color-ink) 6%, transparent),
+    0 10px 30px color-mix(in srgb, var(--color-ink) 10%, transparent);
+  --glass-wallpaper:
+    radial-gradient(ellipse at 0% 8%, color-mix(in srgb, var(--color-brand) 26%, transparent), transparent 65%),
+    radial-gradient(ellipse at 100% 24%, color-mix(in srgb, var(--color-ch-music) 20%, transparent), transparent 64%),
+    radial-gradient(ellipse at 20% 100%, color-mix(in srgb, var(--color-ch-audio) 24%, transparent), transparent 68%),
+    radial-gradient(ellipse at 80% 85%, color-mix(in srgb, var(--color-ch-video) 17%, transparent), transparent 62%);
+  --glass-track: color-mix(in srgb, var(--color-surface-2) 56%, transparent);
+  --glass-selected: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  --glass-nav-selected: color-mix(in srgb, var(--color-brand-soft) 82%, transparent);
+  --glass-button-top: color-mix(in srgb, var(--color-brand-text) 94%, white);
+  --glass-button-base: var(--color-brand-text);
+  --glass-button-ink: var(--color-bg);
+  --glass-button-sheen: linear-gradient(180deg, var(--glass-button-top), var(--glass-button-base));
+  --glass-button-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 45%), 0 2px 4px color-mix(in srgb, var(--color-brand-text) 18%, transparent),
+    0 6px 16px color-mix(in srgb, var(--color-brand-text) 24%, transparent);
+  --glass-cover-shadow:
+    0 2px 4px color-mix(in srgb, var(--color-ink) 10%, transparent),
+    0 10px 22px color-mix(in srgb, var(--color-ink) 16%, transparent);
+  --glass-radius-card: 22px;
+  --glass-radius-sheet: 28px;
+  --glass-radius-menu: 18px;
+  --glass-radius-pill: 999px;
+  --glass-gap: 12px;
+  --glass-heading-space: 80px;
+  --glass-track-padding: 3px;
+  --glass-option-padding: 8px;
+  --glass-item-height: 100%;
+  --glass-nav-padding: 6px;
+  --glass-sidebar-padding: 24px 14px;
+  --glass-nav-clearance: calc(var(--app-nav-bar) + var(--glass-gap) * 2 + var(--safe-bottom));
+  --glass-mini-gap: 10px;
+  --glass-clear: transparent;
+  --glass-zero: 0px;
+}
+
+[data-theme="glass"][data-mode="dark"] {
+  --glass-fill: color-mix(in srgb, var(--color-surface) 64%, transparent);
+  --glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 8%), transparent 55%);
+  --glass-border: color-mix(in srgb, var(--color-ink) 22%, transparent);
+  --glass-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 18%), inset 0 0 0 0.5px rgb(255 255 255 / 10%),
+    inset 0 -1px 0 color-mix(in srgb, var(--color-ink) 6%, transparent), 0 1px 2px rgb(0 0 0 / 18%),
+    0 10px 30px rgb(0 0 0 / 24%);
+  --glass-selected: rgb(255 255 255 / 14%);
+  --glass-button-top: color-mix(in srgb, var(--color-brand-text) 88%, white);
+  --glass-wallpaper:
+    radial-gradient(ellipse at 0% 8%, color-mix(in srgb, var(--color-brand) 30%, transparent), transparent 65%),
+    radial-gradient(ellipse at 100% 24%, color-mix(in srgb, var(--color-ch-music) 24%, transparent), transparent 64%),
+    radial-gradient(ellipse at 20% 100%, color-mix(in srgb, var(--color-ch-audio) 26%, transparent), transparent 68%),
+    radial-gradient(ellipse at 80% 85%, color-mix(in srgb, var(--color-ch-video) 22%, transparent), transparent 62%);
+}
+
+[data-theme="glass"] :is(body, .home-page, .shelf-screen, .library-screen, .sources-screen, .media-screen) {
+  background-image: var(--glass-wallpaper);
+  background-attachment: fixed;
+}
+
+[data-theme="glass"]
+  :is(
+    .app-nav,
+    .topbar,
+    .media-heading,
+    .reader-screen .footer,
+    .rail-button,
+    .media-player:not(.media-player-expanded),
+    .theme-settings-card,
+    .theme-card,
+    .home-resume,
+    .home-empty,
+    .sources-card,
+    .sheet .tts-bar
+  ):not([data-theme="gray"] *) {
+  background: var(--glass-sheen), var(--glass-fill);
+  border: var(--glass-outline);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+[data-theme="glass"] :is(.sheet, .action-menu):not([data-theme="gray"] *) {
+  background: var(--glass-sheen), var(--glass-fill-strong);
+  border: var(--glass-outline);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+[data-theme="glass"] .sheet-header:not([data-theme="gray"] *) {
+  background: var(--glass-clear);
+  border-bottom: var(--glass-outline);
+  box-shadow: none;
+}
+
+[data-theme="glass"]
+  :is(
+    .theme-settings-card,
+    .theme-card,
+    .home-resume,
+    .home-empty,
+    .sources-card,
+    .sheet .tts-bar,
+    .media-player:not(.media-player-expanded)
+  ):not([data-theme="gray"] *) {
+  border-radius: var(--glass-radius-card);
+}
+
+[data-theme="glass"] .sheet:not([data-theme="gray"] *) {
+  border-radius: var(--glass-radius-sheet) var(--glass-radius-sheet) var(--glass-zero) var(--glass-zero);
+}
+
+[data-theme="glass"] .action-menu:not([data-theme="gray"] *) {
+  border-radius: var(--glass-radius-menu);
+}
+
+[data-theme="glass"] .book-card .cover:not([data-theme="gray"] *) {
+  box-shadow: var(--glass-cover-shadow);
+}
+
+[data-theme="glass"] .theme-card[aria-pressed="true"]:not([data-theme="gray"] *) {
+  border-color: var(--color-brand-text);
+}
+
+[data-theme="glass"] .theme-chips > button:not([data-theme="gray"] *) {
+  padding-inline: var(--glass-option-padding);
+}
+
+[data-theme="glass"] .theme-settings-row > span:not([data-theme="gray"] *) {
+  white-space: nowrap;
+}
+
+[data-theme="glass"] .shelf-search input:not([data-theme="gray"] *) {
+  background: var(--glass-clear);
+  border-color: var(--glass-clear);
+  border-radius: var(--glass-radius-pill);
+  box-shadow: none;
+}
+
+[data-theme="glass"] :is(.segmented, .theme-chips, .settings-tabs):not([data-theme="gray"] *) {
+  background: var(--glass-sheen), var(--glass-track);
+  border: var(--glass-outline);
+  border-radius: var(--glass-radius-pill);
+  padding: var(--glass-track-padding);
+  box-shadow: var(--glass-shadow);
+}
+
+[data-theme="glass"] :is(.segmented, .theme-chips, .settings-tabs) > button:not([data-theme="gray"] *) {
+  background: var(--glass-clear);
+  border: var(--glass-outline);
+  border-color: var(--glass-clear);
+  border-radius: var(--glass-radius-pill);
+}
+
+[data-theme="glass"]
+  :is(.segmented, .theme-chips, .settings-tabs)
+  > button:is([aria-pressed="true"], [aria-selected="true"]):not([data-theme="gray"] *) {
+  background: var(--glass-sheen), var(--glass-selected);
+  border-color: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  color: var(--color-brand-text);
+}
+
+[data-theme="glass"]
+  :is(.chip, .icon-button, .media-icon-button, .app-nav-search, .shelf-search, .home-search):not(
+    [data-theme="gray"] *
+  ) {
+  background: var(--glass-sheen), var(--glass-fill);
+  border: var(--glass-outline);
+  border-radius: var(--glass-radius-pill);
+  box-shadow: var(--glass-shadow);
+}
+
+[data-theme="glass"]
+  :is(.tts-bar .tts-controls .tts-toggle, .media-screen .media-toggle-play, .media-mini .media-mini-toggle):not(
+    [data-theme="gray"] *
+  ) {
+  background: var(--glass-button-sheen), var(--glass-button-base);
+  color: var(--glass-button-ink);
+  box-shadow: var(--glass-button-shadow);
+  border: var(--glass-outline);
+  border-radius: var(--glass-radius-pill);
+}
+
+[data-theme="glass"] :is(.app-nav-item[aria-current="page"], .chip[aria-pressed="true"]):not([data-theme="gray"] *) {
+  background: var(--glass-sheen), var(--glass-nav-selected);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--glass-radius-pill);
+  border: var(--glass-outline);
+}
+
+[data-theme="glass"] .app-nav-item[aria-current="page"] .app-nav-icon {
+  background: var(--glass-clear);
+}
+
+@media (max-width: 700px) {
+  [data-theme="glass"] .app-nav {
+    height: var(--app-nav-bar);
+    margin: var(--glass-gap) calc(var(--glass-gap) + var(--safe-right)) calc(var(--glass-gap) + var(--safe-bottom))
+      calc(var(--glass-gap) + var(--safe-left));
+    padding: var(--glass-nav-padding);
+    border-radius: var(--glass-radius-pill);
+  }
+  [data-theme="glass"] .app-nav-item {
+    height: var(--glass-item-height);
+  }
+  [data-theme="glass"] body[data-app-nav="top"] .media-player:is(.media-player-audio, .media-player-native-video) {
+    bottom: calc(var(--glass-nav-clearance) + var(--glass-mini-gap));
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  [data-theme="glass"] .theme-card:hover:not(:disabled):not([data-theme="gray"] *) {
+    background: var(--glass-sheen), var(--glass-fill);
+    border-color: var(--color-brand-text);
+  }
+}
+
+@media (min-width: 701px) {
+  [data-theme="glass"] :is(.app-nav, .media-screen:not(.media-catalog-page) .media-heading):not([data-theme="gray"] *) {
+    background: var(--glass-sheen), var(--glass-fill);
+    border: var(--glass-outline);
+    border-bottom: var(--glass-outline) !important;
+    box-shadow: var(--glass-shadow) !important;
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+  }
+  [data-theme="glass"] .media-screen:not(.media-catalog-page) .media-heading:not([data-theme="gray"] *) {
+    top: var(--glass-gap);
+    left: var(--glass-gap);
+    right: calc(var(--glass-gap) + var(--safe-right));
+    margin: var(--glass-zero);
+    padding-inline: var(--glass-gap);
+    border-radius: var(--glass-radius-card);
+  }
+  [data-theme="glass"] body[data-app-nav] .media-screen:not(.media-catalog-page) .media-heading {
+    left: calc(var(--app-nav-width) + var(--glass-gap));
+  }
+  [data-theme="glass"] .media-screen:not(.media-catalog-page):not(.home-page):not(.mine-page) {
+    padding-top: var(--glass-heading-space);
+  }
+  [data-theme="glass"] .media-screen .media-heading .media-heading-actions {
+    margin-inline: var(--glass-zero);
+  }
+  [data-theme="glass"] .media-screen.media-catalog-page > .media-heading {
+    border: none;
+    background: var(--glass-clear);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  [data-theme="glass"] .reader-screen .topbar:not([data-theme="gray"] *) {
+    top: var(--glass-zero);
+    border-width: var(--glass-zero);
+    border-bottom: var(--glass-outline);
+    border-radius: var(--glass-zero);
+    box-shadow: none;
+  }
+  [data-theme="glass"] .app-nav {
+    width: calc(var(--app-nav-width) - var(--glass-gap) * 2 - var(--safe-left));
+    margin: var(--glass-gap) var(--glass-gap) var(--glass-gap) calc(var(--glass-gap) + var(--safe-left));
+    padding: var(--glass-sidebar-padding);
+    border-radius: var(--glass-radius-sheet);
+  }
+  [data-theme="glass"] .sheet:not([data-theme="gray"] *) {
+    border-radius: var(--glass-radius-sheet);
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  [data-theme="glass"],
+  [data-theme="glass"][data-mode="dark"] {
+    --glass-fill: var(--color-surface);
+    --glass-fill-strong: var(--color-surface);
+    --glass-border: var(--color-line);
+    --glass-blur: none;
+    --glass-track: var(--color-surface-2);
+    --glass-selected: var(--color-surface);
+    --glass-nav-selected: var(--color-brand-soft);
+    --glass-sheen: none;
+    --glass-shadow: none;
+    --glass-cover-shadow: none;
+    --glass-button-sheen: none;
+    --glass-button-shadow: none;
+    --glass-wallpaper: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  [data-theme="glass"],
+  [data-theme="glass"][data-mode="dark"] {
+    --glass-fill: var(--color-surface);
+    --glass-fill-strong: var(--color-surface);
+    --glass-border: var(--color-ink);
+    --glass-blur: none;
+    --glass-shadow: none;
+    --glass-track: var(--color-surface-2);
+    --glass-selected: var(--color-surface);
+    --glass-nav-selected: var(--color-brand-soft);
+    --glass-sheen: none;
+    --glass-cover-shadow: none;
+    --glass-button-sheen: none;
+    --glass-button-shadow: none;
+    --glass-wallpaper: none;
+  }
+}
+
+@media (forced-colors: active) {
+  [data-theme="glass"],
+  [data-theme="glass"][data-mode="dark"] {
+    --glass-fill: Canvas;
+    --glass-fill-strong: Canvas;
+    --glass-border: CanvasText;
+    --glass-blur: none;
+    --glass-shadow: none;
+    --glass-track: Canvas;
+    --glass-selected: Canvas;
+    --glass-nav-selected: Canvas;
+    --glass-sheen: none;
+    --glass-cover-shadow: none;
+    --glass-button-base: ButtonFace;
+    --glass-button-ink: ButtonText;
+    --glass-button-sheen: none;
+    --glass-button-shadow: none;
+    --glass-wallpaper: none;
+  }
+}

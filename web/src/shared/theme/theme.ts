@@ -218,6 +218,55 @@ export const themes = {
       ],
     ),
   },
+  glass: {
+    id: 'glass',
+    name: '液态玻璃',
+    readingOnly: false,
+    light: palette(
+      [
+        '#f2f4f8',
+        '#ffffff',
+        '#e8edf5',
+        '#141820',
+        '#536072',
+        '#cbd3df',
+        '#0062df',
+        '#e1ecff',
+        '#ffffff',
+        '#0056c7',
+        '#ffffff',
+        'rgba(10,18,32,.40)',
+      ],
+      [
+        ['#a34400', '#fff0df', '#8b3900'],
+        ['#7040ce', '#eee6ff', '#6030b8'],
+        ['#b92562', '#ffe5ef', '#a21b53'],
+        ['#006b78', '#dff4f5', '#005a65'],
+      ],
+    ),
+    dark: palette(
+      [
+        '#0b0d12',
+        '#1c1f26',
+        '#272c36',
+        '#f2f5fa',
+        '#aab6c8',
+        '#3b4556',
+        '#0a84ff',
+        '#142b47',
+        '#080c12',
+        '#70b5ff',
+        '#080c12',
+        'rgba(0,0,0,.60)',
+      ],
+      [
+        ['#ffad66', '#382718', '#ffc08a'],
+        ['#be9aff', '#2c2340', '#cdb0ff'],
+        ['#ff8db8', '#3b2030', '#ffa5c8'],
+        ['#60d4df', '#173138', '#80e1e9'],
+      ],
+    ),
+  },
   gray: {
     id: 'gray',
     name: '黑白灰',
@@ -280,7 +329,7 @@ export type ModePreference = 'system' | ThemeMode;
 /** 跟随应用, or the reading-only 黑白灰. */
 export type ReadingTheme = 'app' | 'gray';
 
-export const appThemeIds: readonly AppThemeId[] = ['warm', 'blue', 'green'];
+export const appThemeIds: readonly AppThemeId[] = ['warm', 'blue', 'green', 'glass'];
 export const appThemes = appThemeIds.map((id) => themes[id]);
 export const themeName = (id: ThemeId) => themes[id].name;
 
