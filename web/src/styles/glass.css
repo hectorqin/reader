@@ -33,6 +33,8 @@
   --glass-radius-menu: 18px;
   --glass-radius-pill: 999px;
   --glass-gap: 12px;
+  --glass-heading-space: 80px;
+  --glass-heading-hide: translateY(calc(-100% - var(--glass-gap)));
   --glass-track-padding: 3px;
   --glass-option-padding: 8px;
   --glass-item-height: 100%;
@@ -226,6 +228,43 @@
 }
 
 @media (min-width: 701px) {
+  [data-theme="glass"] .media-screen:not(.media-catalog-page) .media-heading:not([data-theme="gray"] *) {
+    top: var(--glass-gap);
+    left: var(--glass-gap);
+    right: calc(var(--glass-gap) + var(--safe-right));
+    margin: var(--glass-zero);
+    padding-inline: var(--glass-gap);
+    border-width: var(--glass-zero);
+    border-bottom: var(--glass-outline);
+    border-radius: var(--glass-radius-card);
+    box-shadow: none;
+  }
+  [data-theme="glass"] body[data-app-nav] .media-screen:not(.media-catalog-page) .media-heading {
+    left: calc(var(--app-nav-width) + var(--glass-gap));
+  }
+  [data-theme="glass"] .media-screen:not(.media-catalog-page):not(.home-page):not(.mine-page) {
+    padding-top: var(--glass-heading-space);
+  }
+  [data-theme="glass"] .media-screen .media-heading .media-heading-actions {
+    margin-inline: var(--glass-zero);
+  }
+  [data-theme="glass"] .media-screen.media-catalog-page > .media-heading {
+    border: none;
+    background: var(--glass-clear);
+    box-shadow: none;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  [data-theme="glass"] .reader-screen .topbar:not([data-theme="gray"] *) {
+    top: var(--glass-gap);
+    border-width: var(--glass-zero);
+    border-bottom: var(--glass-outline);
+    border-radius: var(--glass-radius-card);
+    box-shadow: none;
+  }
+  [data-theme="glass"] .reader-screen[data-chrome="hidden"] .topbar:not([data-theme="gray"] *) {
+    transform: var(--glass-heading-hide);
+  }
   [data-theme="glass"] .app-nav {
     width: calc(var(--app-nav-width) - var(--glass-gap) * 2 - var(--safe-left));
     margin: var(--glass-gap) var(--glass-gap) var(--glass-gap) calc(var(--glass-gap) + var(--safe-left));
