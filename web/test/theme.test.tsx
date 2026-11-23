@@ -210,7 +210,7 @@ describe('外观与主题', () => {
     const appCards = [...root.querySelectorAll('[aria-label="应用主题"] .theme-card')].map((card) =>
       card.getAttribute('aria-label'),
     );
-    expect(appCards).toEqual(['暖陶', '雾蓝', '青绿']);
+    expect(appCards).toEqual(['暖陶', '雾蓝', '青绿', '液态玻璃']);
     expect(pressed('跟随应用')).toBe('true');
     await click('黑白灰');
     expect(readThemePreference('a')).toMatchObject({ reading: 'gray', theme: 'warm' });

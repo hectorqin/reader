@@ -1,0 +1,84 @@
+[data-theme="glass"] {
+  --glass-fill: color-mix(in srgb, var(--color-surface) 72%, transparent);
+  --glass-fill-strong: color-mix(in srgb, var(--color-surface) 85%, transparent);
+  --glass-border: color-mix(in srgb, var(--color-ink) 18%, transparent);
+  --glass-blur: blur(24px) saturate(180%);
+  --glass-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 42%, transparent),
+    0 12px 36px color-mix(in srgb, var(--color-ink) 10%, transparent);
+  --glass-wallpaper:
+    radial-gradient(ellipse at 8% 12%, color-mix(in srgb, var(--color-brand) 12%, transparent), transparent 65%),
+    radial-gradient(ellipse at 94% 32%, color-mix(in srgb, var(--color-ch-music) 10%, transparent), transparent 60%),
+    radial-gradient(ellipse at 40% 95%, color-mix(in srgb, var(--color-ch-audio) 12%, transparent), transparent 65%);
+}
+
+[data-theme="glass"] :is(body, .home-page, .shelf-screen, .library-screen, .sources-screen, .media-screen) {
+  background-image: var(--glass-wallpaper);
+  background-attachment: fixed;
+}
+
+[data-theme="glass"]
+  :is(
+    .app-nav,
+    .topbar,
+    .media-heading,
+    .reader-screen .footer,
+    .rail-button,
+    .media-player:not(.media-player-expanded),
+    .theme-settings-card,
+    .home-resume,
+    .home-empty,
+    .sources-card,
+    .sheet .tts-bar
+  ):not([data-theme="gray"] *) {
+  background: var(--glass-fill);
+  border-color: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+[data-theme="glass"] :is(.sheet, .action-menu):not([data-theme="gray"] *) {
+  background: var(--glass-fill-strong);
+  border-color: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+
+[data-theme="glass"] .sheet-header:not([data-theme="gray"] *) {
+  background: var(--glass-fill);
+  border-color: var(--glass-border);
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  [data-theme="glass"] {
+    --glass-fill: var(--color-surface);
+    --glass-fill-strong: var(--color-surface);
+    --glass-border: var(--color-line);
+    --glass-blur: none;
+    --glass-wallpaper: none;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  [data-theme="glass"] {
+    --glass-fill: var(--color-surface);
+    --glass-fill-strong: var(--color-surface);
+    --glass-border: var(--color-ink);
+    --glass-blur: none;
+    --glass-shadow: none;
+    --glass-wallpaper: none;
+  }
+}
+
+@media (forced-colors: active) {
+  [data-theme="glass"] {
+    --glass-fill: Canvas;
+    --glass-fill-strong: Canvas;
+    --glass-border: CanvasText;
+    --glass-blur: none;
+    --glass-shadow: none;
+    --glass-wallpaper: none;
+  }
+}

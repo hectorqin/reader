@@ -210,6 +210,60 @@
   --color-scrim: rgba(0, 0, 0, 0.6);
 }
 
+[data-theme="glass"][data-mode="light"] {
+  --color-bg: #f2f4f8;
+  --color-surface: #ffffff;
+  --color-surface-2: #e8edf5;
+  --color-ink: #141820;
+  --color-muted: #536072;
+  --color-line: #cbd3df;
+  --color-brand: #0062df;
+  --color-brand-soft: #e1ecff;
+  --color-on-brand: #ffffff;
+  --color-brand-text: #0056c7;
+  --color-on-ch: #ffffff;
+  --color-scrim: rgba(10, 18, 32, 0.4);
+  --color-ch-read: #a34400;
+  --color-ch-read-soft: #fff0df;
+  --color-ch-read-text: #8b3900;
+  --color-ch-video: #7040ce;
+  --color-ch-video-soft: #eee6ff;
+  --color-ch-video-text: #6030b8;
+  --color-ch-music: #b92562;
+  --color-ch-music-soft: #ffe5ef;
+  --color-ch-music-text: #a21b53;
+  --color-ch-audio: #006b78;
+  --color-ch-audio-soft: #dff4f5;
+  --color-ch-audio-text: #005a65;
+}
+
+[data-theme="glass"][data-mode="dark"] {
+  --color-bg: #0b0d12;
+  --color-surface: #1c1f26;
+  --color-surface-2: #272c36;
+  --color-ink: #f2f5fa;
+  --color-muted: #aab6c8;
+  --color-line: #3b4556;
+  --color-brand: #0a84ff;
+  --color-brand-soft: #142b47;
+  --color-on-brand: #080c12;
+  --color-brand-text: #70b5ff;
+  --color-on-ch: #080c12;
+  --color-scrim: rgba(0, 0, 0, 0.6);
+  --color-ch-read: #ffad66;
+  --color-ch-read-soft: #382718;
+  --color-ch-read-text: #ffc08a;
+  --color-ch-video: #be9aff;
+  --color-ch-video-soft: #2c2340;
+  --color-ch-video-text: #cdb0ff;
+  --color-ch-music: #ff8db8;
+  --color-ch-music-soft: #3b2030;
+  --color-ch-music-text: #ffa5c8;
+  --color-ch-audio: #60d4df;
+  --color-ch-audio-soft: #173138;
+  --color-ch-audio-text: #80e1e9;
+}
+
 /* 黑白灰 · 浅色 */
 [data-theme="gray"][data-mode="light"] {
   --color-bg: #f5f5f5;
