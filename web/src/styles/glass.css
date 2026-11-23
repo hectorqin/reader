@@ -34,7 +34,6 @@
   --glass-radius-pill: 999px;
   --glass-gap: 12px;
   --glass-heading-space: 80px;
-  --glass-heading-hide: translateY(calc(-100% - var(--glass-gap)));
   --glass-track-padding: 3px;
   --glass-option-padding: 8px;
   --glass-item-height: 100%;
@@ -228,16 +227,21 @@
 }
 
 @media (min-width: 701px) {
+  [data-theme="glass"] :is(.app-nav, .media-screen:not(.media-catalog-page) .media-heading):not([data-theme="gray"] *) {
+    background: var(--glass-sheen), var(--glass-fill);
+    border: var(--glass-outline);
+    border-bottom: var(--glass-outline) !important;
+    box-shadow: var(--glass-shadow) !important;
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+  }
   [data-theme="glass"] .media-screen:not(.media-catalog-page) .media-heading:not([data-theme="gray"] *) {
     top: var(--glass-gap);
     left: var(--glass-gap);
     right: calc(var(--glass-gap) + var(--safe-right));
     margin: var(--glass-zero);
     padding-inline: var(--glass-gap);
-    border-width: var(--glass-zero);
-    border-bottom: var(--glass-outline);
     border-radius: var(--glass-radius-card);
-    box-shadow: none;
   }
   [data-theme="glass"] body[data-app-nav] .media-screen:not(.media-catalog-page) .media-heading {
     left: calc(var(--app-nav-width) + var(--glass-gap));
@@ -256,14 +260,11 @@
     -webkit-backdrop-filter: none;
   }
   [data-theme="glass"] .reader-screen .topbar:not([data-theme="gray"] *) {
-    top: var(--glass-gap);
+    top: var(--glass-zero);
     border-width: var(--glass-zero);
     border-bottom: var(--glass-outline);
-    border-radius: var(--glass-radius-card);
+    border-radius: var(--glass-zero);
     box-shadow: none;
-  }
-  [data-theme="glass"] .reader-screen[data-chrome="hidden"] .topbar:not([data-theme="gray"] *) {
-    transform: var(--glass-heading-hide);
   }
   [data-theme="glass"] .app-nav {
     width: calc(var(--app-nav-width) - var(--glass-gap) * 2 - var(--safe-left));

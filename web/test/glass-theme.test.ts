@@ -59,4 +59,13 @@ describe('glass material', () => {
     expect(resolveAppTheme({ ...preference, mode: 'dark' }, false)).toEqual({ theme: 'glass', mode: 'dark' });
     expect(validThemePreference({ theme: 'unknown' }).theme).toBe('warm');
   });
+
+  it('shares desktop sidebar material with headers and keeps reader chrome flush', () => {
+    expect(css).toContain(':is(.app-nav, .media-screen:not(.media-catalog-page) .media-heading)');
+    expect(css).toContain('box-shadow: var(--glass-shadow) !important');
+    const reader = css.match(/\.reader-screen \.topbar:not\(\[data-theme="gray"\] \*\)\s*\{([^}]+)\}/)?.[1];
+    expect(reader).toContain('top: var(--glass-zero)');
+    expect(reader).toContain('border-radius: var(--glass-zero)');
+    expect(css).not.toContain('--glass-heading-hide');
+  });
 });
