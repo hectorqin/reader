@@ -355,7 +355,9 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
               <dd>{state.chapterLabel || '暂无信息'}</dd>
             </dl>
             <h4>内容简介</h4>
-            <p className="book-detail-description">{state.description || '暂无简介'}</p>
+            <p className={`book-detail-description${state.description ? '' : ' book-detail-empty'}`}>
+              {state.description || '暂无简介'}
+            </p>
             <ReadingHistory state={state} handlers={handlers} />
           </article>
         </Sheet>

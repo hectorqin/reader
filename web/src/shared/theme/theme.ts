@@ -81,7 +81,7 @@ export const themes = {
         '#FFFFFF',
         '#F8EFE8',
         '#3A2A22',
-        '#82685B',
+        '#7a6053',
         '#F0E3DA',
         '#F2B79F',
         '#FBE9E0',
@@ -228,12 +228,12 @@ export const themes = {
         '#ffffff',
         '#e8edf5',
         '#141820',
-        '#536072',
+        '#3F4C60',
         '#cbd3df',
         '#0062df',
         '#e1ecff',
         '#ffffff',
-        '#0056c7',
+        '#0049ad',
         '#ffffff',
         'rgba(10,18,32,.40)',
       ],
@@ -431,6 +431,17 @@ export function saveThemePreference(scope: string, patch: Partial<ThemePreferenc
   // Storage events do not fire in the tab that made the change; tell this tab directly.
   if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(themeChangeEvent, { detail: { scope } }));
   return next;
+}
+
+export const loginThemeScope = (baseUrl: string): string => JSON.stringify([baseUrl.replace(/\/+$/, ''), 'anonymous']);
+
+/** Keep only the last appearance for this server, never account or session metadata. */
+export function rememberLoginTheme(baseUrl: string, scope: string): void {
+  try {
+    saveThemePreference(loginThemeScope(baseUrl), readThemePreference(scope));
+  } catch {
+    // Storage may be unavailable; that must not prevent rendering or signing out.
+  }
 }
 
 export function systemPrefersDark(): boolean {

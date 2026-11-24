@@ -12,7 +12,7 @@
   max-width: min(18rem, calc(100vw - 16px));
   max-height: min(24rem, calc(100dvh - 16px));
   margin: 0;
-  padding: 4px;
+  padding: var(--space-1);
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--color-line);
@@ -22,9 +22,7 @@
   font: inherit;
   font-size: var(--text-body, 15px);
   line-height: 1.4;
-  box-shadow:
-    0 10px 32px color-mix(in srgb, #000 18%, transparent),
-    0 2px 6px color-mix(in srgb, #000 8%, transparent);
+  box-shadow: var(--shadow-lg);
   animation: action-menu-in var(--motion-duration) var(--motion-ease);
 }
 
@@ -37,11 +35,11 @@
   appearance: none;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-2);
   width: 100%;
   min-height: 40px;
   margin: 0;
-  padding: 8px 12px;
+  padding: var(--space-2) var(--space-3);
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;

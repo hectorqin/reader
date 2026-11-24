@@ -437,7 +437,7 @@ const FLOW_STYLESHEET = `
   pointer-events: none;
   z-index: -1;
   border-radius: 3px;
-  background: color-mix(in srgb, var(--reader-accent, #7a5c3e) 34%, transparent);
+  background: color-mix(in srgb, var(--reader-accent, var(--color-brand-text)) 34%, transparent);
   transition: top 120ms linear, left 120ms linear, width 120ms linear, height 120ms linear;
 }
 .fixed-page {

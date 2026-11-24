@@ -18,7 +18,7 @@
   --color-surface: #ffffff;
   --color-surface-2: #f8efe8;
   --color-ink: #3a2a22;
-  --color-muted: #82685b;
+  --color-muted: #7a6053;
   --color-line: #f0e3da;
   --color-brand: #f2b79f;
   --color-brand-soft: #fbe9e0;
@@ -215,12 +215,12 @@
   --color-surface: #ffffff;
   --color-surface-2: #e8edf5;
   --color-ink: #141820;
-  --color-muted: #536072;
+  --color-muted: #3f4c60;
   --color-line: #cbd3df;
   --color-brand: #0062df;
   --color-brand-soft: #e1ecff;
   --color-on-brand: #ffffff;
-  --color-brand-text: #0056c7;
+  --color-brand-text: #0049ad;
   --color-on-ch: #ffffff;
   --color-scrim: rgba(10, 18, 32, 0.4);
   --color-ch-read: #a34400;
@@ -434,4 +434,81 @@
   --reader-ink: #d8d4ca;
   --reader-muted: #9d988d;
   --reader-line: #34322e;
+}
+
+/* UI geometry and effects; scoped surfaces resolve their own palette before these aliases. */
+:root,
+[data-theme],
+[data-mode] {
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: var(--radius-md);
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+  --space-pixel: 1px;
+  --space-half: 2px;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-7: 1.75rem;
+  --space-8: 2rem;
+  --space-9: 2.25rem;
+  --space-10: 2.5rem;
+  --space-11: 2.75rem;
+  --space-12: 3rem;
+  --space-14: 3.5rem;
+  --space-16: 4rem;
+
+  --color-black: #000000;
+  --color-white: #ffffff;
+  --color-video-bg: #101510;
+  --color-video-scrim: rgb(0 0 0 / 0.62);
+  --color-video-control: rgb(0 0 0 / 0.45);
+  --color-video-button: rgb(255 255 255 / 0.12);
+  --color-video-selected: rgb(255 255 255 / 0.28);
+  --color-backdrop-fallback: rgb(0 0 0 / 0.4);
+  --color-cover-badge: rgb(0 0 0 / 0.58);
+  --color-cover-track: rgb(0 0 0 / 0.35);
+  --color-note-ink: #222222;
+  --color-portrait-ink: #f7f0da;
+  --color-portrait-sheen: #f1e8bd70;
+  --color-portrait-shade: #121f2540;
+  --color-portrait-rim: #ede3ca55;
+  --color-reader-danger: #c0392b;
+  --color-error-text: #a32c22;
+  --color-success-text: #326c46;
+  --reader-viewer-bed: rgba(14, 13, 12, 0.96);
+  --reader-viewer-ink: #f3f0ea;
+  --reader-viewer-control: rgba(20, 19, 18, 0.62);
+  --reader-viewer-edge: rgba(255, 255, 255, 0.28);
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.14), 0 3px 10px rgb(0 0 0 / 0.06);
+  --shadow-md: 0 3px 12px rgb(0 0 0 / 0.08);
+  --shadow-lg: 0 10px 32px rgb(0 0 0 / 0.14);
+  --shadow-inset: inset 0 1px 2px rgb(0 0 0 / 0.06);
+  --shadow-sheet: 0 -14px 36px rgb(0 0 0 / 0.22);
+  --shadow-nav: 0 -8px 30px color-mix(in srgb, var(--color-ink) 10%, transparent);
+  --shadow-chrome-down: 0 2px 12px rgb(0 0 0 / 0.04);
+  --shadow-chrome-up: 0 -2px 12px rgb(0 0 0 / 0.04);
+  --shadow-reader-paper: 0 0 40px rgb(0 0 0 / 0.02);
+  --shadow-nav-focus: 0 0 0 2px;
+  --shadow-selected-ring: 0 0 0 1px;
+  --shadow-avatar-ring: 0 0 0 3px;
+  --shadow-paper-ring: inset 0 0 0 3px;
+  --shadow-edge: inset 0 0 0 1px;
+  --shadow-edge-bottom: inset 0 -1px;
+  --shadow-edge-clear: inset 0 -2px transparent;
+}
+
+[data-mode="dark"] {
+  --color-error-text: #ffaaa0;
+  --color-success-text: #9dd9ac;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.24), 0 3px 10px rgb(0 0 0 / 0.12);
+  --shadow-md: 0 3px 12px rgb(0 0 0 / 0.18);
+  --shadow-lg: 0 10px 32px rgb(0 0 0 / 0.3);
+  --shadow-sheet: 0 -14px 36px rgb(0 0 0 / 0.32);
 }

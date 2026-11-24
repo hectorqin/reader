@@ -13,5 +13,5 @@
   font-size: var(--text-meta);
 }
 .plugin-install-form input[type="file"] {
-  padding: 9px;
+  padding: var(--space-2);
 }

@@ -8,12 +8,12 @@
 .mine-profile {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: var(--space-4);
   margin: 20px 0 4px;
-  padding: 18px 20px;
-  border: 1px solid color-mix(in srgb, var(--color-brand) 35%, transparent);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-xl);
-  background: var(--color-brand-soft);
+  background: var(--color-surface);
   color: var(--color-ink);
 }
 
@@ -28,7 +28,7 @@
   color: var(--color-on-brand);
   font-size: var(--text-display);
   font-weight: 700;
-  box-shadow: 0 0 0 3px var(--color-surface);
+  box-shadow: var(--shadow-avatar-ring) var(--color-surface);
 }
 
 .mine-profile-text {
@@ -37,7 +37,7 @@
 .mine-profile-text strong {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
   font-size: var(--text-title);
   font-weight: 600;
   overflow-wrap: anywhere;
@@ -45,7 +45,7 @@
 .mine-role {
   flex: none;
   height: 20px;
-  padding: 0 8px;
+  padding: 0 var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--color-surface);
   color: var(--color-brand-text);
@@ -56,7 +56,7 @@
 .mine-profile-text small {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1);
   margin-top: 4px;
   font-size: var(--text-meta);
   color: var(--color-muted);
@@ -78,7 +78,7 @@
 /* The padding is hit area only: the line stays one line of meta text (ui.md §3.3). */
 .mine-status-link {
   margin: -10px 0 -10px 4px;
-  padding: 10px 4px;
+  padding: var(--space-2) var(--space-1);
   color: var(--color-brand-text);
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -96,7 +96,7 @@
   .mine-groups {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 24px;
+    column-gap: var(--space-6);
     align-items: start;
   }
   .mine-column {
@@ -128,10 +128,10 @@
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   width: 100%;
   min-height: 54px;
-  padding: 0 14px;
+  padding: 0 var(--space-3);
   box-sizing: border-box;
   border: 0;
   background: transparent;
@@ -209,7 +209,7 @@
 .settings-body {
   max-width: 640px;
   margin: 0 auto;
-  padding-bottom: 40px;
+  padding-bottom: var(--space-10);
 }
 .settings-tabs {
   display: flex;
@@ -221,7 +221,7 @@
   flex: 1 1 0;
   min-width: 0;
   min-height: 48px;
-  padding: 0 4px;
+  padding: 0 var(--space-1);
   margin-bottom: -1px;
   border: 0;
   border-bottom: 2px solid transparent;
@@ -304,9 +304,9 @@
 .settings-page .settings-link {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   margin-top: 22px;
-  padding: 14px;
+  padding: var(--space-3);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
   background: var(--color-surface);

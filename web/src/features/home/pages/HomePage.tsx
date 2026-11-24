@@ -7,7 +7,8 @@ import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { coverTint } from '../../../ui/cover-tint.ts';
 import { BookCard, useCover } from '../../shelf/pages/ShelfPage.tsx';
-import { useShelf } from '../../shelf/queries/shelf.queries.ts';
+import { shelfQuery, useShelf } from '../../shelf/queries/shelf.queries.ts';
+import { useMediaQuery } from '../../../shared/ui/use-media-query.ts';
 import { historyQuery, mediaKeys, type Activity } from '../../media/queries/media.queries.ts';
 import { MediaCover } from '../../media/components/cover.tsx';
 import { resolveWork } from '../../media/services/work.ts';
@@ -199,10 +200,11 @@ function Discover({
     // Same picks until asked for another batch; refocusing the tab must not reshuffle under the reader.
     staleTime: mode === 'random' ? Infinity : 5 * 60_000,
     placeholderData: keepPreviousData,
+    retry: false,
   });
   const items = sample.data?.items ?? [];
   // Optional: an older server, a starting media worker or an empty channel simply shows nothing.
-  if (!items.length) return null;
+  if (sample.isError || !items.length) return null;
   const square = channel !== 'video';
   return (
     <section className="home-discover" data-channel={channel} aria-label={heading}>
@@ -258,6 +260,9 @@ export function HomePage() {
     queryFn: ({ signal }) => runtime.api.continueReading(2, { signal }),
   });
   const shelf = useShelf(1, 'recent');
+  const desktop = useMediaQuery('(min-width: 701px)');
+  const added = useQuery({ ...shelfQuery(runtime, 1, 'added'), enabled: desktop, retry: false });
+  const addedBooks = added.isError ? [] : (added.data?.items ?? []).slice(0, 4);
   // 首页显示最近续播 (偏好设置 › 影音浏览) off: no video/audiobook continue cards; books are not media.
   const { showContinue } = useMediaPreferences();
   const video = useQuery({ ...historyQuery(runtime, 'video', new URLSearchParams()), enabled: media && showContinue });
@@ -344,6 +349,22 @@ export function HomePage() {
           <div className="home-shelf-row">
             {books.map((item) => (
               <BookCard key={item.id} book={item} showAuthor={false} showProgress />
+            ))}
+          </div>
+        </section>
+      )}
+      {desktop && addedBooks.length > 0 && (
+        <section className="home-recent-books" aria-label="最近添加的书">
+          <div className="home-section">
+            <h2>最近添加的书</h2>
+            <Link to="/shelf?sort=added">
+              全部
+              <Icon name="chevron-right" size={16} />
+            </Link>
+          </div>
+          <div className="home-shelf-row">
+            {addedBooks.map((item) => (
+              <BookCard key={item.id} book={item} showAuthor showProgress={false} />
             ))}
           </div>
         </section>

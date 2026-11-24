@@ -480,7 +480,7 @@ export function PlaybackControls({
       >
         {[0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3].map((value) => (
           <option key={value} value={value}>
-            {value}×
+            {Number.isInteger(value) ? value.toFixed(1) : value}×
           </option>
         ))}
       </MediaSelect>

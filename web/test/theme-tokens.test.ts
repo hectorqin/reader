@@ -73,6 +73,7 @@ describe('theme tokens', () => {
           ['ink on bg', t.ink, t.bg],
           ['ink on surface', t.ink, t.surface],
           ['muted on bg', t.muted, t.bg],
+          ['muted on surface', t.muted, t.surface],
           ['muted on surface-2', t.muted, t.surface2],
           ['brand-text on brand-soft', t.brandText, t.brandSoft],
           ['brand-text on bg', t.brandText, t.bg],

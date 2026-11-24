@@ -893,6 +893,28 @@ describe('legacy offline migration', () => {
   });
 });
 
+it.each([undefined, null])('opens tools with %s manifest metadata', async (metadata) => {
+  const env = await setup();
+  const incomplete = manifest(content(['a']));
+  (incomplete as unknown as { book?: Book | null | undefined }).book = metadata;
+  const cache = new PublicationCache(env.platform.kv, env.platform.blobs, publicationScope(env.api.baseUrl, 'u1'));
+  env.transport.respondWith((request) => {
+    if (request.url.endsWith('/manifest')) return { status: 200, headers: {}, json: incomplete };
+    if (request.url.includes('/assets?')) return { status: 200, headers: {}, bytes: new TextEncoder().encode('正文') };
+    return { status: 200, headers: {}, json: { progress: null } };
+  });
+  await env.screen.open(book);
+  expect(body(env.screen)?.textContent).toContain('正文');
+  await click(env.screen, '工具');
+  await vi.waitFor(() => expect(env.screen.element.textContent).toContain('搜索全文'));
+  await click(env.screen, '笔记');
+  expect(env.offline.notesFor(book.id)).toEqual([]);
+  await click(env.screen, '添加当前位置书签');
+  await vi.waitFor(() => expect(env.offline.notesFor(book.id)).toHaveLength(1));
+  expect(env.offline.notesFor(book.id)[0]).toMatchObject({ bookId: book.id, text: book.title, type: 'bookmark' });
+  expect((await cache.manifest(book.id))?.book).toEqual(book);
+});
+
 it('opens tools, searches the whole book, navigates and returns, and persists a bookmark', async () => {
   const env = await setup();
   serve(env.transport, content(['a', 'b']));
@@ -1103,6 +1125,18 @@ it('lists 阅读记录 in 书籍信息 and goes back to a place from it', async 
   older.click();
   await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('r1:0.5000:chapter:a'));
   expect(env.screen.element.querySelector('.reading-history')).toBeNull();
+});
+
+it('shows a quiet description placeholder and empty reading history in book info', async () => {
+  const env = await setup();
+  serve(env.transport, content(['a']));
+  await env.screen.open(book);
+  vi.spyOn(env.api, 'progressHistory').mockResolvedValue([]);
+  await click(env.screen, '书籍信息');
+  await vi.waitFor(() =>
+    expect(env.screen.element.querySelector('.reading-history')?.textContent).toContain('还没有阅读记录'),
+  );
+  expect(env.screen.element.querySelector('.book-detail-empty')?.textContent).toBe('暂无简介');
 });
 
 it('says 阅读记录 cannot be read offline instead of showing an empty list', async () => {

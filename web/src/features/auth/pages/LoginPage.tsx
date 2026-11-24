@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
 import type { InstanceInfo } from '../../../api/types.ts';
 import { ApiError } from '../../../api/errors.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { validServerUrl } from '../../../app/runtime.ts';
 import { Icon } from '../../../ui/toolkit.tsx';
+import { loginThemeScope, ThemeController } from '../../../shared/theme/theme.ts';
 
 export function LoginPage() {
   const runtime = useRuntime();
@@ -21,6 +22,11 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
   const probe = useRef<ReturnType<typeof setTimeout> | null>(null);
   const probeGeneration = useRef(0);
+  const themeServer = validServerUrl(serverUrl) || runtime.api.baseUrl;
+  useLayoutEffect(() => {
+    const theme = new ThemeController(loginThemeScope(themeServer));
+    return () => theme.dispose();
+  }, [themeServer]);
   useEffect(() => {
     const value = serverUrl.trim();
     probeGeneration.current += 1;

@@ -7,7 +7,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-2);
   margin: 14px 0 6px;
 }
 .media-favorites .media-favorite-tools p {
@@ -24,7 +24,7 @@
 .media-screen .media-favorite-filter-menu > summary {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-1);
   min-height: 44px;
   padding: 0;
   border: 0;
@@ -54,7 +54,7 @@
 .media-screen .media-favorites .media-favorite-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   width: 100%;
   min-height: 60px;
   padding: 0;
@@ -90,7 +90,7 @@
 .media-favorites .media-favorite-copy {
   flex: 1;
   min-width: 0;
-  padding: 9px 0;
+  padding: var(--space-2) 0;
 }
 .media-favorites .media-favorite-copy strong {
   display: block;

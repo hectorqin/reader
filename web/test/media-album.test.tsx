@@ -107,6 +107,8 @@ it('selects a starting track, plays remaining tracks and enqueues the same order
     ),
   );
   await vi.waitFor(() => expect(root.querySelectorAll('.media-album-track-link').length).toBe(3));
+  expect(root.querySelector('.media-album-queue')?.textContent).toBe('加入队列');
+  expect(root.querySelector('.media-album-queue .icon')).not.toBeNull();
   await act(async () => root.querySelector<HTMLInputElement>('[aria-label="从 b 开始播放"]')!.click());
   const buttons = () => Array.from(root.querySelectorAll('button'));
   await act(async () =>

@@ -12,13 +12,13 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
-  padding: 0.625rem 0.625rem 0.625rem 1rem;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-lg);
   background: var(--reader-surface);
   color: var(--reader-ink);
-  box-shadow: 0 4px 16px #0000000d;
+  box-shadow: var(--shadow-md);
   font-size: var(--text-ui);
   line-height: 1.5;
 }
@@ -41,7 +41,7 @@ body:has(.reader-screen[data-chrome="visible"]) .pwa-update {
 .pwa-update .button {
   min-height: 44px;
   flex: none;
-  padding: 0.625rem 1rem;
+  padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-md);
   font: inherit;
   font-weight: 600;

@@ -19,7 +19,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  margin: var(--space-3) 0;
+  margin: var(--space-4) 0;
 }
 .stats-controls .segmented {
   flex: 0 1 18rem;
@@ -46,7 +46,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: var(--space-half);
   min-width: 0;
   min-height: 44px;
   padding: var(--space-1) var(--space-2);
@@ -100,15 +100,15 @@
 }
 
 .stats-chart {
-  margin-top: var(--space-3);
-  padding: var(--space-3);
+  margin-top: var(--space-4);
+  padding: var(--space-4);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
 .stats-readout {
   display: grid;
-  gap: 2px;
+  gap: var(--space-half);
   min-height: 4.2rem;
 }
 .stats-readout small,
@@ -125,7 +125,7 @@
 .stats-bars {
   display: flex;
   align-items: stretch;
-  gap: 2px;
+  gap: var(--space-half);
   height: 11rem;
   margin-top: var(--space-2);
   border-bottom: 1px solid var(--color-line);
@@ -138,7 +138,7 @@
   justify-content: flex-end;
   min-width: 0;
   min-height: 0;
-  padding: 0 0 1.1rem;
+  padding: 0 0 var(--space-4);
   border: 0;
   border-radius: 0;
   background: none;
@@ -148,13 +148,13 @@
 }
 .stats-page .stats-bars[data-group="month"] .stats-bar,
 .stats-page .stats-bars[data-group="year"] .stats-bar {
-  padding-inline: 3px;
+  padding-inline: var(--space-half);
 }
 /* One stack per bar: 2px surface gaps between kinds, 4px rounded data end at the top. */
 .stats-stack {
   display: flex;
   flex-direction: column-reverse;
-  gap: 2px;
+  gap: var(--space-half);
   min-height: 0;
   border-radius: var(--radius-xs) var(--radius-xs) 0 0;
   overflow: hidden;
@@ -215,7 +215,7 @@
 .stats-table td,
 .stats-admin th,
 .stats-admin td {
-  padding: 6px 4px;
+  padding: var(--space-1) var(--space-1);
   border-bottom: 1px solid var(--color-line);
   text-align: end;
   color: var(--color-ink);
@@ -236,13 +236,13 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin: var(--space-4) 0 var(--space-2);
+  margin: var(--space-6) 0 var(--space-2);
   font-size: var(--text-title);
   font-weight: 600;
 }
 .stats-page .stats-clear {
   margin-inline-start: auto;
-  padding: 4px 10px;
+  padding: var(--space-1) var(--space-2);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-pill);
   background: var(--color-surface);
@@ -254,7 +254,7 @@
 }
 .stats-works ol {
   display: grid;
-  gap: 2px;
+  gap: var(--space-half);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -319,7 +319,7 @@
 /* 阅读日历. One hue per kind (the kind's own --color-chart-N; the brand colour for
  * everything), five steps by opacity, so the scale reads the same in light and dark. */
 .stats-calendar {
-  margin-top: var(--space-4);
+  margin-top: var(--space-6);
 }
 .stats-calendar {
   --heat: var(--color-brand-text);
@@ -360,14 +360,14 @@
 }
 .stats-calendar-grid {
   display: flex;
-  gap: 3px;
+  gap: var(--space-half);
   width: max-content;
 }
 .stats-calendar-week,
 .stats-calendar-days {
   display: grid;
   grid-template-rows: 1rem repeat(7, 12px);
-  gap: 3px;
+  gap: var(--space-half);
 }
 /* The weekday names stay put while the weeks scroll under them on a narrow screen. */
 .stats-calendar-days {
@@ -380,7 +380,7 @@
   font-size: var(--text-micro);
   line-height: 12px;
   color: var(--color-muted);
-  padding-inline-end: 4px;
+  padding-inline-end: var(--space-1);
 }
 .stats-calendar-month {
   font-size: var(--text-micro);
@@ -434,7 +434,7 @@
 .stats-calendar-legend {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-half);
   margin-top: var(--space-1);
   font-size: var(--text-micro);
   color: var(--color-muted);

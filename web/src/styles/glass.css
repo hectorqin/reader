@@ -17,6 +17,7 @@
     radial-gradient(ellipse at 80% 85%, color-mix(in srgb, var(--color-ch-video) 17%, transparent), transparent 62%);
   --glass-track: color-mix(in srgb, var(--color-surface-2) 56%, transparent);
   --glass-selected: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  --glass-selected-ink: var(--color-brand-text);
   --glass-nav-selected: color-mix(in srgb, var(--color-brand-soft) 82%, transparent);
   --glass-button-top: color-mix(in srgb, var(--color-brand-text) 94%, white);
   --glass-button-base: var(--color-brand-text);
@@ -46,6 +47,7 @@
 }
 
 [data-theme="glass"][data-mode="dark"] {
+  --glass-selected-ink: var(--color-ink);
   --glass-fill: color-mix(in srgb, var(--color-surface) 64%, transparent);
   --glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 8%), transparent 55%);
   --glass-border: color-mix(in srgb, var(--color-ink) 22%, transparent);
@@ -168,7 +170,7 @@
   background: var(--glass-sheen), var(--glass-selected);
   border-color: var(--glass-border);
   box-shadow: var(--glass-shadow);
-  color: var(--color-brand-text);
+  color: var(--glass-selected-ink);
 }
 
 [data-theme="glass"]

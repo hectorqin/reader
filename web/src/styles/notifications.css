@@ -2,7 +2,7 @@
 body .notyf {
   padding: max(1rem, var(--safe-top)) max(1rem, var(--safe-right)) max(1rem, var(--safe-bottom))
     max(1rem, var(--safe-left));
-  gap: 0.5rem;
+  gap: var(--space-2);
   font: inherit;
 }
 /* On a phone the tab bar owns the bottom edge (ui.md §3.1): notices float above it, like the update bar. */
@@ -33,18 +33,18 @@ body:has(.reader-screen[data-chrome="visible"]) .notyf {
   max-height: min(16rem, calc(100dvh - 2rem));
   overflow: auto;
   margin: 0;
-  padding: 0.65rem 0.8rem 0.65rem 1rem;
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-4);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-lg);
   color: var(--reader-ink);
-  box-shadow: 0 6px 24px #00000014;
+  box-shadow: var(--shadow-md);
   font-size: var(--text-label);
   text-align: start;
   pointer-events: none;
   animation-duration: var(--motion-duration);
 }
 .global-notice .notyf__wrapper {
-  gap: 0.65rem;
+  gap: var(--space-3);
   padding: 0;
 }
 .global-notice .notyf__message {
@@ -85,16 +85,16 @@ body:has(.reader-screen[data-chrome="visible"]) .notyf {
   outline-offset: 2px;
 }
 .global-notice[data-kind="error"] {
-  color: #a32c22;
+  color: var(--color-error-text);
 }
 [data-mode="dark"] .global-notice[data-kind="error"] {
-  color: #ffaaa0;
+  color: var(--color-error-text);
 }
 .global-notice[data-kind="success"] {
-  color: #326c46;
+  color: var(--color-success-text);
 }
 [data-mode="dark"] .global-notice[data-kind="success"] {
-  color: #9dd9ac;
+  color: var(--color-success-text);
 }
 .global-notice[data-kind="loading"] .notyf__wrapper::before {
   content: "";

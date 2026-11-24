@@ -1303,7 +1303,8 @@ export class ReaderScreen {
 
   private async loadManifest(book: Book): Promise<Manifest> {
     try {
-      const manifest = await this.options.api.manifest(book.id);
+      const received = await this.options.api.manifest(book.id);
+      const manifest = { ...received, book: received.book ?? book };
       await this.publicationCache.putManifest(book.id, manifest).catch(() => undefined);
       return manifest;
     } catch (error) {

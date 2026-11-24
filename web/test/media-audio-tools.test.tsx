@@ -173,6 +173,10 @@ it('keeps the audiobook chapter eyebrow with its title and speed in a dedicated 
   expect(title.previousElementSibling?.textContent).toContain('第 1 / 1 章');
   expect(root.querySelector('.media-playing-copy')?.contains(title.previousElementSibling)).toBe(true);
   expect(root.querySelector('.media-playback-options > .media-speed-control [role="combobox"]')).not.toBeNull();
+  expect(root.querySelector('.media-playback-options > .media-speed-control [role="combobox"]')?.textContent).toBe(
+    '1.0×',
+  );
+  expect(root.querySelector('.media-playback-options > .media-speed-control > .icon')).not.toBeNull();
   await act(async () => root.querySelector<HTMLButtonElement>('.media-toggle-play')!.click());
   expect(toggle).toHaveBeenCalledTimes(1);
 });

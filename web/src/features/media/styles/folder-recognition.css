@@ -1,6 +1,6 @@
 .media-recognition-form {
   max-width: 100%;
-  padding: 16px;
+  padding: var(--space-4);
   box-sizing: border-box;
   min-height: 0;
   overflow-y: auto;
@@ -14,12 +14,12 @@
 }
 .media-recognition-form .media-toolbar {
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .media-recognition-form .media-recognition-check {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: var(--space-2);
 }
 .media-recognition-form input[type="checkbox"] {
   width: 18px;
@@ -41,7 +41,7 @@
   top: -16px;
   z-index: 2;
   background: var(--reader-paper);
-  padding: 10px 0;
+  padding: var(--space-2) 0;
   border-bottom: 1px solid var(--border);
 }
 .media-recognition-bulk p {
@@ -53,7 +53,7 @@
 }
 .media-recognition-preview {
   border-top: 1px solid var(--border);
-  padding-top: 16px;
+  padding-top: var(--space-4);
 }
 .media-recognition-preview > p {
   font-size: var(--text-label);
@@ -64,14 +64,14 @@
   display: flex;
   flex-direction: row;
   align-items: flex-start;
-  gap: 10px;
-  padding: 12px 0;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
   border-bottom: 1px solid var(--border);
 }
 .media-recognition-row > span {
   min-width: 0;
   display: grid;
-  gap: 5px;
+  gap: var(--space-1);
   overflow-wrap: anywhere;
 }
 .media-recognition-row small {
