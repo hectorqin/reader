@@ -26,11 +26,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
   min-width: 0;
   min-height: 44px;
   width: 100%;
-  padding: 10px 12px;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--border, var(--color-line));
   border-radius: var(--radius-sm);
   background: var(--media-paper, var(--color-surface));
@@ -81,16 +81,16 @@
 .media-select-control[data-variant="plain"] > .media-select-trigger {
   border: 0;
   background: transparent;
-  padding: 0 2px;
+  padding: 0 var(--space-half);
   font-size: var(--text-meta);
-  gap: 8px;
+  gap: var(--space-2);
 }
 .media-select-menu {
   position: fixed;
   inset: auto;
   box-sizing: border-box;
   margin: 0;
-  padding: 5px;
+  padding: var(--space-1);
   min-width: 0;
   max-width: calc(100vw - 16px);
   overflow: auto;
@@ -101,7 +101,7 @@
   border-radius: var(--radius-md);
   background: var(--media-paper, var(--color-surface));
   color: var(--text, var(--color-ink));
-  box-shadow: 0 8px 30px #00000024;
+  box-shadow: var(--shadow-lg);
   z-index: 1000;
   font:
     var(--text-ui)/1.5 -apple-system,
@@ -119,10 +119,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-4);
   min-height: 44px;
   box-sizing: border-box;
-  padding: 10px 12px;
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   cursor: pointer;
   overflow-wrap: anywhere;
@@ -170,11 +170,11 @@
 .media-screen .media-playback-options .media-select-trigger {
   min-height: 24px;
   height: 24px;
-  padding: 0 3px;
+  padding: 0 var(--space-half);
   border: 0;
   background: transparent;
   font-size: var(--text-meta);
-  gap: 3px;
+  gap: var(--space-half);
   color: var(--muted, var(--color-muted));
 }
 .media-screen .media-playback-options .media-select-trigger > svg {

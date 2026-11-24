@@ -30,13 +30,6 @@
 
 :root {
   /* Colours are the theme's: styles/theme-tokens.css. */
-  /* Corner radii: six steps (ui.md §2.6). Pick the step by what the box is, not by eye. */
-  --radius-xs: 4px; /* badges, tags, progress tracks */
-  --radius-sm: 8px; /* small controls, menu items, thumbnails, covers */
-  --radius-md: 10px; /* buttons, inputs, menus, list cards */
-  --radius-lg: 14px; /* panels, page cards, popovers */
-  --radius-xl: 20px; /* sheets, hero cards */
-  --radius-pill: 999px;
   --reader-radius: var(--radius-md);
   --collection-measure: 80rem;
   /*
@@ -61,22 +54,6 @@
    * one round of this review.
    */
   --shelf-search-inset: 0.75rem;
-
-  /*
-   * The spacing scale.
-   *
-   * Four steps, not eight. A larger scale reads as precision and behaves as a
-   * suggestion: once `1.75rem` and `2rem` both exist, half the stylesheet uses one
-   * and half the other and the inconsistency is invisible in any single rule.
-   *
-   * The values are the ones the stylesheet already used, promoted to names so that
-   * "put this a bit further from that" becomes "which step is this" — the question
-   * that actually has an answer.
-   */
-  --space-1: 0.35rem; /* inline gaps inside a control */
-  --space-2: 0.6rem; /* padding inside a control */
-  --space-3: 0.9rem; /* gutter between sections */
-  --space-4: 1.5rem; /* padding inside a page-level band */
 
   /*
    * The type scale. Named by role rather than by size, because the size is the part
@@ -150,10 +127,6 @@
   --reader-page-margin: 1.5rem;
   --reader-brightness: 1;
   /* The picture viewer's bed and the controls drawn on it: dark in every theme, like a lightbox. */
-  --reader-viewer-bed: rgba(14, 13, 12, 0.96);
-  --reader-viewer-ink: #f3f0ea;
-  --reader-viewer-control: rgba(20, 19, 18, 0.62);
-  --reader-viewer-edge: rgba(255, 255, 255, 0.28);
   /* How much of the page outside the focused paragraph is covered (专注模式). */
   --reader-focus-veil: 0.68;
   --reader-measure: 42rem;
@@ -421,7 +394,7 @@ select {
   inset: 0;
   pointer-events: none;
   z-index: 5;
-  background: #000;
+  background: var(--color-black);
   opacity: calc(1 - var(--reader-brightness));
   mix-blend-mode: multiply;
 }
@@ -480,8 +453,8 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: calc(var(--space-2) + var(--safe-top)) calc(var(--space-3) + var(--safe-right)) var(--space-2)
-    calc(var(--space-3) + var(--safe-left));
+  padding: calc(var(--space-2) + var(--safe-top)) calc(var(--space-4) + var(--safe-right)) var(--space-2)
+    calc(var(--space-4) + var(--safe-left));
   pointer-events: none;
 }
 .image-viewer-count {
@@ -510,12 +483,12 @@ select {
   display: none;
   position: absolute;
   top: 50%;
-  left: calc(var(--space-3) + var(--safe-left));
+  left: calc(var(--space-4) + var(--safe-left));
   transform: translateY(-50%);
 }
 .image-viewer-step.image-viewer-next {
   left: auto;
-  right: calc(var(--space-3) + var(--safe-right));
+  right: calc(var(--space-4) + var(--safe-right));
 }
 @media (hover: hover) and (pointer: fine) {
   .image-viewer-step {
@@ -761,8 +734,8 @@ book-content {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
-  padding: 0.3rem 0.25rem;
+  gap: var(--space-half);
+  padding: var(--space-1) var(--space-1);
   border: 0;
   border-radius: var(--reader-radius);
   background: transparent;
@@ -849,7 +822,7 @@ book-content {
   background: var(--reader-surface);
   color: var(--reader-ink);
   border-radius: var(--reader-radius);
-  padding: 0.6rem 1rem;
+  padding: var(--space-2) var(--space-4);
   font-size: var(--text-body);
   cursor: pointer;
   touch-action: manipulation;
@@ -907,7 +880,7 @@ book-content {
 }
 
 .sheet-header .icon-text-button {
-  padding: 0.45rem 0.6rem;
+  padding: var(--space-2) var(--space-2);
   font-size: var(--text-label);
 }
 
@@ -977,7 +950,7 @@ book-content {
   }
 
   .button.danger:hover {
-    background: color-mix(in srgb, #c0392b 10%, var(--reader-surface));
+    background: color-mix(in srgb, var(--color-reader-danger) 10%, var(--reader-surface));
   }
 }
 
@@ -1023,7 +996,7 @@ book-content {
   background: var(--reader-surface);
   color: var(--reader-ink);
   border-radius: var(--reader-radius);
-  padding: 0.45rem 0.6rem;
+  padding: var(--space-2) var(--space-2);
   font-size: var(--text-title);
   font-family: inherit;
   width: 100%;
@@ -1091,7 +1064,7 @@ book-content {
 .shelf-head {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: var(--space-3);
   padding: calc(0.9rem + var(--safe-top)) var(--shelf-gutter-end) 0.5rem calc(0.9rem + var(--safe-left));
   max-width: var(--shelf-measure);
   margin-inline: auto;
@@ -1130,7 +1103,7 @@ book-content {
 .shelf-head-actions {
   display: flex;
   align-items: center;
-  gap: 0.15rem;
+  gap: var(--space-half);
   flex: 0 0 auto;
   /* Nudged back up so the 40px target of the first button aligns with the cap
      height of the title rather than with its baseline. */
@@ -1253,7 +1226,7 @@ book-content {
   color: var(--reader-ink);
   border-radius: var(--radius-pill);
   /* Room for the glyph on the left and the clear button on the right. */
-  padding: 0.62rem 2.4rem 0.62rem 2.15rem;
+  padding: var(--space-2) var(--space-10) var(--space-2) var(--space-9);
   /*
    * A field is text, so it gets the text' baseline and the icons positioned inside it
    * are centred against its box instead. The two are only the same line while the
@@ -1362,7 +1335,7 @@ book-content {
   z-index: 4;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   /*
    * A hairline under the sticky band, so the covers scrolling beneath it have an
    * edge to pass. Without it the band is invisible until something slides under it,
@@ -1396,7 +1369,7 @@ book-content {
 .shelf-sort {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--space-1);
   overflow-x: auto;
   scrollbar-width: none;
   flex: 1 1 auto;
@@ -1437,8 +1410,8 @@ book-content {
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 0.3rem;
-  padding: 0.9rem 0.35rem 0.25rem;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-1) var(--space-1);
 }
 
 /*
@@ -1457,7 +1430,7 @@ book-content {
   border-radius: var(--reader-radius);
   min-width: 2rem;
   height: 2rem;
-  padding: 0 0.4rem;
+  padding: 0 var(--space-2);
   font-size: var(--text-label);
   font-variant-numeric: tabular-nums;
   display: inline-grid;
@@ -1545,18 +1518,18 @@ book-content {
    * lines of text form one block, and equal gaps make the author name look like
    * it belongs to the book below it.
    */
-  gap: 1.1rem 0.75rem;
+  gap: var(--space-4) var(--space-3);
   align-items: start;
 }
 
 .book-grid[data-density="compact"] {
   --shelf-cover-min: 5rem;
-  gap: 0.9rem 0.6rem;
+  gap: var(--space-4) var(--space-2);
 }
 
 .book-grid[data-density="comfortable"] {
   --shelf-cover-min: 9.5rem;
-  gap: 1.35rem 1rem;
+  gap: var(--space-5) var(--space-4);
 }
 
 /*
@@ -1615,7 +1588,7 @@ book-content {
   text-align: start;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-1);
   min-width: 0;
   width: 100%;
 }
@@ -1630,7 +1603,7 @@ book-content {
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-1);
   min-width: 0;
   width: 100%;
   font: inherit;
@@ -1660,7 +1633,7 @@ book-content {
   color: var(--reader-ink);
   opacity: 0.55;
   backdrop-filter: blur(4px);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+  box-shadow: var(--shadow-sm);
   transition: opacity var(--motion-duration) var(--motion-ease);
 }
 
@@ -1713,9 +1686,7 @@ book-content {
   border-radius: var(--radius-sm);
   overflow: hidden;
   background: color-mix(in srgb, var(--reader-line) 70%, var(--reader-surface));
-  box-shadow:
-    0 1px 2px rgb(0 0 0 / 0.14),
-    0 3px 10px rgb(0 0 0 / 0.06);
+  box-shadow: var(--shadow-sm);
   display: grid;
   place-items: stretch;
   transition:
@@ -1725,7 +1696,7 @@ book-content {
 
 .book-card .book-open:active .cover {
   transform: scale(0.975);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
+  box-shadow: var(--shadow-sm);
 }
 
 .book-card .cover img {
@@ -1747,7 +1718,7 @@ book-content {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.7rem 0.55rem;
+  padding: var(--space-3) var(--space-2);
   font-size: var(--text-label);
   font-weight: 500;
   line-height: 1.35;
@@ -1778,10 +1749,10 @@ book-content {
   position: absolute;
   inset-block-end: 0.3rem;
   inset-inline-end: 0.3rem;
-  background: rgb(0 0 0 / 0.58);
-  color: #fff;
+  background: var(--color-cover-badge);
+  color: var(--color-white);
   border-radius: var(--radius-xs);
-  padding: 0.05rem 0.3rem;
+  padding: var(--space-pixel) var(--space-1);
   font-size: var(--text-micro);
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -1831,7 +1802,7 @@ book-content {
   inset-inline: 0;
   inset-block-end: 0;
   height: 4px;
-  background: rgb(0 0 0 / 0.35);
+  background: var(--color-cover-track);
 }
 
 .book-card .cover-progress span {
@@ -1921,7 +1892,7 @@ book-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--space-1);
 }
 
 .empty-state p {
@@ -1948,7 +1919,7 @@ book-content {
 
 .empty-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
   justify-content: center;
   margin-top: 0.85rem;
@@ -1959,7 +1930,7 @@ book-content {
 .switch-field {
   flex-direction: row;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .switch-text {
@@ -2002,7 +1973,7 @@ book-content {
   height: 1.2rem;
   border-radius: 50%;
   background: var(--reader-surface);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  box-shadow: var(--shadow-sm);
   transition: inset-inline-start var(--motion-duration) var(--motion-ease);
 }
 
@@ -2066,7 +2037,7 @@ book-content {
   border: 0;
   background: transparent;
   color: var(--reader-ink);
-  padding: 0.55rem 0.6rem;
+  padding: var(--space-2) var(--space-2);
   border-radius: var(--reader-radius);
   font-size: var(--text-body);
   line-height: 1.35;
@@ -2089,7 +2060,7 @@ book-content {
 /* A volume heading: names the chapters under it, and is not one of them. */
 .toc-list .toc-volume {
   margin-top: var(--space-2);
-  padding: 0.45rem 0.6rem 0.25rem;
+  padding: var(--space-2) var(--space-2) var(--space-1);
   color: var(--reader-muted);
   font-size: var(--text-label);
   font-weight: 600;
@@ -2263,7 +2234,7 @@ book-content {
   border-radius: 50%;
   background: var(--reader-surface);
   border: 2px solid var(--reader-accent);
-  box-shadow: 0 1px 4px color-mix(in srgb, #000 18%, transparent);
+  box-shadow: var(--shadow-sm);
 }
 
 .progress-scrubber::-moz-range-thumb,
@@ -2273,7 +2244,7 @@ book-content {
   border-radius: 50%;
   background: var(--reader-surface);
   border: 2px solid var(--reader-accent);
-  box-shadow: 0 1px 4px color-mix(in srgb, #000 18%, transparent);
+  box-shadow: var(--shadow-sm);
 }
 
 .progress-scrubber:focus-visible,
@@ -2314,13 +2285,13 @@ book-content {
 .nav-chapter {
   display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
+  gap: var(--space-half);
   border: 0;
   background: transparent;
   color: var(--reader-ink);
   font: inherit;
   font-size: var(--text-label);
-  padding: 0.45rem 0;
+  padding: var(--space-2) 0;
   border-radius: var(--reader-radius);
   cursor: pointer;
   touch-action: manipulation;
@@ -2406,7 +2377,7 @@ book-content {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  padding: 0.2rem;
+  padding: var(--space-1);
   opacity: 1;
   transform: none;
   transition:
@@ -2475,7 +2446,7 @@ book-content {
   font-size: var(--text-title);
   cursor: pointer;
   touch-action: manipulation;
-  box-shadow: 0 2px 8px color-mix(in srgb, #000 12%, transparent);
+  box-shadow: var(--shadow-sm);
   transition:
     transform var(--motion-duration) var(--motion-ease),
     background var(--motion-duration) var(--motion-ease);
@@ -2533,7 +2504,7 @@ book-content {
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-2);
-  padding: 0.35rem 0.5rem;
+  padding: var(--space-1) var(--space-2);
   background: var(--reader-surface-float);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -2676,7 +2647,7 @@ book-content {
   background: var(--reader-surface);
   color: var(--reader-muted);
   border-radius: var(--radius-pill);
-  padding: 0.3rem 0.7rem;
+  padding: var(--space-1) var(--space-3);
   font-size: var(--text-meta);
   white-space: nowrap;
   cursor: pointer;
@@ -2756,7 +2727,7 @@ book-content {
   display: grid;
   grid-template-columns: minmax(4.5rem, max-content) 1fr;
   align-items: center;
-  gap: var(--space-2) var(--space-3);
+  gap: var(--space-2) var(--space-4);
   margin-bottom: var(--space-2);
 }
 
@@ -2845,7 +2816,7 @@ book-content {
 .panel-fold > summary {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
   min-height: 44px;
   cursor: pointer;
   list-style: none;
@@ -2889,7 +2860,7 @@ book-content {
  * portrait like the page it stands for, so a cell's place reads as the place on
  * the screen; its height is capped so the sheet still shows the rows around it. */
 .tap-zones {
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 
 .tap-zones-head {
@@ -2906,7 +2877,7 @@ book-content {
 }
 
 .tap-zones-head .tap-zones-action {
-  padding: 0.35rem 0.6rem;
+  padding: var(--space-1) var(--space-2);
   font-size: var(--text-label);
 }
 
@@ -2961,7 +2932,7 @@ book-content {
   margin: auto;
   max-width: 24rem;
   width: 100%;
-  padding: 1.5rem;
+  padding: var(--space-6);
   text-align: center;
 }
 
@@ -2976,7 +2947,7 @@ book-content {
   box-sizing: border-box;
   overflow-y: auto;
   background: var(--reader-paper);
-  padding: 3.2rem 1.5rem 4rem;
+  padding: 3.2rem var(--space-6) var(--space-16);
 }
 .login-card {
   max-width: 35rem;
@@ -3008,7 +2979,7 @@ book-content {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 0.5rem;
+  gap: var(--space-2);
   margin: 0 0 1rem;
 }
 .login-card .field label {
@@ -3024,7 +2995,7 @@ book-content {
   min-width: 0;
   min-height: 46px;
   box-sizing: border-box;
-  padding: 0.65rem 0.85rem;
+  padding: var(--space-3) var(--space-3);
   font-size: var(--text-title);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-xs);
@@ -3039,7 +3010,7 @@ book-content {
 .login-connection {
   margin-bottom: 1.4rem;
   border-bottom: 1px solid var(--reader-line);
-  padding-bottom: 0.9rem;
+  padding-bottom: var(--space-4);
 }
 .login-connection summary {
   font-size: var(--text-ui);
@@ -3091,7 +3062,7 @@ book-content {
   position: relative;
 }
 .login-password-input input {
-  padding-right: 3rem;
+  padding-right: var(--space-12);
 }
 .login-password-toggle {
   position: absolute;
@@ -3132,7 +3103,7 @@ book-content {
 }
 .login-card .login-notice {
   margin-top: 0.95rem;
-  padding: 1rem 1.1rem;
+  padding: var(--space-4) var(--space-4);
   border-radius: var(--radius-xs);
   background: var(--color-brand-soft);
   color: var(--reader-ink);
@@ -3162,14 +3133,14 @@ book-content {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
+  gap: var(--space-1);
   font-size: var(--text-ui);
   color: var(--reader-muted);
 }
 .login-switch button {
   min-height: 44px;
   border: 0;
-  padding: 0.5rem;
+  padding: var(--space-2);
   background: transparent;
   color: var(--reader-accent);
   font: inherit;
@@ -3177,12 +3148,12 @@ book-content {
 }
 .user-management {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 .user-manager-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 .user-manager-actions input {
   flex: 1;
@@ -3190,15 +3161,15 @@ book-content {
 }
 .user-manager-form {
   display: grid;
-  gap: 0.85rem;
-  padding: 1rem;
+  gap: var(--space-3);
+  padding: var(--space-4);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-md);
 }
 .user-manager-form label,
 .user-manager-mode {
   display: grid;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 .user-management input,
 .user-management select {
@@ -3206,7 +3177,7 @@ book-content {
   width: 100%;
   min-height: 44px;
   font-size: var(--text-title);
-  padding: 0.65rem 0.75rem;
+  padding: var(--space-3) var(--space-3);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-md);
   background: var(--reader-paper);
@@ -3221,10 +3192,10 @@ book-content {
   padding: 0;
   margin: 0;
   display: grid;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 .user-manager-list li {
-  padding: 1rem;
+  padding: var(--space-4);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-md);
   overflow-wrap: anywhere;
@@ -3236,11 +3207,11 @@ book-content {
 .user-management summary {
   cursor: pointer;
   min-height: 44px;
-  padding-block: 0.65rem;
+  padding-block: var(--space-3);
 }
 @media (max-width: 700px) {
   .login-screen {
-    padding: 2rem 1rem 3rem;
+    padding: var(--space-8) var(--space-4) var(--space-12);
   }
   .login-card {
     margin-inline: auto;
@@ -3250,7 +3221,7 @@ book-content {
 .notice {
   background: color-mix(in srgb, var(--reader-accent) 12%, var(--reader-surface));
   border-radius: var(--reader-radius);
-  padding: 0.6rem 0.75rem;
+  padding: var(--space-2) var(--space-3);
   font-size: var(--text-label);
   margin-bottom: 0.9rem;
 }
@@ -3270,7 +3241,7 @@ book-content {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: var(--space-half);
 }
 
 .callout .button {
@@ -3314,8 +3285,8 @@ book-content {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-3);
-  padding: var(--space-4);
+  gap: var(--space-4);
+  padding: var(--space-6);
   text-align: center;
   color: var(--reader-ink);
 }
@@ -3340,7 +3311,7 @@ book-content {
   inset: 0;
   z-index: var(--reader-layer-readout);
   min-height: 0;
-  padding: var(--space-4);
+  padding: var(--space-6);
   text-align: center;
   background: var(--reader-paper);
 }
@@ -3357,7 +3328,7 @@ book-content {
   border: 0;
   background: var(--reader-surface);
   color: var(--reader-ink);
-  padding: 0.5rem;
+  padding: var(--space-2);
   font-size: var(--text-ui);
   cursor: pointer;
 }
@@ -3415,7 +3386,7 @@ book-content {
   flex: 1 1 auto;
   display: flex;
   align-items: center;
-  gap: 0.15rem;
+  gap: var(--space-half);
   overflow-x: auto;
   scrollbar-width: none;
   min-width: 0;
@@ -3432,7 +3403,7 @@ book-content {
   color: var(--reader-ink);
   font-size: var(--text-ui);
   font-family: inherit;
-  padding: 0.35rem 0.25rem;
+  padding: var(--space-1) var(--space-1);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -3516,7 +3487,7 @@ book-content {
 }
 
 .folder-picker-note {
-  margin: var(--space-3) var(--space-2);
+  margin: var(--space-4) var(--space-2);
   font-size: var(--text-label);
   line-height: 1.6;
 }
@@ -3536,8 +3507,8 @@ book-content {
   display: grid;
   grid-template-columns: auto 1fr auto auto;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 0.75rem;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
   /*
    * Rows are separated by a *hairline*, and the last one has none.
    *
@@ -3637,7 +3608,7 @@ book-content {
 .manager-name {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -3675,7 +3646,7 @@ book-content {
 .manager-meta {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   font-size: var(--text-meta);
   white-space: nowrap;
 }
@@ -3683,7 +3654,7 @@ book-content {
 .manager-badge {
   border: 1px solid color-mix(in srgb, var(--reader-line) 90%, transparent);
   border-radius: var(--radius-pill);
-  padding: 0.02rem 0.35rem;
+  padding: var(--space-pixel) var(--space-1);
   font-size: var(--text-micro);
   letter-spacing: 0.01em;
   color: var(--reader-muted);
@@ -3749,7 +3720,7 @@ book-content {
   inset-block-end: 0;
   font-size: var(--text-meta);
   text-align: center;
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-2) var(--space-3);
   background: color-mix(in srgb, var(--reader-surface) 92%, transparent);
   backdrop-filter: blur(6px);
   border-top: 1px solid transparent;
@@ -3771,9 +3742,9 @@ book-content {
  */
 .manager-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-2);
   align-items: center;
-  padding: 0.6rem 0.75rem;
+  padding: var(--space-2) var(--space-3);
   padding-bottom: calc(0.6rem + var(--safe-bottom));
   border-top: 1px solid var(--reader-line);
   background: var(--reader-surface);
@@ -3797,8 +3768,8 @@ book-content {
 }
 
 .button.danger {
-  border-color: color-mix(in srgb, #c0392b 55%, transparent);
-  color: #c0392b;
+  border-color: color-mix(in srgb, var(--color-reader-danger) 55%, transparent);
+  color: var(--color-reader-danger);
 }
 
 /*
@@ -3848,7 +3819,7 @@ book-content {
 .sources-header {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-4);
   padding: calc(1rem + var(--safe-top)) calc(1rem + var(--safe-right)) 1rem calc(1rem + var(--safe-left));
   border-bottom: 1px solid var(--reader-line);
 }
@@ -3868,18 +3839,18 @@ book-content {
 .sources-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 0.75rem 1rem;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
 }
 .sources-body {
   overflow: auto;
-  padding: 0 1rem 2rem;
+  padding: 0 var(--space-4) var(--space-8);
   flex: 1;
 }
 .sources-card {
   max-width: 64rem;
   margin: 0 auto 1rem;
-  padding: 1rem;
+  padding: var(--space-4);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-lg);
 }
@@ -3891,7 +3862,7 @@ book-content {
 .extension-sheet-form label {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: var(--space-2);
   margin: 0.75rem 0;
 }
 .sources-card input:not([type="checkbox"]),
@@ -3902,7 +3873,7 @@ book-content {
 .extension-sheet-form textarea {
   width: 100%;
   box-sizing: border-box;
-  padding: 0.65rem;
+  padding: var(--space-3);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-sm);
   background: var(--reader-surface);
@@ -3915,10 +3886,10 @@ book-content {
 .sources-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  gap: var(--space-4);
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 0;
+  padding: var(--space-4) 0;
   border-top: 1px solid var(--reader-line);
 }
 .sources-row > div:first-child {
@@ -3947,13 +3918,13 @@ book-content {
 }
 .source-interval .media-select-trigger {
   min-height: 40px;
-  padding: 0.45rem 0.55rem;
+  padding: var(--space-2) var(--space-2);
 }
 .source-catalog-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.6rem;
+  gap: var(--space-2);
   margin: 0.5rem 0 1rem;
 }
 .source-navigation {
@@ -3961,7 +3932,7 @@ book-content {
   margin: 0.5rem 0 1rem;
 }
 .library-files-screen .manager-status {
-  padding: 0.65rem 1rem 1rem;
+  padding: var(--space-3) var(--space-4) var(--space-4);
 }
 .collection-link.is-disabled {
   opacity: 0.5;
@@ -3970,7 +3941,7 @@ book-content {
 .sources-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-2);
   align-items: center;
 }
 .sources-actions label {
@@ -3984,7 +3955,7 @@ book-content {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  gap: 0.85rem;
+  gap: var(--space-3);
   margin: 1rem 0 1.5rem;
 }
 .sources-search label {
@@ -4002,7 +3973,7 @@ book-content {
   align-items: center;
   justify-content: center;
   min-height: 44px;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 .sources-search input,
 .sources-search select {
@@ -4011,15 +3982,15 @@ book-content {
 }
 .catalog-feedback {
   margin: 1rem 0;
-  padding-top: 1.25rem;
+  padding-top: var(--space-5);
   border-top: 1px solid var(--reader-line);
 }
 .search-progress {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.6rem 1rem;
-  padding: 1rem;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--reader-accent) 6%, var(--reader-paper));
   font-size: var(--text-ui);
@@ -4049,13 +4020,13 @@ book-content {
 }
 .search-split .search-menu-toggle {
   border-radius: 0 var(--reader-radius) var(--reader-radius) 0;
-  padding-inline: 0.65rem;
+  padding-inline: var(--space-3);
   border-left: 1px solid var(--reader-line);
 }
 .catalog-summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem 1rem;
+  gap: var(--space-2) var(--space-4);
   justify-content: space-between;
   align-items: center;
 }
@@ -4065,7 +4036,7 @@ book-content {
 .catalog-summary span {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-2);
   color: var(--reader-muted);
   font-size: var(--text-ui);
 }
@@ -4077,7 +4048,7 @@ book-content {
   margin: 0.4rem 0 0.75rem;
 }
 .catalog-errors {
-  padding: 0.7rem 1rem;
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--reader-muted) 5%, var(--reader-paper));
@@ -4100,8 +4071,8 @@ book-content {
   display: grid;
   grid-template-columns: minmax(7rem, 1fr) minmax(0, 3fr) auto;
   align-items: baseline;
-  gap: 0.3rem 1rem;
-  padding: 0.6rem 0;
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-2) 0;
   border-top: 1px solid var(--reader-line);
   font-size: var(--text-label);
   overflow-wrap: anywhere;
@@ -4122,9 +4093,9 @@ book-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.8rem;
+  gap: var(--space-3);
   text-align: center;
-  padding: 2.5rem 1rem;
+  padding: var(--space-10) var(--space-4);
 }
 .catalog-empty > .icon {
   font-size: 1.7rem;
@@ -4137,7 +4108,7 @@ book-content {
   line-height: 1.7;
 }
 .catalog-book {
-  padding: 1.4rem 0;
+  padding: var(--space-6) 0;
   align-items: flex-start;
 }
 /* 发现: a trail of where you are, the levels below as chips, then books. */
@@ -4146,7 +4117,7 @@ book-content {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-1);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
   font-size: var(--text-ui);
   color: var(--reader-muted);
 }
@@ -4177,8 +4148,8 @@ book-content {
   width: 100%;
   box-sizing: border-box;
   min-height: 44px;
-  margin-bottom: var(--space-3);
-  padding: 0.6rem 0.8rem;
+  margin-bottom: var(--space-4);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-md);
   background: var(--reader-paper);
@@ -4199,7 +4170,7 @@ book-content {
 .explore-link {
   min-height: 44px;
   max-width: 100%;
-  padding: 0.5rem 0.9rem;
+  padding: var(--space-2) var(--space-4);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-pill);
   background: var(--reader-surface);
@@ -4228,13 +4199,13 @@ book-content {
   }
 }
 .explore-links + .explore-books {
-  margin-top: var(--space-4);
+  margin-top: var(--space-6);
 }
 .explore-book {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: var(--space-2) var(--space-3);
-  padding: var(--space-3) 0;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4) 0;
   border-top: 1px solid var(--reader-line);
 }
 .explore-book:first-child {
@@ -4307,7 +4278,7 @@ book-content {
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 /* The source picker leads the bar; its name is the control's own label, so the caption is for assistive tech only. */
 .explore-tools .searchable-select {
@@ -4384,19 +4355,19 @@ book-content {
 .explore-layout.segmented button {
   flex: none;
   min-height: 44px;
-  padding: 0 var(--space-3);
+  padding: 0 var(--space-4);
 }
 .explore-layout.segmented button:focus-visible {
   outline: var(--focus-ring);
   outline-offset: -2px;
 }
 .explore-links + .explore-grid {
-  margin-top: var(--space-4);
+  margin-top: var(--space-6);
 }
 .explore-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
-  gap: var(--space-4) var(--space-3);
+  gap: var(--space-6) var(--space-4);
 }
 .explore-card {
   display: flex;
@@ -4408,7 +4379,7 @@ book-content {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
-  gap: 0.2rem;
+  gap: var(--space-1);
   min-width: 0;
   padding: 0;
   border: 0;
@@ -4460,7 +4431,7 @@ book-content {
 .catalog-book-main {
   display: flex;
   align-items: flex-start;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 .catalog-book-main > div {
   flex: 1;
@@ -4492,7 +4463,7 @@ book-content {
   font-size: var(--text-title);
 }
 .cover-picker-status {
-  margin: 0 0 var(--space-3);
+  margin: 0 0 var(--space-4);
   color: var(--reader-muted);
   font-size: var(--text-ui);
 }
@@ -4500,18 +4471,18 @@ book-content {
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  margin-bottom: var(--space-3);
+  margin-bottom: var(--space-4);
   color: var(--reader-muted);
   font-size: var(--text-ui);
 }
 .cover-picker-restore {
-  margin-top: var(--space-4);
+  margin-top: var(--space-6);
   min-height: 44px;
 }
 .cover-picker-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr));
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 .cover-picker-item {
   display: flex;
@@ -4561,13 +4532,13 @@ book-content {
   margin: 0.7rem 0 0;
 }
 .catalog-book .sources-actions {
-  padding-top: 0.2rem;
+  padding-top: var(--space-1);
 }
 .catalog-pagination {
   display: flex;
   justify-content: flex-end;
-  gap: 0.6rem;
-  padding-top: 1rem;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
   border-top: 1px solid var(--reader-line);
 }
 @media (max-width: 640px) {
@@ -4616,7 +4587,7 @@ svg.icon {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
   color: var(--reader-muted);
   background: var(--reader-paper);
   font-size: var(--text-meta);
@@ -4632,7 +4603,7 @@ svg.icon {
 .reading-indicator-bottom {
   bottom: 0;
   height: calc(1.8rem + var(--safe-bottom));
-  padding-top: 0.35rem;
+  padding-top: var(--space-1);
   padding-bottom: var(--safe-bottom);
 }
 .reading-indicator > span {
@@ -4656,18 +4627,18 @@ svg.icon {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 0.5rem;
+  gap: var(--space-2);
   height: auto;
   min-height: calc(4.5rem + var(--safe-top));
   padding: calc(0.6rem + var(--safe-top)) calc(1rem + var(--safe-right)) 0.6rem calc(1rem + var(--safe-left));
   background: var(--reader-surface);
   border: 0;
-  box-shadow: 0 2px 12px #0000000a;
+  box-shadow: var(--shadow-chrome-down);
 }
 .reader-heading {
   min-width: 0;
   display: grid;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 .reader-heading strong {
   font-size: var(--text-title);
@@ -4688,19 +4659,19 @@ svg.icon {
   padding: 0.5rem calc(1rem + var(--safe-right)) calc(0.4rem + var(--safe-bottom)) calc(1rem + var(--safe-left));
   background: var(--reader-surface);
   border: 0;
-  box-shadow: 0 -2px 12px #0000000a;
+  box-shadow: var(--shadow-chrome-up);
 }
 .reader-screen .progress-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
   padding: 0;
   min-height: 3rem;
 }
 .reader-screen .nav-chapter {
   flex: 0 0 auto;
   font-size: var(--text-label);
-  padding: 0.35rem 0;
+  padding: var(--space-1) 0;
   min-height: 44px;
 }
 .reader-scrub {
@@ -4721,7 +4692,7 @@ svg.icon {
 .reader-actions {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 .reader-actions .top-button[aria-pressed="true"] {
   color: var(--reader-accent);
@@ -4737,8 +4708,8 @@ svg.icon {
   min-width: 0;
   max-width: none;
   min-height: 60px;
-  padding: 0.45rem 0;
-  gap: 0.45rem;
+  padding: var(--space-2) 0;
+  gap: var(--space-2);
 }
 .reader-actions .icon {
   font-size: var(--text-display);
@@ -4765,7 +4736,7 @@ svg.icon {
   height: 48px;
   border-radius: 50%;
   background: var(--reader-surface);
-  box-shadow: 0 3px 12px #00000020;
+  box-shadow: var(--shadow-md);
 }
 .reader-screen .rail-button .icon {
   font-size: var(--text-display);
@@ -4780,15 +4751,15 @@ svg.icon {
   }
 }
 .reader-screen .sheet .field {
-  padding-block: 0.8rem;
+  padding-block: var(--space-3);
 }
 .reader-screen .sheet .tts-bar {
   /* In the 朗读 sheet the bar is a card among the settings, not a strip over the page. */
   position: static;
   width: auto;
   transform: none;
-  margin-bottom: var(--space-3);
-  padding: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-md);
   background: var(--reader-surface);
@@ -4797,8 +4768,8 @@ svg.icon {
 }
 .reader-screen .sheet .field {
   grid-template-columns: minmax(5.5rem, max-content) minmax(0, 1fr);
-  gap: 0.75rem;
-  padding-block: 0.5rem;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
 }
 .reader-screen .field input[type="range"] {
   min-height: 32px;
@@ -4845,26 +4816,26 @@ svg.icon {
   box-sizing: border-box;
 }
 .extension-description {
-  color: var(--muted, #777);
+  color: var(--muted, var(--color-muted));
   margin: 0 0 16px;
   line-height: 1.6;
 }
 .extension-tabs {
   display: flex;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: var(--space-1);
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
-  border-bottom: 1px solid var(--border, #ddd);
+  border-bottom: 1px solid var(--border, var(--color-line));
   margin-bottom: 20px;
 }
 .extension-tabs button {
   flex: 0 0 auto;
   white-space: nowrap;
-  padding: 12px 16px;
+  padding: var(--space-3) var(--space-4);
   background: transparent;
   color: inherit;
   border: 0;
@@ -4889,7 +4860,7 @@ svg.icon {
 }
 .extension-item-heading {
   display: flex;
-  gap: 16px;
+  gap: var(--space-4);
   align-items: start;
   justify-content: space-between;
 }
@@ -4906,7 +4877,7 @@ svg.icon {
 .extension-actions:not([hidden]) {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-3);
   margin-top: 16px;
 }
 .extension-actions form:has(label) {
@@ -4922,9 +4893,9 @@ svg.icon {
   min-height: 9rem;
 }
 .extension-empty {
-  padding: 28px 16px;
+  padding: var(--space-7) var(--space-4);
   text-align: center;
-  color: var(--muted, #777);
+  color: var(--muted, var(--color-muted));
   line-height: 1.7;
 }
 
@@ -4933,7 +4904,7 @@ svg.icon {
   width: 100%;
   max-width: 64rem;
   margin-inline: auto;
-  padding: 0 1rem;
+  padding: 0 var(--space-4);
   box-sizing: border-box;
 }
 .extension-toolbar .extension-tabs {
@@ -4956,7 +4927,7 @@ svg.icon {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 .extension-form-inline h3 {
   flex-basis: 100%;
@@ -4982,7 +4953,7 @@ svg.icon {
 }
 .extension-actions .extension-form-inline {
   border-top: 1px solid var(--reader-line);
-  padding-top: 0.75rem;
+  padding-top: var(--space-3);
 }
 .extension-screen button {
   min-height: 44px;
@@ -4998,7 +4969,7 @@ svg.icon {
     flex: 1 1 9rem;
   }
   .extension-item-heading {
-    gap: 0.75rem;
+    gap: var(--space-3);
   }
 }
 .extension-tabs button:disabled {
@@ -5011,7 +4982,7 @@ svg.icon {
 .extension-output summary {
   font-weight: 650;
   cursor: pointer;
-  padding-block: 0.35rem;
+  padding-block: var(--space-1);
 }
 .extension-output pre {
   max-height: 26rem;
@@ -5019,7 +4990,7 @@ svg.icon {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   margin: 0.75rem 0 0;
-  padding: 1rem;
+  padding: var(--space-4);
   background: var(--reader-surface);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-sm);
@@ -5039,7 +5010,7 @@ svg.icon {
   flex: none;
   flex-wrap: nowrap;
   gap: 0;
-  padding: 0 1rem;
+  padding: 0 var(--space-4);
   width: 100%;
   max-width: 66rem;
   margin: 0 auto 1rem;
@@ -5048,7 +5019,7 @@ svg.icon {
   flex: 1;
   min-width: 0;
   min-height: 52px;
-  padding: 0.85rem 0.35rem;
+  padding: var(--space-3) var(--space-1);
   border: 0;
   border-bottom: 2px solid var(--reader-line);
   background: transparent;
@@ -5077,7 +5048,7 @@ svg.icon {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-3);
   margin-bottom: 0.5rem;
 }
 .sources-list-heading h2 {
@@ -5092,13 +5063,13 @@ svg.icon {
 .source-add {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--space-1);
   min-height: 44px;
-  padding: 0.5rem 0.7rem;
+  padding: var(--space-2) var(--space-3);
 }
 .sources-list .source-entry {
   display: block;
-  padding: 1rem 0;
+  padding: var(--space-4) 0;
 }
 .sources-list .source-entry:last-child {
   padding-bottom: 0;
@@ -5108,7 +5079,7 @@ svg.icon {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.6rem 1rem;
+  gap: var(--space-2) var(--space-4);
 }
 .source-entry-info {
   flex: 1 1 12rem;
@@ -5145,7 +5116,7 @@ svg.icon {
 .source-entry-actions {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: var(--space-2);
   flex-shrink: 0;
   margin-inline-start: auto;
 }
@@ -5190,7 +5161,7 @@ svg.icon {
   border-radius: var(--radius-md);
 }
 .sources-screen .searchable-select-menu {
-  background: var(--reader-paper, #fff);
+  background: var(--reader-paper, var(--color-white));
   opacity: 1;
 }
 /* The card's generic label/input/button rules must not reach the picker's own controls:
@@ -5198,9 +5169,9 @@ svg.icon {
 .sources-card .searchable-select-search {
   flex-direction: row;
   flex: none;
-  gap: 0.5rem;
+  gap: var(--space-2);
   margin: 0;
-  padding: 0.25rem 0.5rem;
+  padding: var(--space-1) var(--space-2);
   color: var(--reader-muted);
 }
 .sources-card .searchable-select-search input {
@@ -5226,7 +5197,7 @@ svg.icon {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 1rem 2rem;
+    gap: var(--space-4) var(--space-8);
   }
   .source-picker > div {
     flex: 1;
@@ -5249,14 +5220,14 @@ svg.icon {
     margin: 0;
   }
   .source-picker > .source-picker-cta {
-    margin-top: calc(var(--space-3) * -0.5);
+    margin-top: calc(var(--space-4) * -0.5);
   }
 }
 /* Collection pages share a quiet heading, labelled destinations and useful empty states. */
 .shelf-head {
   align-items: center;
   padding-top: calc(1.25rem + var(--safe-top));
-  padding-bottom: 0.85rem;
+  padding-bottom: var(--space-3);
 }
 .shelf-head-actions {
   margin-top: 0;
@@ -5278,7 +5249,7 @@ svg.icon {
 .collection-heading {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 .collection-heading-text {
   flex: 1;
@@ -5298,7 +5269,7 @@ svg.icon {
 }
 .collection-links {
   display: flex;
-  gap: 0.65rem;
+  gap: var(--space-3);
   margin-top: 0.85rem;
 }
 .shelf-links {
@@ -5309,11 +5280,11 @@ svg.icon {
 .collection-link.button {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: var(--space-2);
   flex: 1;
   min-width: 0;
   min-height: 48px;
-  padding: 0.7rem 0.85rem;
+  padding: var(--space-3) var(--space-3);
   font-size: var(--text-ui);
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--reader-accent) 4%, var(--reader-paper));
@@ -5339,7 +5310,7 @@ svg.icon {
 }
 .shelf-links .collection-link.button {
   min-height: 44px;
-  padding: 0.6rem 0.75rem;
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   box-shadow: none;
 }
@@ -5355,18 +5326,18 @@ svg.icon {
 }
 /* In the title row (phones): two words beside the settings button, no icons or chevrons — the row has ~200px. */
 .shelf-head-actions {
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 .shelf-head-actions .shelf-links {
   max-width: none;
   margin: 0;
   padding: 0;
-  gap: 0.4rem;
+  gap: var(--space-2);
 }
 .shelf-head-actions .shelf-links .collection-link.button {
   flex: none;
   min-width: 0;
-  padding: 0 0.75rem;
+  padding: 0 var(--space-3);
 }
 .shelf-head-actions .shelf-links .collection-link.button > svg {
   display: none;
@@ -5379,8 +5350,8 @@ svg.icon {
   width: calc(100% - 2rem);
   max-width: 30rem;
   margin: clamp(1.5rem, 7vh, 4rem) auto 2rem;
-  padding: 1.75rem 1.25rem;
-  gap: 0.7rem;
+  padding: var(--space-7) var(--space-5);
+  gap: var(--space-3);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-xl);
   background: color-mix(in srgb, var(--reader-surface) 45%, var(--reader-paper));
@@ -5389,7 +5360,7 @@ svg.icon {
   box-sizing: content-box;
   width: 30px;
   height: 30px;
-  padding: 1rem;
+  padding: var(--space-4);
   border-radius: var(--radius-lg);
   background: color-mix(in srgb, var(--reader-accent) 9%, transparent);
   color: var(--reader-accent);
@@ -5408,7 +5379,7 @@ svg.icon {
 }
 .collection-empty .empty-actions {
   margin-top: 0.6rem;
-  gap: 0.65rem;
+  gap: var(--space-3);
 }
 .collection-empty .button {
   min-height: 44px;
@@ -5416,7 +5387,7 @@ svg.icon {
 }
 .file-manager-header .manager-crumbs {
   margin-top: 0.75rem;
-  padding: 0.25rem 0;
+  padding: var(--space-1) 0;
 }
 .file-manager-header .manager-crumb {
   min-height: 44px;
@@ -5433,8 +5404,8 @@ svg.icon {
 }
 .library-files-screen .manager-row {
   grid-template-columns: 24px minmax(0, 1fr) 44px;
-  gap: 0.4rem 0.65rem;
-  padding: 0.9rem 0.75rem;
+  gap: var(--space-2) var(--space-3);
+  padding: var(--space-4) var(--space-3);
 }
 .library-files-screen .manager-check {
   grid-column: 1;
@@ -5456,9 +5427,9 @@ svg.icon {
   grid-column: 2;
   grid-row: 2;
   flex-wrap: wrap;
-  gap: 0.3rem 0.65rem;
+  gap: var(--space-1) var(--space-3);
   white-space: normal;
-  padding-left: 1.5rem;
+  padding-left: var(--space-6);
 }
 .library-files-screen .manager-more {
   grid-column: 3;
@@ -5473,13 +5444,13 @@ svg.icon {
   position: static;
   border: 0;
   background: transparent;
-  padding: 0.5rem 1rem 1rem;
+  padding: var(--space-2) var(--space-4) var(--space-4);
 }
 .file-manager-header .collection-links {
   align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 0.55rem;
+  gap: var(--space-2);
 }
 .file-manager-header .collection-link.button {
   flex: 0 0 auto;
@@ -5529,16 +5500,16 @@ svg.icon {
     width: calc(100% - 2 * var(--page-gutter) + 1.8rem);
   }
   .shelf-head {
-    padding-top: 2rem;
-    padding-bottom: 1.25rem;
+    padding-top: var(--space-8);
+    padding-bottom: var(--space-5);
   }
   .shelf-discovery {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: var(--space-6);
     max-width: var(--shelf-measure);
     margin: 0 auto 1rem;
-    padding-inline: 0.9rem;
+    padding-inline: var(--space-4);
   }
   .shelf-discovery .shelf-links {
     flex: none;
@@ -5559,8 +5530,8 @@ svg.icon {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 0.5rem 2rem;
-    padding-top: 2rem;
+    gap: var(--space-2) var(--space-8);
+    padding-top: var(--space-8);
   }
   .collection-header .collection-links {
     margin-top: 0;
@@ -5577,7 +5548,7 @@ svg.icon {
   .library-files-screen .manager-row {
     grid-template-columns: 24px minmax(0, 1fr) minmax(15rem, 22rem) 44px;
     min-height: 64px;
-    padding-block: 0.5rem;
+    padding-block: var(--space-2);
   }
   .library-files-screen .manager-check {
     grid-row: 1;
@@ -5599,7 +5570,7 @@ svg.icon {
     width: calc(100% - 2 * var(--page-gutter) + 1.8rem);
     max-width: var(--collection-measure);
     margin-inline: auto;
-    padding: 2rem 0.9rem 0.75rem;
+    padding: var(--space-8) var(--space-4) var(--space-3);
     border-bottom: 0;
   }
   .sources-header h1 {
@@ -5609,11 +5580,11 @@ svg.icon {
   .sources-hub .sources-tabs [role="tab"] {
     flex: 0 1 auto;
     min-width: 9rem;
-    padding-inline: 1.5rem;
+    padding-inline: var(--space-6);
   }
   .extension-tabs button {
     min-width: 7rem;
-    padding-inline: 1.5rem;
+    padding-inline: var(--space-6);
   }
   .sources-hub .sources-body,
   .extension-screen .sources-body,
@@ -5622,7 +5593,7 @@ svg.icon {
     width: calc(100% - 2 * var(--page-gutter) + 1.8rem);
     max-width: var(--collection-measure);
     margin-inline: auto;
-    padding-inline: 0.9rem;
+    padding-inline: var(--space-4);
   }
   .sources-body .sources-card {
     max-width: none;
@@ -5645,7 +5616,7 @@ svg.icon {
     margin-inline: auto;
     background: var(--reader-paper);
     border-inline: 1px solid var(--reader-line);
-    box-shadow: 0 0 40px #00000005;
+    box-shadow: var(--shadow-reader-paper);
     pointer-events: none;
   }
   .reader-screen .book-host[data-layout="reflowable"] {
@@ -5659,7 +5630,7 @@ svg.icon {
     max-width: var(--desktop-page-width);
     min-height: 4.5rem;
     margin-inline: auto;
-    padding-inline: 1.5rem;
+    padding-inline: var(--space-6);
     border-bottom: 1px solid var(--reader-line);
     background: var(--reader-paper);
     box-shadow: none;
@@ -5673,18 +5644,18 @@ svg.icon {
   .reader-screen .footer {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: var(--space-4);
     inset-inline: 2rem;
     bottom: 1.5rem;
     width: calc(100% - 4rem);
     max-width: 50rem;
     height: 4.5rem;
     margin-inline: auto;
-    padding: 0.55rem 1rem;
+    padding: var(--space-2) var(--space-4);
     border: 1px solid var(--reader-line);
     border-radius: var(--radius-lg);
     background: var(--reader-surface);
-    box-shadow: 0 8px 32px #00000012;
+    box-shadow: var(--shadow-lg);
   }
   .reader-screen .progress-row {
     flex: 1;
@@ -5692,15 +5663,15 @@ svg.icon {
   }
   .reader-screen .reader-actions {
     display: flex;
-    gap: 0.25rem;
-    padding-left: 0.75rem;
+    gap: var(--space-1);
+    padding-left: var(--space-3);
     border-left: 1px solid var(--reader-line);
   }
   .reader-screen .reader-actions .top-button {
     flex-direction: row;
     min-width: 4.75rem;
     min-height: 44px;
-    padding: 0.5rem 0.7rem;
+    padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-md);
   }
   @media (hover: hover) and (pointer: fine) {
@@ -5719,7 +5690,7 @@ svg.icon {
     width: var(--desktop-page-width);
     max-width: 100%;
     margin-inline: auto;
-    padding-inline: 1.5rem;
+    padding-inline: var(--space-6);
     font-size: var(--text-meta);
   }
   .reader-screen .sheet::backdrop {
@@ -5730,8 +5701,8 @@ svg.icon {
     font-weight: 650;
     letter-spacing: 0.05em;
     color: var(--reader-accent);
-    padding-top: 0.9rem;
-    padding-bottom: 0.65rem;
+    padding-top: var(--space-4);
+    padding-bottom: var(--space-3);
   }
   .reader-screen .section-title:first-child {
     margin-top: 0;
@@ -5739,7 +5710,7 @@ svg.icon {
 }
 @media (max-width: 600px) {
   .sources-header {
-    gap: 0.6rem;
+    gap: var(--space-2);
     padding-inline: calc(0.75rem + var(--safe-left)) calc(0.75rem + var(--safe-right));
   }
   .sources-header h1 {
@@ -5773,20 +5744,20 @@ svg.icon {
 }
 .reader-top-actions {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--space-1);
   flex: none;
   margin-inline-start: auto;
 }
 .reader-source-info {
   flex: 1 0 100%;
   display: flex;
-  gap: 0.65rem;
+  gap: var(--space-3);
   align-items: center;
   min-width: 0;
   font-size: var(--text-meta);
   color: var(--reader-muted);
   border-top: 1px solid var(--reader-line);
-  padding-top: 0.45rem;
+  padding-top: var(--space-2);
 }
 .reader-source-info span {
   flex: 0 1 auto;
@@ -5933,14 +5904,14 @@ svg.icon {
 
 .alternative-preview {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 .alternative-preview h4 {
   margin: 0;
 }
 .alternative-preview label {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 .alternative-preview select {
   width: 100%;
@@ -5951,7 +5922,7 @@ svg.icon {
 .catalog-book:has(.catalog-source-count) {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 .catalog-book:has(.catalog-source-count) > div {
   flex: 1;
@@ -5960,13 +5931,13 @@ svg.icon {
 .catalog-source-count {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex: none;
   min-height: 44px;
   white-space: nowrap;
 }
 .catalog-source-item {
-  padding-block: 1rem;
+  padding-block: var(--space-4);
   border-bottom: 1px solid var(--reader-line);
 }
 .catalog-source-item:last-child {
@@ -5986,7 +5957,7 @@ svg.icon {
   .catalog-source-item {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: var(--space-4);
   }
   .catalog-source-item > div:first-child {
     flex: 1;
@@ -6002,7 +5973,7 @@ svg.icon {
 .source-default-badge {
   display: inline-block;
   margin-inline-start: 0.6rem;
-  padding: 0.12rem 0.45rem;
+  padding: var(--space-half) var(--space-2);
   border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--reader-accent) 10%, transparent);
   color: var(--reader-accent);
@@ -6011,7 +5982,7 @@ svg.icon {
   vertical-align: middle;
 }
 .source-switch {
-  padding-block: 0.25rem 1rem;
+  padding-block: var(--space-1) var(--space-4);
   overflow-wrap: anywhere;
 }
 .source-switch-status {
@@ -6019,7 +5990,7 @@ svg.icon {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 0.65rem;
+  gap: var(--space-3);
   font-size: var(--text-ui);
 }
 .source-switch-status strong {
@@ -6048,15 +6019,15 @@ svg.icon {
 }
 .source-switch-list {
   display: grid;
-  gap: 0.7rem;
+  gap: var(--space-3);
 }
 .source-switch-card {
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
+  gap: var(--space-2);
   width: 100%;
   min-width: 0;
-  padding: 1rem;
+  padding: var(--space-4);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-lg);
   background: var(--reader-paper);
@@ -6083,7 +6054,7 @@ svg.icon {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
   width: 100%;
   font-size: var(--text-body);
 }
@@ -6101,7 +6072,7 @@ svg.icon {
 .source-switch-chapter {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: var(--space-2);
   font-size: var(--text-label);
   line-height: 1.6;
   color: var(--reader-muted);
@@ -6125,12 +6096,12 @@ svg.icon {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   flex: none;
-  padding: 0.35rem 0.75rem 0;
+  padding: var(--space-1) var(--space-3) 0;
   border-bottom: 1px solid var(--reader-line);
 }
 .reading-tool-tab {
   min-height: 48px;
-  padding: 0.5rem 0.2rem;
+  padding: var(--space-2) var(--space-1);
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -6143,7 +6114,7 @@ svg.icon {
   border-bottom-color: var(--reader-accent);
 }
 .reading-tool-panel {
-  padding: 1rem;
+  padding: var(--space-4);
   overflow-y: auto;
   overscroll-behavior: contain;
   min-height: 0;
@@ -6157,7 +6128,7 @@ svg.icon {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 .reading-tool-heading small {
   font-weight: normal;
@@ -6166,19 +6137,19 @@ svg.icon {
 }
 .reading-tool-heading .button {
   font-size: var(--text-ui);
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-2) var(--space-3);
   white-space: nowrap;
 }
 .reading-tool-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 .reading-note-editor {
   display: grid;
-  gap: 0.85rem;
-  padding: 1rem;
+  gap: var(--space-3);
+  padding: var(--space-4);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-md);
   background: var(--reader-surface);
@@ -6190,7 +6161,7 @@ svg.icon {
 .reading-note-colors {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 .reading-note-colors > span {
   font-size: var(--text-ui);
@@ -6202,21 +6173,21 @@ svg.icon {
   border: 2px solid transparent;
   border-radius: 50%;
   background: var(--note-color);
-  color: #222;
+  color: var(--color-note-ink);
   cursor: pointer;
 }
 .reading-note-colors button[aria-pressed="true"] {
   border-color: var(--reader-accent);
-  box-shadow: inset 0 0 0 3px var(--reader-paper);
+  box-shadow: var(--shadow-paper-ring) var(--reader-paper);
 }
 .reading-note-filters {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--space-1);
   border-bottom: 1px solid var(--reader-line);
 }
 .reading-note-filters button {
   min-height: 44px;
-  padding: 0.5rem 0.65rem;
+  padding: var(--space-2) var(--space-3);
   background: transparent;
   color: var(--reader-ink);
   border: 0;
@@ -6234,7 +6205,7 @@ svg.icon {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 .reading-note-list li {
   border: 1px solid var(--reader-line);
@@ -6243,9 +6214,9 @@ svg.icon {
 }
 .reading-note-open {
   width: 100%;
-  padding: 0.8rem;
+  padding: var(--space-3);
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-2);
   text-align: start;
   background: transparent;
   color: var(--reader-ink);
@@ -6272,20 +6243,20 @@ svg.icon {
 .reading-note-comment {
   font-size: var(--text-ui);
   border-inline-start: 2px solid var(--reader-line);
-  padding-inline-start: 0.65rem;
+  padding-inline-start: var(--space-3);
 }
 .reading-note-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 0.25rem;
-  padding: 0 0.4rem;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
   border-top: 1px solid var(--reader-line);
 }
 .reading-note-actions button {
   min-height: 44px;
-  padding: 0.4rem 0.6rem;
+  padding: var(--space-2) var(--space-2);
   border: 0;
   background: transparent;
   color: var(--reader-accent);
@@ -6294,12 +6265,12 @@ svg.icon {
 }
 .reading-note-actions > span {
   margin-inline-end: auto;
-  padding: 0.4rem;
+  padding: var(--space-2);
   font-size: var(--text-label);
 }
 .reading-tool-empty {
   text-align: center;
-  padding: 1.5rem 0.5rem;
+  padding: var(--space-6) var(--space-2);
 }
 .reading-tool-empty strong {
   font-weight: 500;
@@ -6311,10 +6282,10 @@ svg.icon {
   position: fixed;
   z-index: 60;
   box-sizing: border-box;
-  padding: 0.6rem;
+  padding: var(--space-2);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-md);
-  box-shadow: 0 6px 28px #0003;
+  box-shadow: var(--shadow-lg);
   background: var(--reader-paper);
   color: var(--reader-ink);
   font:
@@ -6323,7 +6294,7 @@ svg.icon {
 }
 .annotation-actions {
   display: flex;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 .annotation-actions button {
   flex: 1;
@@ -6343,7 +6314,7 @@ svg.icon {
 .annotation-popover blockquote,
 .annotation-editor blockquote {
   margin: 0.3rem 0 0.75rem;
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-2) var(--space-3);
   border-inline-start: 3px solid var(--reader-accent);
   max-height: 6rem;
   overflow: auto;
@@ -6374,11 +6345,11 @@ svg.icon {
 /* AI 选区助手: the passage, what to do with it, and the one current answer. */
 .ai-assist {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 .ai-assist blockquote {
   margin: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-2) var(--space-4);
   border-inline-start: 3px solid var(--reader-accent);
   max-height: 7rem;
   overflow: auto;
@@ -6429,17 +6400,17 @@ svg.icon {
 }
 .annotation-editor {
   display: grid;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 .annotation-editor label {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 .annotation-editor textarea {
   box-sizing: border-box;
   width: 100%;
   min-height: 6rem;
-  padding: 0.75rem;
+  padding: var(--space-3);
   font: inherit;
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-sm);
@@ -6449,25 +6420,25 @@ svg.icon {
 }
 .reading-tool-advanced {
   border-top: 1px solid var(--reader-line);
-  padding-top: 0.5rem;
+  padding-top: var(--space-2);
 }
 .reading-tool-advanced summary {
-  padding: 0.6rem 0;
+  padding: var(--space-2) 0;
   cursor: pointer;
   font-size: var(--text-ui);
 }
 .reading-tool-advanced > div {
   display: grid;
-  gap: 0.75rem;
-  padding-top: 0.5rem;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
 }
 .reading-tools section {
   display: grid;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 .reading-tools label {
   display: grid;
-  gap: 0.3rem;
+  gap: var(--space-1);
 }
 .reading-tools input,
 .reading-tools textarea,
@@ -6482,7 +6453,7 @@ svg.icon {
 }
 .reading-tool-results {
   margin: 0;
-  padding-left: 1.5rem;
+  padding-left: var(--space-6);
 }
 .reading-tool-results li {
   margin-block: 0.6rem;
@@ -6493,7 +6464,7 @@ svg.icon {
 }
 .reading-tool-range {
   display: flex;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 .reading-tool-range label {
   min-width: 0;
@@ -6526,7 +6497,7 @@ svg.icon {
   box-sizing: border-box;
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-sm);
-  padding: 0.6rem;
+  padding: var(--space-2);
   background: var(--reader-paper);
   color: var(--reader-ink);
 }
@@ -6536,7 +6507,7 @@ svg.icon {
 }
 .reading-tools form {
   display: grid;
-  gap: 0.6rem;
+  gap: var(--space-2);
 }
 .reading-tools p {
   margin: 0.3rem 0;
@@ -6550,13 +6521,13 @@ svg.icon {
 }
 .reading-tools blockquote {
   border-inline-start: 3px solid var(--reader-accent);
-  padding: 0.5rem 0.75rem;
+  padding: var(--space-2) var(--space-3);
   line-height: 1.6;
 }
 .extension-workbench {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1rem;
+  gap: var(--space-4);
   align-items: start;
 }
 .extension-workbench > div {
@@ -6590,7 +6561,7 @@ svg.icon {
   width: 100%;
   min-height: 44px;
   box-sizing: border-box;
-  padding: 0.6rem 0.8rem;
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--reader-line);
   border-radius: var(--radius-md);
   background: var(--reader-paper);
@@ -6647,7 +6618,7 @@ svg.icon {
   inset-block-start: 0.35rem;
   inset-inline-start: 0.35rem;
   z-index: 1;
-  padding: 0.1rem 0.4rem;
+  padding: var(--space-half) var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--color-brand-soft);
   color: var(--reader-accent);

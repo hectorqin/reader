@@ -9,15 +9,15 @@
   --art-background-color: var(--color-surface);
   --art-text-shadow-color: transparent;
   --art-transition-duration: var(--motion-duration);
-  --art-padding: var(--space-3);
+  --art-padding: var(--space-4);
   --art-border-radius: var(--radius-sm);
   --art-progress-color: var(--reader-viewer-edge);
   --art-loaded-color: var(--reader-viewer-ink);
   --art-hover-color: var(--reader-viewer-edge);
   --art-widget-background: var(--reader-viewer-control);
   --art-tip-background: var(--reader-viewer-control);
-  --art-control-height: calc(var(--space-4) * 2);
-  --art-control-icon-size: var(--space-4);
+  --art-control-height: calc(var(--space-6) * 2);
+  --art-control-icon-size: var(--space-6);
   --art-control-icon-scale: 1;
   --art-control-opacity: 1;
   --art-bottom-offset: 0px;
@@ -27,11 +27,11 @@
   font: inherit;
 }
 .artplayer-host .art-video {
-  background: black;
+  background: var(--color-black);
 }
 .artplayer-host .art-video-player .art-bottom {
-  padding-left: max(var(--space-3), var(--safe-left));
-  padding-right: max(var(--space-3), var(--safe-right));
+  padding-left: max(var(--space-4), var(--safe-left));
+  padding-right: max(var(--space-4), var(--safe-right));
   background: linear-gradient(to top, var(--reader-viewer-bed), var(--color-scrim), transparent) bottom / 100%
     var(--art-bottom-height) no-repeat;
 }
@@ -53,7 +53,7 @@
   white-space: nowrap;
 }
 .artplayer-host .art-control {
-  min-width: calc(var(--space-4) * 2);
+  min-width: calc(var(--space-6) * 2);
 }
 .artplayer-host .art-contextmenus,
 .artplayer-host .art-subtitle {

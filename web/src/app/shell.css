@@ -86,7 +86,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: var(--space-half);
     height: 52px;
     font-size: var(--text-meta);
     font-weight: 500;
@@ -117,12 +117,12 @@
     display: flex;
     flex-direction: column;
     width: var(--app-nav-width);
-    padding: 24px 14px;
+    padding: var(--space-6) var(--space-3);
     border-right: 1px solid var(--nav-line);
     overflow-y: auto;
   }
   .app-nav-brand {
-    padding: 0 14px 22px;
+    padding: 0 var(--space-3) var(--space-5);
     font-family: "Songti SC", "Noto Serif SC", "Source Han Serif SC", serif;
     font-size: 26px;
     font-weight: 700;
@@ -131,9 +131,9 @@
   .app-nav-item {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-3);
     height: 44px;
-    padding: 0 14px;
+    padding: 0 var(--space-3);
     border-radius: var(--radius-md);
     font-size: var(--text-body);
     color: var(--nav-ink);
@@ -156,9 +156,9 @@
   .app-nav-subitem {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-3);
     height: 38px;
-    padding: 0 14px 0 46px;
+    padding: 0 var(--space-3) 0 var(--space-11);
     border-radius: var(--radius-md);
     font-size: var(--text-ui);
     color: var(--nav-muted);
@@ -183,9 +183,9 @@
   .app-nav-user {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-2);
     margin-top: auto;
-    padding: 10px 12px;
+    padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-lg);
     background: var(--color-bg);
   }
@@ -216,7 +216,7 @@
   .app-nav-user-text small {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: var(--space-1);
     font-size: var(--text-meta);
     color: var(--nav-muted);
   }
@@ -236,9 +236,9 @@
   .app-nav-search {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     margin: 0 0 16px;
-    padding: 0 12px;
+    padding: 0 var(--space-3);
     border-radius: var(--radius-md);
     background: var(--color-surface-2);
     color: var(--nav-muted);
@@ -271,7 +271,7 @@
     outline-offset: calc(-1 * var(--focus-offset));
   }
   .app-nav-search:focus-within {
-    box-shadow: 0 0 0 2px var(--nav-accent);
+    box-shadow: var(--shadow-nav-focus) var(--nav-accent);
   }
   /* iOS zooms the page into any field under 16px when it is focused (it ignores
      maximum-scale), so a finger-driven sidebar (iPad, phone in landscape) gets 16px. */
@@ -354,7 +354,7 @@
     width: calc(100% - 2 * var(--page-gutter) + 1.8rem);
   }
   .shelf-head {
-    padding-top: 24px;
+    padding-top: var(--space-6);
   }
 }
 /* Between the sidebar breakpoint and 64rem the discovery row is display: contents,
@@ -370,7 +370,7 @@
 @media (min-width: 701px) {
   /* Only pages whose header scrolls with them; pages with a fixed header keep their 68px. */
   body[data-app-nav] .media-screen:is(.media-catalog-page, .mine-page, .home-page) {
-    padding-top: 24px;
+    padding-top: var(--space-6);
   }
   /* Search and the ⋯ menu used to hang from the rail with a negative offset. They end
    * where the page column ends, not at the window edge. */
@@ -402,7 +402,7 @@
 .reader-screen .footer {
   border-top: 0;
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-  box-shadow: 0 -8px 30px color-mix(in srgb, var(--color-ink) 10%, transparent);
+  box-shadow: var(--shadow-nav);
 }
 .reader-screen .topbar {
   border-bottom: 1px solid var(--reader-line);
@@ -431,13 +431,13 @@ body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 340px;
     grid-auto-rows: min-content;
-    column-gap: 24px;
+    column-gap: var(--space-6);
     align-content: start;
     box-sizing: border-box;
     width: min(1280px, 100%);
     max-width: none;
     margin: 0 auto;
-    padding: 20px 32px 32px;
+    padding: var(--space-5) var(--space-8) var(--space-8);
   }
   .media-video-workspace:has(.media-episode-rail) > div:not(.media-video-stage),
   .media-video-workspace:has(.media-episode-rail) .media-video-controls {
@@ -475,8 +475,8 @@ body {
 .media-channel-segments {
   display: flex;
   flex: 1;
-  gap: 2px;
-  padding: 4px;
+  gap: var(--space-half);
+  padding: var(--space-1);
   border-radius: var(--radius-lg);
   background: var(--media-surface, var(--surface));
 }
@@ -491,10 +491,10 @@ body {
   text-decoration: none;
 }
 .media-channel-segments a[aria-current="page"] {
-  background: var(--media-paper, #fff);
+  background: var(--media-paper, var(--color-white));
   color: var(--text);
   font-weight: 600;
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--color-ink) 18%, transparent);
+  box-shadow: var(--shadow-sm);
 }
 .media-channel-segments a:focus-visible {
   outline: 2px solid var(--media-accent);

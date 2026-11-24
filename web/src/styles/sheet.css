@@ -26,7 +26,7 @@
   font: inherit;
   font-size: var(--text-body);
   line-height: 1.5;
-  box-shadow: 0 -14px 36px color-mix(in srgb, #000 22%, transparent);
+  box-shadow: var(--shadow-sheet);
   overflow: hidden;
 }
 
@@ -38,7 +38,7 @@
 
 /* The fallback colour is for WebViews whose ::backdrop does not inherit custom properties. */
 .sheet::backdrop {
-  background: var(--color-scrim, rgb(0 0 0 / 0.4));
+  background: var(--color-scrim, var(--color-backdrop-fallback));
 }
 
 /* The bar is 2.25rem × 0.25rem as before; the padding is finger room for dragging,
@@ -49,7 +49,7 @@
   width: 2.25rem;
   height: 0.25rem;
   margin: 0 auto;
-  padding: 0.5rem 2rem 0.25rem;
+  padding: var(--space-2) var(--space-8) var(--space-1);
   border-radius: var(--radius-pill);
   background: var(--reader-line);
   background-clip: content-box;
@@ -62,7 +62,7 @@
   gap: var(--space-2);
   min-height: 3.25rem;
   box-sizing: border-box;
-  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
   border-bottom: 1px solid var(--reader-line);
 }
 
@@ -99,7 +99,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding: var(--space-3) var(--space-3) calc(var(--space-3) + var(--safe-bottom));
+  padding: var(--space-4) var(--space-4) calc(var(--space-4) + var(--safe-bottom));
 }
 
 /* A compact sheet is as tall as its content: a zero basis would collapse its body to
@@ -109,7 +109,7 @@
 }
 
 .sheet:has(> .sheet-footer) > .sheet-body {
-  padding-bottom: var(--space-3);
+  padding-bottom: var(--space-4);
 }
 
 .sheet-footer {
@@ -118,7 +118,7 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-3) calc(var(--space-2) + var(--safe-bottom));
+  padding: var(--space-2) var(--space-4) calc(var(--space-2) + var(--safe-bottom));
   border-top: 1px solid var(--reader-line);
 }
 
@@ -140,7 +140,7 @@
 .sheet-form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 .sheet-field {
@@ -341,7 +341,7 @@
     max-height: calc(100dvh - 2rem);
     border-bottom: 1px solid var(--reader-line);
     border-radius: var(--radius-lg);
-    box-shadow: 0 12px 48px color-mix(in srgb, #000 20%, transparent);
+    box-shadow: var(--shadow-lg);
   }
 
   .sheet[open] {
@@ -357,7 +357,7 @@
     right: auto;
     bottom: auto;
     width: min(24rem, calc(100vw - 2rem));
-    box-shadow: 0 12px 40px color-mix(in srgb, #000 18%, transparent);
+    box-shadow: var(--shadow-lg);
   }
 
   .sheet[data-size="compact"][data-anchored][open] {
@@ -365,7 +365,7 @@
   }
 
   .sheet[data-size="compact"][data-anchored]::backdrop {
-    background: color-mix(in srgb, var(--color-scrim, rgb(0 0 0 / 0.4)) 45%, transparent);
+    background: color-mix(in srgb, var(--color-scrim, var(--color-backdrop-fallback)) 45%, transparent);
   }
 
   .sheet[data-size="wide"] {
@@ -381,7 +381,7 @@
   }
 
   .sheet-body {
-    padding-bottom: var(--space-3);
+    padding-bottom: var(--space-4);
   }
 
   .sheet-footer {

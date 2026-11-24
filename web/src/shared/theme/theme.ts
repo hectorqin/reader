@@ -433,6 +433,17 @@ export function saveThemePreference(scope: string, patch: Partial<ThemePreferenc
   return next;
 }
 
+export const loginThemeScope = (baseUrl: string): string => JSON.stringify([baseUrl.replace(/\/+$/, ''), 'anonymous']);
+
+/** Keep only the last appearance for this server, never account or session metadata. */
+export function rememberLoginTheme(baseUrl: string, scope: string): void {
+  try {
+    saveThemePreference(loginThemeScope(baseUrl), readThemePreference(scope));
+  } catch {
+    // Storage may be unavailable; that must not prevent rendering or signing out.
+  }
+}
+
 export function systemPrefersDark(): boolean {
   return typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches === true;
 }

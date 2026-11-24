@@ -14,6 +14,41 @@ const stylesheets = (dir: string): string[] =>
   });
 
 describe('design tokens', () => {
+  it('keeps literal colors in the semantic palette and glass material definitions', () => {
+    const allowlist = new Set<string>();
+    const seen = new Set<string>();
+    const offenders = stylesheets(root).flatMap((file) => {
+      if (['theme-tokens.css', 'glass.css'].includes(file.split(/[\\/]/).at(-1)!)) return [];
+      const source = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+      return [...source.matchAll(/^\s*([a-z-]+):\s*([^;{}]+);/gm)]
+        .filter(([, , value]) =>
+          /#[\da-f]{3,8}\b|\brgba?\(|(?:^|[\s,(])(?:black|silver|gray|white|maroon|red|purple|fuchsia|green|lime|olive|yellow|navy|blue|teal|aqua|rebeccapurple)(?=[\s,)]|$)/i.test(
+            value!,
+          ),
+        )
+        .map((match) => `${relative(root, file)}: ${match[0].trim()}`)
+        .filter((entry) => {
+          if (!allowlist.has(entry)) return true;
+          seen.add(entry);
+          return false;
+        });
+    });
+    expect(offenders).toEqual([]);
+    expect([...allowlist].filter((entry) => !seen.has(entry))).toEqual([]);
+  });
+
+  it('reads shadows from tokens rather than introducing another elevation recipe', () => {
+    const offenders = stylesheets(root).flatMap((file) => {
+      if (file.endsWith('theme-tokens.css') || file.endsWith('glass.css')) return [];
+      return [...readFileSync(file, 'utf8').matchAll(/\bbox-shadow:\s*([^;]+);/g)]
+        .filter(
+          ([, value]) => !/^(?:none|var\(--[\w-]+\)(?:\s+var\(--[\w-]+\))*)(?:\s*!important)?$/.test(value!.trim()),
+        )
+        .map((match) => `${relative(root, file)}: ${match[0]}`);
+    });
+    expect(offenders).toEqual([]);
+  });
+
   it('keeps compact visible captions at the metadata size rather than below 12px', () => {
     const css = readFileSync(join(root, 'styles/reader.css'), 'utf8');
     expect(css).toMatch(/--text-meta:\s*0\.75rem;/);
