@@ -18,7 +18,7 @@
   --color-surface: #ffffff;
   --color-surface-2: #f8efe8;
   --color-ink: #3a2a22;
-  --color-muted: #82685b;
+  --color-muted: #7a6053;
   --color-line: #f0e3da;
   --color-brand: #f2b79f;
   --color-brand-soft: #fbe9e0;
@@ -215,12 +215,12 @@
   --color-surface: #ffffff;
   --color-surface-2: #e8edf5;
   --color-ink: #141820;
-  --color-muted: #536072;
+  --color-muted: #3f4c60;
   --color-line: #cbd3df;
   --color-brand: #0062df;
   --color-brand-soft: #e1ecff;
   --color-on-brand: #ffffff;
-  --color-brand-text: #0056c7;
+  --color-brand-text: #0049ad;
   --color-on-ch: #ffffff;
   --color-scrim: rgba(10, 18, 32, 0.4);
   --color-ch-read: #a34400;

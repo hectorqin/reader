@@ -14,6 +14,15 @@ const stylesheets = (dir: string): string[] =>
   });
 
 describe('design tokens', () => {
+  it('keeps compact visible captions at the metadata size rather than below 12px', () => {
+    const css = readFileSync(join(root, 'styles/reader.css'), 'utf8');
+    expect(css).toMatch(/--text-meta:\s*0\.75rem;/);
+    expect(css).toMatch(/--text-micro:\s*var\(--text-meta\);/);
+    expect(css).toMatch(/--touch-target:\s*2\.75rem;/);
+    const shell = readFileSync(join(root, 'app/shell.css'), 'utf8');
+    expect(shell).toMatch(/\.app-nav-search > input:focus-visible\s*\{\s*outline: var\(--focus-ring\);/);
+  });
+
   it('uses --radius-* instead of literal corner radii (ui.md §2.6)', () => {
     const offenders = stylesheets(root).flatMap((file) => {
       const source = readFileSync(file, 'utf8');

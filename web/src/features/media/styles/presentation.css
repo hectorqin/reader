@@ -750,11 +750,10 @@ body:has(> #app > .media-screen) {
   height: 25px;
 }
 .media-screen .media-skip {
-  position: relative;
+  grid-template-rows: 1fr auto;
+  padding: 0;
 }
 .media-skip small {
-  position: absolute;
-  inset: 18px 0 auto;
   text-align: center;
   font-size: var(--text-micro);
   font-weight: 600;
@@ -941,6 +940,8 @@ body:has(> #app > .media-screen) {
 }
 .media-continue > .media-cover .media-cover-title {
   font-size: var(--text-meta);
+  color: var(--text);
+  opacity: 1;
 }
 .media-continue small {
   overflow: hidden;

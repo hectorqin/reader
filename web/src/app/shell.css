@@ -262,6 +262,14 @@
   .app-nav-search input::-webkit-search-cancel-button {
     display: none;
   }
+  .app-nav-search input::placeholder {
+    color: var(--nav-muted);
+    opacity: 1;
+  }
+  .app-nav-search > input:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: calc(-1 * var(--focus-offset));
+  }
   .app-nav-search:focus-within {
     box-shadow: 0 0 0 2px var(--nav-accent);
   }

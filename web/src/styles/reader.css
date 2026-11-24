@@ -89,7 +89,8 @@
   --text-ui: 0.875rem; /* list rows and settings rows in the app chrome */
   --text-label: 0.82rem; /* field labels, section titles, secondary buttons */
   --text-meta: 0.75rem; /* the line under a title: counts, times, sources */
-  --text-micro: 0.625rem; /* corner badges on covers and icons, nothing else */
+  --text-micro: var(--text-meta); /* compact badges and captions share the 12px floor */
+  --touch-target: 2.75rem;
 
   /*
    * Motion.
@@ -1279,7 +1280,7 @@ book-content {
 }
 
 .shelf-search input::placeholder {
-  color: color-mix(in srgb, var(--reader-muted) 85%, transparent);
+  color: var(--reader-muted);
 }
 
 .shelf-search input:focus-visible {
@@ -1751,7 +1752,7 @@ book-content {
   font-weight: 500;
   line-height: 1.35;
   text-align: center;
-  color: color-mix(in srgb, var(--reader-ink) 72%, transparent);
+  color: var(--reader-ink);
   background: linear-gradient(
     150deg,
     color-mix(in srgb, var(--reader-accent) 16%, var(--reader-surface)) 0%,
@@ -6661,4 +6662,25 @@ svg.icon {
 .collection-heading > .icon-button[aria-label="返回"] > .icon,
 .sources-header > .icon-button[aria-label="返回"] > .icon {
   font-size: var(--text-display);
+}
+
+@media (max-width: 760px) {
+  .reader-screen {
+    --reader-footer-height: calc(9.5rem + var(--safe-bottom));
+  }
+
+  .chip,
+  .sheet-close.icon-button,
+  .reader-screen .topbar .icon-button,
+  .reader-screen .nav-chapter,
+  .reader-screen .progress-scrubber,
+  .media-screen .media-heading-actions .media-icon-button {
+    min-width: var(--touch-target);
+    min-height: var(--touch-target);
+    flex-shrink: 0;
+  }
+
+  .chip::before {
+    content: none;
+  }
 }
