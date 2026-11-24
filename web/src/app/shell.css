@@ -239,7 +239,7 @@
     gap: var(--space-2);
     margin: 0 0 16px;
     padding: 0 var(--space-3);
-    border-radius: var(--radius-md);
+    border-radius: var(--radius-pill);
     background: var(--color-surface-2);
     color: var(--nav-muted);
   }
@@ -266,12 +266,9 @@
     color: var(--nav-muted);
     opacity: 1;
   }
-  .app-nav-search > input:focus-visible {
-    outline: var(--focus-ring);
-    outline-offset: calc(-1 * var(--focus-offset));
-  }
   .app-nav-search:focus-within {
-    box-shadow: var(--shadow-nav-focus) var(--nav-accent);
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-offset);
   }
   /* iOS zooms the page into any field under 16px when it is focused (it ignores
      maximum-scale), so a finger-driven sidebar (iPad, phone in landscape) gets 16px. */

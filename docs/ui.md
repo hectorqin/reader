@@ -104,6 +104,9 @@
 用 `:focus-visible` 而非 `:focus`：鼠标点击按钮不应留下焦点环，键盘 Tab 必须
 始终显示。
 
+侧栏搜索的焦点环只画在胶囊外框（`:focus-within`），输入本身不再叠加 outline；
+玻璃材质的原有边缘与阴影不随焦点替换。
+
 ### 2.5 悬停
 
 统一包在 `@media (hover: hover) and (pointer: fine)` 里。不加这层的话，触屏上

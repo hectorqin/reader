@@ -55,7 +55,12 @@ describe('design tokens', () => {
     expect(css).toMatch(/--text-micro:\s*var\(--text-meta\);/);
     expect(css).toMatch(/--touch-target:\s*2\.75rem;/);
     const shell = readFileSync(join(root, 'app/shell.css'), 'utf8');
-    expect(shell).toMatch(/\.app-nav-search > input:focus-visible\s*\{\s*outline: var\(--focus-ring\);/);
+    expect(shell).toMatch(/\.app-nav-search\s*\{[^}]*border-radius: var\(--radius-pill\);/);
+    expect(shell).toMatch(
+      /\.app-nav-search:focus-within\s*\{\s*outline: var\(--focus-ring\);\s*outline-offset: var\(--focus-offset\);/,
+    );
+    expect(shell).toMatch(/\.app-nav-search input\s*\{[^}]*outline: none;/);
+    expect(shell).not.toMatch(/\.app-nav-search > input:focus-visible/);
   });
 
   it('uses --radius-* instead of literal corner radii (ui.md §2.6)', () => {
