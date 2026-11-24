@@ -34,6 +34,9 @@
 }
 /* The sidebar carries the search field from here up. */
 @media (min-width: 701px) {
+  .home-page {
+    --home-book-width: 9rem;
+  }
   .home-page .home-header {
     padding-right: 0;
   }
@@ -300,6 +303,27 @@
 .home-shelf-row .book-card {
   flex: none;
   width: 112px;
+}
+
+@media (min-width: 701px) {
+  :is(.home-shelf, .home-recent-books) .home-shelf-row {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-3);
+    overflow: visible;
+  }
+  :is(.home-shelf, .home-recent-books) .book-card {
+    width: 100%;
+    max-width: var(--home-book-width);
+    min-width: 0;
+  }
+  .home-shelf .book-card:nth-child(n + 5) {
+    display: none;
+  }
+  .home-section > a {
+    min-height: var(--touch-target);
+    min-width: var(--touch-target);
+  }
 }
 
 /* The row's own view switch: the toolkit control, compacted to sit beside a section title. */

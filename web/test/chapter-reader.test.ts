@@ -1127,6 +1127,18 @@ it('lists 阅读记录 in 书籍信息 and goes back to a place from it', async 
   expect(env.screen.element.querySelector('.reading-history')).toBeNull();
 });
 
+it('shows a quiet description placeholder and empty reading history in book info', async () => {
+  const env = await setup();
+  serve(env.transport, content(['a']));
+  await env.screen.open(book);
+  vi.spyOn(env.api, 'progressHistory').mockResolvedValue([]);
+  await click(env.screen, '书籍信息');
+  await vi.waitFor(() =>
+    expect(env.screen.element.querySelector('.reading-history')?.textContent).toContain('还没有阅读记录'),
+  );
+  expect(env.screen.element.querySelector('.book-detail-empty')?.textContent).toBe('暂无简介');
+});
+
 it('says 阅读记录 cannot be read offline instead of showing an empty list', async () => {
   const env = await setup();
   serve(env.transport, content(['a']));

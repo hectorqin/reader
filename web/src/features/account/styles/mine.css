@@ -11,9 +11,9 @@
   gap: 16px;
   margin: 20px 0 4px;
   padding: 18px 20px;
-  border: 1px solid color-mix(in srgb, var(--color-brand) 35%, transparent);
+  border: 1px solid var(--color-line);
   border-radius: var(--radius-xl);
-  background: var(--color-brand-soft);
+  background: var(--color-surface);
   color: var(--color-ink);
 }
 

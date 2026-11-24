@@ -1978,6 +1978,11 @@
   margin-top: 6px;
 }
 
+.media-playback-status[data-channel="audiobook"] {
+  --audio-cover-cap: 18rem;
+  --audio-cover-size: min(66%, var(--audio-cover-cap));
+}
+
 .media-screen.media-playback-page:not(.media-video-page) .media-playback-status[data-panel="main"],
 .media-screen.media-playback-page:not(.media-video-page) .media-playback-status[data-panel="lyrics"] {
   box-sizing: border-box;
@@ -2004,7 +2009,7 @@
   .media-playback-status[data-panel="main"][data-channel="audiobook"]
   .media-playing-artwork
   > .media-cover {
-  width: 135px;
+  width: var(--audio-cover-size);
   aspect-ratio: 2/3;
   margin: 0 auto;
 }
@@ -2123,7 +2128,10 @@
   justify-content: center;
   border: 0;
   background: transparent;
-  font-size: var(--text-title);
+  font-size: var(--text-meta);
+}
+.media-screen .media-playback-options .media-speed-control .media-select-trigger > svg {
+  display: none;
 }
 .media-audio-speed .media-select-control {
   flex: 1;
@@ -2383,7 +2391,8 @@
     .media-playback-status[data-panel="main"][data-channel="audiobook"]
     .media-playing-artwork
     > .media-cover {
-    width: 230px;
+    --audio-cover-size: min(100%, var(--audio-cover-cap));
+    width: var(--audio-cover-size);
     margin: auto;
   }
   .media-screen .media-playback-status[data-panel="main"] .media-playing-chapter {
@@ -2512,6 +2521,40 @@
   text-decoration: none;
   color: inherit;
   display: block;
+}
+.media-screen .media-grid[data-channel="music"] .media-tile strong:has(+ small) {
+  min-height: 0;
+}
+.media-screen .media-grid[data-channel="music"] .media-tile small {
+  margin-top: var(--space-1);
+}
+.media-screen .media-album-actions > .media-primary {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+  min-height: var(--touch-target);
+}
+.media-screen .media-album-actions > .media-album-queue {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: var(--touch-target);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--text-ui);
+}
+@media (max-width: 700px) {
+  .media-screen.media-playback-page:not(.media-video-page)
+    .media-playback-status[data-panel="main"][data-channel="audiobook"] {
+    min-height: 0;
+    justify-content: flex-start;
+    padding-top: var(--space-3);
+  }
 }
 .media-screen .media-browse-tools {
   height: auto;

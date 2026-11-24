@@ -4232,7 +4232,7 @@ book-content {
 }
 .explore-book {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: var(--space-2) var(--space-3);
   padding: var(--space-3) 0;
   border-top: 1px solid var(--reader-line);
@@ -4243,17 +4243,23 @@ book-content {
 }
 .explore-book .lazy-cover {
   width: 4rem;
-  grid-row: span 2;
+  grid-row: 1 / 4;
 }
 .explore-book-text {
-  min-width: 0;
+  display: contents;
 }
 .explore-book-text strong {
+  grid-column: 2 / -1;
+  grid-row: 1;
   display: block;
   font-size: var(--text-title);
   overflow-wrap: anywhere;
 }
 .explore-book-text small {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: center;
+  min-width: 0;
   display: block;
   margin-top: 0.2rem;
   color: var(--reader-muted);
@@ -4261,6 +4267,8 @@ book-content {
   overflow-wrap: anywhere;
 }
 .explore-book-text p {
+  grid-column: 2 / -1;
+  grid-row: 3;
   margin: 0.4rem 0 0;
   color: var(--reader-muted);
   font-size: var(--text-ui);
@@ -4271,13 +4279,27 @@ book-content {
   overflow: hidden;
 }
 .explore-book-actions {
-  grid-column: 2;
+  grid-column: 3;
+  grid-row: 2;
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
 }
 .explore-book-actions .button {
   min-height: 44px;
+}
+@media (min-width: 701px) {
+  .explore-book-text strong {
+    grid-column: 2;
+    align-self: center;
+  }
+  .explore-book-actions {
+    grid-row: 1;
+    align-self: start;
+  }
+  .explore-book-text small {
+    grid-column: 2 / -1;
+  }
 }
 /* 发现's own bar: what the local library adds (upload, file manager) on the left, the layout choice on the right. */
 .explore-tools {
@@ -5789,7 +5811,25 @@ svg.icon {
 }
 .book-detail {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-2);
+}
+.book-detail p,
+.book-detail h4 {
+  margin: 0;
+}
+.book-detail h4 {
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+.book-detail .reading-history {
+  display: grid;
+  gap: var(--space-1);
+}
+.book-detail .book-detail-empty,
+.book-detail .reading-history > .muted {
+  color: var(--reader-muted);
+  font-size: var(--text-meta);
+  font-weight: 400;
 }
 .book-detail h3 {
   margin: 0;
@@ -5802,8 +5842,9 @@ svg.icon {
 .book-detail dl {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 0.6rem 1rem;
-  padding-block: 0.8rem;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+  padding-block: var(--space-2);
   border-block: 1px solid var(--reader-line);
 }
 .book-detail-manage {

@@ -178,9 +178,8 @@ export function AlbumPlayback({
               <Icon name="play" size={16} />
               {start > 0 ? '从此曲播放' : '播放全部'}
             </button>
-            {actions}
             <button
-              className="media-icon-button"
+              className="media-album-queue"
               aria-label="加入队列"
               title="加入队列"
               disabled={busy || !queue.entries.length}
@@ -189,7 +188,9 @@ export function AlbumPlayback({
               }
             >
               <Icon name="queue-add" size={16} />
+              加入队列
             </button>
+            {actions}
           </div>
           <div className="media-album-columns">
             <div className="media-album-track-body">
