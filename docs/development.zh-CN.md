@@ -117,7 +117,7 @@ UI 评审在真实 Chromium 中通过 CDP 截图并测量；浏览器缺失时�
 ## 持续集成与发布
 
 - GitHub Actions `.github/workflows/ci.yml`：每个 PR 和每个分支的 push 都会运行。格式检查任务在根目录执行 `npm run format:check`；服务端与 Web 分别执行 install → typecheck → test → build；另有 UI 评审（复用 Web 产物，截图作为制品保留），以及 Android 的 `check-shell.sh`、Web 资源打包校验，以及 debug 与 release APK（制品 `reader-android-apk` / `reader-debug-apk`，文件名 `reader-pro-<版本>.apk`；版本取发布标签，否则取 `git describe`）。
-- `.github/workflows/release.yml`：只在推送 `v*` 标签或手动运行时触发，先跑 CI，再在 amd64 与 arm64 原生 runner 上构建镜像并发布到 Docker Hub `hectorqin/reader-pro`。标签发布 `x.y.z`、`x.y`、`latest` 与 `sha-*`；手动运行发布分支名与 `sha-*`。标签发布还会创建 GitHub Release：说明由 `scripts/release-notes.mjs` 按上一个 `v*` 标签以来的 Conventional Commits 分类生成（附注标签的说明放在最前），附件为 release APK、`reader-web-<版本>.zip` 与 `SHA256SUMS.txt`；带后缀的标签（如 `v1.3.0-rc.1`）标记为预发布。需要仓库机密 `DOCKER_USERNAME`、`DOCKER_PASSWORD`；设置了 `ANDROID_KEYSTORE_BASE64`（`.jks` 的 base64）、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`（可选 `ANDROID_KEY_PASSWORD`）时 APK 用该密钥签名，否则用 runner 临时生成的 debug 密钥（这样的 APK 之间不能覆盖升级）。`main` 是长期开发分支，push 到 `main` 不会发布。
+- `.github/workflows/release.yml`：只在推送 `v*` 标签或手动运行时触发，先跑 CI，再在 amd64 与 arm64 原生 runner 上构建镜像并发布到 Docker Hub `hectorqin/reader-pro`。标签发布 `x.y.z`、`x.y`、`latest` 与 `sha-*`；手动运行发布分支名与 `sha-*`。标签发布还会创建 GitHub Release：说明由 `scripts/release-notes.mjs` 按上一个 `v*` 标签以来的 Conventional Commits 分类生成（标题与安装说明为中英双语，提交标题保持原文；附注标签的说明放在最前，版本亮点可在其中用中英双语写），附件为 release APK、`reader-web-<版本>.zip` 与 `SHA256SUMS.txt`；带后缀的标签（如 `v1.3.0-rc.1`）标记为预发布。需要仓库机密 `DOCKER_USERNAME`、`DOCKER_PASSWORD`；设置了 `ANDROID_KEYSTORE_BASE64`（`.jks` 的 base64）、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`（可选 `ANDROID_KEY_PASSWORD`）时 APK 用该密钥签名，否则用 runner 临时生成的 debug 密钥（这样的 APK 之间不能覆盖升级）。`main` 是长期开发分支，push 到 `main` 不会发布。
 
 ## 构建与运行
 

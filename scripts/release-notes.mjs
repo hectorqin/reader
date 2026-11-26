@@ -80,17 +80,18 @@ for (const [key, title] of GROUPS) {
     out.push(`## ${title}`, '', ...items, '');
   }
 }
-if (!GROUPS.some(([key]) => groups.get(key).length)) out.push('_No changes since the previous release._', '');
+if (!GROUPS.some(([key]) => groups.get(key).length))
+  out.push('_自上个版本以来无变更 / No changes since the previous release._', '');
 
 out.push(
   '## 安装 Install',
   '',
-  `- **Docker** (amd64 / arm64): \`docker pull ${image}:${version}\``,
-  `- **Android**: \`reader-pro-${version}.apk\`（侧载安装 / side-load）`,
-  `- **Web client**: \`reader-web-${version}.zip\`（静态文件，可放到 \`WEB_DIR\` / static bundle for \`WEB_DIR\`）`,
-  '- 校验 Checksums: `SHA256SUMS.txt`',
+  `- **Docker**（amd64 / arm64）: \`docker pull ${image}:${version}\``,
+  `- **安卓 Android**: \`reader-pro-${version}.apk\`（下载后直接安装 / download and side-load）`,
+  `- **网页客户端 Web client**: \`reader-web-${version}.zip\`（静态文件，可放到 \`WEB_DIR\` / static bundle for \`WEB_DIR\`）`,
+  '- **校验和 Checksums**: `SHA256SUMS.txt`',
   '',
 );
-if (previous) out.push(`**Full changelog**: https://github.com/${repo}/compare/${previous}...${tag}`);
+if (previous) out.push(`**完整变更 Full changelog**: https://github.com/${repo}/compare/${previous}...${tag}`);
 
 console.log(out.join('\n'));
