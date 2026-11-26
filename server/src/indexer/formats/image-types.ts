@@ -37,7 +37,7 @@ const ZIP_IMAGE_TYPES: Record<string, string> = {
   '.zip': 'application/zip',
   '.cbz': 'application/vnd.comicbook+zip',
   '.cbr': 'application/vnd.comicbook-rar',
-  '.txt': 'text/plain; charset=utf-8',
+  '.txt': 'text/plain',
   '.md': 'text/markdown; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.html': 'text/html; charset=utf-8',

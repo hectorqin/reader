@@ -349,7 +349,7 @@ export const textHandler = registerFileHandler({
     const info = await stat(ctx.absPath);
     return {
       stream: createReadStream(ctx.absPath),
-      contentType: contentTypeFor(ctx.relPath, 'text/plain; charset=utf-8'),
+      contentType: contentTypeFor(ctx.relPath),
       size: info.size,
       seekable: true,
       lastModified: info.mtimeMs,

@@ -48,8 +48,12 @@ test('OPDS credentials publish a scoped, paginated read-only feed and revoke eve
   const session = await ctx.users.login('alice', 'password123', 'test');
   const otherSession = await ctx.users.login('other', 'password123', 'test');
   const bearer = { authorization: 'Bearer ' + session.accessToken };
+  const gbkFilename = '中文 书.txt';
+  const gbkBody = Buffer.from('d6d0cec4', 'hex');
   for (let i = 0; i < 52; i++) {
     const id = 'b' + String(i).padStart(3, '0');
+    const filename = i === 1 ? gbkFilename : id + '.txt';
+    const body = i === 1 ? gbkBody : Buffer.from('hello OPDS');
     db.run(
       'INSERT INTO books(id,content_hash,format,title,author,created_at,updated_at) VALUES(?,?,?,?,?,?,?)',
       id,
@@ -60,13 +64,13 @@ test('OPDS credentials publish a scoped, paginated read-only feed and revoke eve
       1,
       1,
     );
-    await writeFile(join(booksDir, id + '.txt'), 'hello OPDS');
+    await writeFile(join(booksDir, filename), body);
     db.run(
       'INSERT INTO book_files(id,book_id,rel_path,size,mtime_ms,first_seen,last_seen) VALUES(?,?,?,?,?,?,?)',
       id,
       id,
-      id + '.txt',
-      10,
+      filename,
+      body.byteLength,
       1,
       1,
       1,
@@ -104,6 +108,27 @@ test('OPDS credentials publish a scoped, paginated read-only feed and revoke eve
   assert.ok(feed.body.includes('&lt;&amp;&gt;'));
   assert.ok(!feed.body.includes('test.txt'));
   assert.equal(feed.headers['cache-control'], 'private, no-store');
+  const acquisition = parsed.entry.find((entry: any) => entry.id === 'urn:reader:book:b001').link;
+  assert.equal(acquisition['@_rel'], 'http://opds-spec.org/acquisition');
+  assert.equal(acquisition['@_type'], 'text/plain');
+  assert.equal(
+    acquisition['@_href'],
+    `https://reader.test/prefix/opds/books/b001/content/${encodeURIComponent(gbkFilename)}`,
+  );
+  const acquisitionPath = new URL(acquisition['@_href']).pathname.slice('/prefix'.length);
+  const download = await app.inject({ url: acquisitionPath, headers: basic });
+  assert.equal(download.statusCode, 200);
+  assert.deepEqual(download.rawPayload, gbkBody);
+  assert.equal(download.headers['content-type'], 'text/plain');
+  assert.equal(
+    download.headers['content-disposition'],
+    `inline; filename="__ _.txt"; filename*=UTF-8''${encodeURIComponent(gbkFilename)}`,
+  );
+  assert.equal((await app.inject(acquisitionPath)).statusCode, 401);
+  const rawAsset = await app.inject({ url: '/api/v1/books/b001/assets?ref=content', headers: bearer });
+  assert.equal(rawAsset.statusCode, 200);
+  assert.equal(rawAsset.headers['content-type'], 'text/plain');
+  assert.deepEqual(rawAsset.rawPayload, gbkBody);
   const client = createOpdsProvider({
     fetch: async (input, init) => {
       const target = new URL(String(input));
@@ -180,6 +205,7 @@ test('OPDS credentials publish a scoped, paginated read-only feed and revoke eve
   };
   assert.ok(!(await app.inject({ url: '/opds', headers: otherBasic })).body.includes('<entry>'));
   assert.equal((await app.inject({ url: '/opds/books/b000/content', headers: otherBasic })).statusCode, 404);
+  assert.equal((await app.inject({ url: acquisitionPath, headers: otherBasic })).statusCode, 404);
   await app.inject({ method: 'DELETE', url: '/api/v1/opds/credentials/' + credential.id, headers: bearer });
   for (const url of ['/opds', '/opds/books/b000/content', '/opds/books/b000/cover'])
     assert.equal((await app.inject({ url, headers: basic })).statusCode, 401);
