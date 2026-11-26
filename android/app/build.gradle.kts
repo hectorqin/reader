@@ -11,8 +11,9 @@ android {
         applicationId = "com.htmake.readerpro"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI passes the release tag's version (-PreaderVersionName=1.2.3 -PreaderVersionCode=1002003).
+        versionCode = (project.findProperty("readerVersionCode") as String?)?.toInt() ?: 1
+        versionName = (project.findProperty("readerVersionName") as String?) ?: "0.1.0"
 
         /*
          * Where the WebView points on first launch.
@@ -33,6 +34,25 @@ android {
         )
     }
 
+    /*
+     * A release keystore is optional. CI provides one from repository secrets
+     * (ANDROID_KEYSTORE_BASE64 and friends, see .github/workflows/ci.yml); without
+     * it the release build keeps the debug key so the APK still side-loads.
+     */
+    val releaseKeystore = providers.environmentVariable("READER_KEYSTORE_FILE").orNull?.let { file(it) }
+    signingConfigs {
+        if (releaseKeystore != null && releaseKeystore.isFile) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = providers.environmentVariable("READER_KEYSTORE_PASSWORD").orNull
+                keyAlias = providers.environmentVariable("READER_KEY_ALIAS").orNull
+                keyPassword =
+                    providers.environmentVariable("READER_KEY_PASSWORD").orNull
+                        ?: providers.environmentVariable("READER_KEYSTORE_PASSWORD").orNull
+            }
+        }
+    }
+
     buildFeatures {
         buildConfig = true
         viewBinding = false
@@ -51,7 +71,7 @@ android {
             // Signed with the debug key unless a keystore is provided. An
             // unsigned release APK cannot be side-loaded at all, and this project
             // has no signing infrastructure to promise (product design §7).
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 
