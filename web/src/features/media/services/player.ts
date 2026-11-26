@@ -10,6 +10,7 @@ import { SubtitleControls } from '../components/subtitles.ts';
 import { AudioTrackControls } from '../components/audio-tracks.ts';
 import { NativeAudio } from './native-audio.ts';
 import { playbackSupport, playbackFailure, type PlaybackStream } from './playback-support.ts';
+import { newId } from '../../../core/id.ts';
 
 import { playModes, type PlayMode } from './play-mode.ts';
 export { playModes, type PlayMode };
@@ -963,7 +964,7 @@ export class MediaPlayer extends EventTarget {
     this.video.hidden = !selected.video || this.nativeActive;
     this.element.hidden = !this.visible;
     if (this.nativeActive) {
-      this.nativeQueueId = crypto.randomUUID();
+      this.nativeQueueId = newId();
       this.native!.command('play', {
         sessionId: session.id,
         url: this.api.streamUrl(session),

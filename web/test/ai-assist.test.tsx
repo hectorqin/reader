@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AiAssistSheet, MAX_KEPT_ANSWER, keptAnswer, type AssistAction } from '../src/ui/ai-assist.tsx';
 import { AnnotationPopover } from '../src/ui/annotation-popover.tsx';
+import { dismissAllNotices } from '../src/ui/notifications.ts';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -125,6 +126,7 @@ describe('AnnotationPopover 问AI', () => {
   afterEach(() => {
     act(() => root.unmount());
     host.remove();
+    dismissAllNotices();
   });
   const target = {
     anchor: { sectionId: 's', start: 0, end: 2, quote: '选区', prefix: '', suffix: '' },
@@ -147,4 +149,28 @@ describe('AnnotationPopover 问AI', () => {
     );
     expect(askAi).toHaveBeenCalledTimes(1);
   });
+
+  it.each([undefined, {}])(
+    'keeps the selection open and offers system copy or HTTPS without clipboard (%s)',
+    async (clipboard) => {
+      const previous = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard });
+      const close = vi.fn();
+      try {
+        act(() => root.render(<AnnotationPopover {...props} close={close} />));
+        const copy = [...host.querySelectorAll<HTMLButtonElement>('.annotation-actions button')].find(
+          (candidate) => candidate.textContent === '复制',
+        )!;
+        await act(async () => copy.click());
+        expect(document.querySelector('[role="alert"]')?.textContent).toBe(
+          '当前环境不支持剪贴板，请使用系统复制或通过 HTTPS 访问',
+        );
+        expect(close).not.toHaveBeenCalled();
+        expect(copy.disabled).toBe(false);
+      } finally {
+        if (previous) Object.defineProperty(navigator, 'clipboard', previous);
+        else Reflect.deleteProperty(navigator, 'clipboard');
+      }
+    },
+  );
 });

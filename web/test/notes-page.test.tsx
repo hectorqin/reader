@@ -292,3 +292,17 @@ it('exports what the filter shows, copied as Markdown', async () => {
   expect(writeText).toHaveBeenCalledWith('# markdown');
   expect(document.querySelector('.notes-export-status')?.textContent).toBe('已复制 2 条笔记、1 篇书评');
 });
+
+it.each([undefined, {}])('offers download or HTTPS when clipboard writing is unavailable (%s)', async (clipboard) => {
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: clipboard });
+  await paint('/me/notes');
+  await settle();
+  await act(async () => button('导出').click());
+  await act(async () => button('复制 Markdown').click());
+  await settle();
+  expect(document.querySelector('.notes-export-status')?.textContent).toBe(
+    '当前环境不支持剪贴板，请使用下载导出或通过 HTTPS 访问',
+  );
+  expect(button('复制 Markdown').disabled).toBe(false);
+  expect(button('下载 Markdown').disabled).toBe(false);
+});
