@@ -38,6 +38,8 @@ export interface Locator {
 }
 
 export const LOCATOR_PREFIX = 'r1';
+const OFFSET_DECIMALS = 4;
+export const LOCATOR_OFFSET_ROUNDING_ERROR = 0.5 * 10 ** -OFFSET_DECIMALS;
 
 export function parseLocator(value: string, doc: BookDoc): Locator | null {
   if (!value) return null;
@@ -95,7 +97,7 @@ function resolve(sectionId: string, offset: number, doc: BookDoc): Locator | nul
  */
 export function formatLocator(sectionId: string, offset: number): string {
   const clamped = Math.min(1, Math.max(0, Number.isFinite(offset) ? offset : 0));
-  return `${LOCATOR_PREFIX}:${clamped.toFixed(4)}:${sectionId}`;
+  return `${LOCATOR_PREFIX}:${clamped.toFixed(OFFSET_DECIMALS)}:${sectionId}`;
 }
 
 /**

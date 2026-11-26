@@ -50,6 +50,7 @@ beforeAll(() => {
 function scrollable(
   element: HTMLElement,
   geometry: { clientHeight: number; scrollHeight: number; clientWidth?: number; scrollWidth?: number },
+  quantizeScrollTop = Math.round,
 ): void {
   const state = { top: 0, left: 0 };
   Object.defineProperty(element, 'clientHeight', { get: () => geometry.clientHeight, configurable: true });
@@ -57,7 +58,7 @@ function scrollable(
   Object.defineProperty(element, 'clientWidth', { get: () => geometry.clientWidth ?? 400, configurable: true });
   Object.defineProperty(element, 'scrollWidth', { get: () => geometry.scrollWidth ?? 400, configurable: true });
   Object.defineProperty(element, 'scrollTop', {
-    get: () => Math.round(state.top),
+    get: () => quantizeScrollTop(state.top),
     set: (value: number) => {
       state.top = Math.min(Math.max(0, value), Math.max(0, geometry.scrollHeight - geometry.clientHeight));
     },
@@ -155,6 +156,37 @@ describe('page turns in scroll mode', () => {
     } finally {
       view.dispose();
       globalThis.ResizeObserver = previousObserver;
+    }
+  });
+
+  it('reopens a rounded page-three locator at the same screen boundary', async () => {
+    const pages: number[] = [];
+    const view = new ReaderView({
+      container,
+      doc: doc(1),
+      onPositionChange: (position) => pages.push(position.pageInChapter),
+    });
+    const host = view.elementHost;
+    scrollable(host, { clientHeight: 650, scrollHeight: 4254 }, Math.floor);
+    try {
+      await view.open(0);
+      await view.next();
+      await view.next();
+      const saved = view.position();
+      expect([saved.pageInChapter, saved.chapterPages]).toEqual([3, 7]);
+      const pageStart = host.scrollTop;
+
+      await view.open(0);
+      await view.openLocator(saved.locator);
+      expect(host.scrollTop).toBe(pageStart);
+      expect(pages.at(-1)).toBe(3);
+      await view.next();
+      expect(view.position().pageInChapter).toBe(4);
+
+      await view.openLocator('r1:0.4000:ch0.xhtml');
+      expect(host.scrollTop).toBe(1441);
+    } finally {
+      view.dispose();
     }
   });
 

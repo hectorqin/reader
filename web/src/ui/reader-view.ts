@@ -5,7 +5,7 @@ import type { NativePageHost } from './native-page.ts';
 import { ResourceResolver, hydrateResources } from './resources.ts';
 import { createBookHost, extractBody, extractInlineStyles, type BookShadowHost } from './shadow.ts';
 import { escapeHtml, textToChapterHtml } from '../formats/segments.ts';
-import { bookPercentage, formatLocator, parseLocator } from './locator.ts';
+import { bookPercentage, formatLocator, LOCATOR_OFFSET_ROUNDING_ERROR, parseLocator } from './locator.ts';
 import { collectSpokenChunks, type SpokenChunk } from '../render/tts-text.ts';
 import { adoptWindow } from '../formats/windowed.ts';
 import { BOOK_RESOURCE_MARKER, chapterRefFromLink } from '../formats/book-resource.ts';
@@ -153,6 +153,7 @@ export interface ViewSettings {
 
 /** A stand-in for the section index being out of range, so a caller need not guard. */
 const EMPTY_SECTION: Section = { id: '', label: '', depth: 0 };
+const SCROLL_PIXEL_TOLERANCE = 1;
 
 const DEFAULT_SETTINGS: ViewSettings = {
   mode: 'scroll',
@@ -1477,8 +1478,17 @@ export class ReaderView {
       this.syncPageMask();
       return;
     }
-    const limit = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    scroller.scrollTop = limit * this.sectionOffset;
+    const limit = this.scrollRange();
+    const target = limit * this.sectionOffset;
+    let offset = target;
+    if (target > 0 && target < limit) {
+      // A saved page start can land just before its boundary after locator and
+      // browser rounding. Restore the exact boundary without snapping free scroll.
+      const tolerance = SCROLL_PIXEL_TOLERANCE + limit * LOCATOR_OFFSET_ROUNDING_ERROR;
+      const boundary = this.screenBoundaryAt(target, tolerance);
+      if (Math.abs(boundary.offset - target) <= tolerance) offset = boundary.offset;
+    }
+    scroller.scrollTop = offset;
     this.syncPageMask();
   }
 
@@ -1570,15 +1580,16 @@ export class ReaderView {
    * is: see `screenOffset`.
    */
   private scrollPage(): number {
+    return this.screenBoundaryAt(this.scroller.scrollTop, SCROLL_PIXEL_TOLERANCE).page;
+  }
+
+  private screenBoundaryAt(top: number, tolerance: number): { page: number; offset: number } {
     const total = this.screenCount();
-    const top = this.scroller.scrollTop;
-    for (let page = total - 1; page >= 0; page -= 1) {
-      // A tolerance of one pixel, because the browser rounds `scrollTop` on read
-      // (`722.99` is reported as `723`) and an exact comparison would then put the
-      // reader on the page *before* the one they are looking at.
-      if (top >= this.screenOffset(page) - 1) return page;
+    for (let page = total - 1; page > 0; page -= 1) {
+      const offset = this.screenOffset(page);
+      if (top >= offset - tolerance) return { page, offset };
     }
-    return 0;
+    return { page: 0, offset: 0 };
   }
 
   /**
