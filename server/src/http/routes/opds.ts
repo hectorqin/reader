@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createReadStream } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
-import { isAbsolute, relative } from 'node:path';
+import { isAbsolute, posix, relative } from 'node:path';
 import type { AppContext } from '../context.ts';
 import { authenticate, currentUser } from '../auth.ts';
 import { OpdsCredentials, xml } from '../../services/opds.ts';
@@ -86,9 +86,11 @@ export function registerOpdsRoutes(app: FastifyInstance, ctx: AppContext): void 
       .map((book) => {
         const href = `${root()}/books/${encodeURIComponent(book.id)}`;
         const file = new FilePublications(ctx.db, ctx.config).context(book.id);
+        const acquisitionUrl = `${href}/content/${encodeURIComponent(posix.basename(file.relPath))}`;
+        const mediaType = contentTypeFor(file.relPath).split(';', 1)[0];
         return `<entry><id>urn:reader:book:${xml(book.id)}</id><title>${xml(book.title)}</title><updated>${new Date(book.updatedAt).toISOString()}</updated>
         <author><name>${xml(book.author)}</name></author><summary type="text">${xml(book.description)}</summary>
-        ${link('http://opds-spec.org/acquisition', href + '/content', contentTypeFor(file.relPath))}
+        ${link('http://opds-spec.org/acquisition', acquisitionUrl, mediaType)}
         ${book.coverUrl ? link('http://opds-spec.org/image', href + '/cover', '') : ''}</entry>`;
       })
       .join('');
@@ -106,13 +108,17 @@ export function registerOpdsRoutes(app: FastifyInstance, ctx: AppContext): void 
         `<?xml version="1.0" encoding="utf-8"?><OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/"><ShortName>Reader</ShortName><Description>搜索个人书架</Description><Url type="${feedType}" template="${xml(root() + '?search={searchTerms}')}"/><InputEncoding>UTF-8</InputEncoding></OpenSearchDescription>`,
       ),
   );
-  app.get('/opds/books/:id/content', { onRequest: isolateBookResource, preHandler: access }, async (request, reply) => {
-    const book = ctx.shelf.get(currentUser(request).id, (request.params as { id: string }).id);
-    if (!formats.includes(book.format)) throw notFound('publication not available');
-    const files = new FilePublications(ctx.db, ctx.config);
-    await containedFile(files.context(book.id).absPath, [ctx.config.booksDir, ctx.config.dataDir]);
-    return sendAssetPayload(request, reply, await files.content(book.id, book.format));
-  });
+  app.get(
+    '/opds/books/:id/content/:filename?',
+    { onRequest: isolateBookResource, preHandler: access },
+    async (request, reply) => {
+      const book = ctx.shelf.get(currentUser(request).id, (request.params as { id: string }).id);
+      if (!formats.includes(book.format)) throw notFound('publication not available');
+      const files = new FilePublications(ctx.db, ctx.config);
+      await containedFile(files.context(book.id).absPath, [ctx.config.booksDir, ctx.config.dataDir]);
+      return sendAssetPayload(request, reply, await files.content(book.id, book.format));
+    },
+  );
   app.get('/opds/books/:id/cover', { onRequest: isolateBookResource, preHandler: access }, async (request, reply) => {
     const book = ctx.shelf.get(currentUser(request).id, (request.params as { id: string }).id);
     if (!formats.includes(book.format)) throw notFound('publication not available');

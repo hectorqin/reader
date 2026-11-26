@@ -111,7 +111,12 @@ export async function sendAssetPayload(
   if (payload.etag) reply.header('etag', `"${payload.etag}"`);
   if (payload.lastModified) reply.header('last-modified', new Date(payload.lastModified).toUTCString());
   if (payload.filename) {
-    reply.header('content-disposition', `inline; filename*=UTF-8''${encodeURIComponent(payload.filename)}`);
+    const fallback = payload.filename.replace(/[^\x20-\x7e]|["%\\]/gu, '_');
+    const encoded = encodeURIComponent(payload.filename).replace(
+      /['()*]/g,
+      (character) => '%' + character.charCodeAt(0).toString(16).toUpperCase(),
+    );
+    reply.header('content-disposition', `inline; filename="${fallback}"; filename*=UTF-8''${encoded}`);
   }
 
   if (options.notModifiedOn && payload.lastModified && payload.lastModified <= options.notModifiedOn) {
