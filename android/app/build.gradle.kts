@@ -39,16 +39,18 @@ android {
      * (ANDROID_KEYSTORE_BASE64 and friends, see .github/workflows/ci.yml); without
      * it the release build keeps the debug key so the APK still side-loads.
      */
-    val releaseKeystore = providers.environmentVariable("READER_KEYSTORE_FILE").orNull?.let { file(it) }
+    // CI passes unset secrets as empty strings, so empty counts as unset.
+    fun env(name: String) = providers.environmentVariable(name).orNull?.takeIf { it.isNotEmpty() }
+    val releaseKeystore = env("READER_KEYSTORE_FILE")?.let { file(it) }
     signingConfigs {
         if (releaseKeystore != null && releaseKeystore.isFile) {
             create("release") {
                 storeFile = releaseKeystore
-                storePassword = providers.environmentVariable("READER_KEYSTORE_PASSWORD").orNull
-                keyAlias = providers.environmentVariable("READER_KEY_ALIAS").orNull
+                storePassword = env("READER_KEYSTORE_PASSWORD")
+                keyAlias = env("READER_KEY_ALIAS")
                 keyPassword =
-                    providers.environmentVariable("READER_KEY_PASSWORD").orNull
-                        ?: providers.environmentVariable("READER_KEYSTORE_PASSWORD").orNull
+                    env("READER_KEY_PASSWORD")
+                        ?: env("READER_KEYSTORE_PASSWORD")
             }
         }
     }
