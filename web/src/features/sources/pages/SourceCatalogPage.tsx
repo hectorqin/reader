@@ -10,6 +10,7 @@ import type { SourceEntry, SourcePage } from '../../../api/sources.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useSources } from '../hooks/sourceQueries.ts';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
+import { newId } from '../../../core/id.ts';
 
 export function mergePages(current: SourcePage | undefined, page: SourcePage): SourcePage {
   const items = new Map((current?.items ?? []).map((item) => [item.ref, item]));
@@ -70,22 +71,22 @@ export function SourceCatalogPage() {
     if (!term || !source) return;
     setBusy(true);
     setError('');
-    if (!append) {
-      sessionId.current = crypto.randomUUID();
-      setPage(undefined);
-      setCursor(undefined);
-    }
-    setParams((previous) => {
-      const next = new URLSearchParams(previous);
-      next.set('q', term);
-      if (!append) next.delete('cursor');
-      return next;
-    });
     try {
+      if (!append) {
+        sessionId.current = newId();
+        setPage(undefined);
+        setCursor(undefined);
+      }
+      setParams((previous) => {
+        const next = new URLSearchParams(previous);
+        next.set('q', term);
+        if (!append) next.delete('cursor');
+        return next;
+      });
       let merged = append ? page : undefined;
       for await (const chunk of api.searchSource(source.id, {
         query: term,
-        sessionId: sessionId.current ?? crypto.randomUUID(),
+        sessionId: sessionId.current ?? newId(),
         ...(append && cursor ? { cursor } : {}),
         filters,
         resultLimit: 10000,

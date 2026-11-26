@@ -415,7 +415,8 @@ function ExportSheet({
     return `已导出${amount(doc)}到 ${doc.filename}`;
   };
   const copy = async (doc: NotesExport) => {
-    if (!navigator.clipboard) throw new Error('当前环境不支持剪贴板');
+    if (typeof navigator.clipboard?.writeText !== 'function')
+      throw new Error('当前环境不支持剪贴板，请使用下载导出或通过 HTTPS 访问');
     await navigator.clipboard.writeText(doc.content);
     return `已复制${amount(doc).trimEnd()}`;
   };

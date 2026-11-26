@@ -1,5 +1,24 @@
 import { expect, it, vi } from 'vitest';
 import { newId } from '../src/core/id.ts';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
+it('uses the LAN-compatible ID helper everywhere instead of secure-context UUID APIs', () => {
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+      entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)],
+    );
+  const src = join(process.cwd(), 'src');
+  const offenders = walk(src)
+    .filter((file) => relative(src, file) !== join('core', 'id.ts'))
+    .filter((file) =>
+      /\bcrypto\s*(?:(?:\?\.|\.)\s*randomUUID\b|(?:\?\.)?\s*\[\s*['"]randomUUID['"]\s*\])/.test(
+        readFileSync(file, 'utf8'),
+      ),
+    )
+    .map((file) => relative(src, file));
+  expect(offenders).toEqual([]);
+});
 
 it('generates distinct RFC 4122 v4 record IDs without randomUUID on LAN HTTP', () => {
   const random = globalThis.crypto;

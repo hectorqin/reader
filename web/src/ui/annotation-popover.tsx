@@ -188,7 +188,8 @@ export function AnnotationPopover({
               disabled={busy}
               onClick={() =>
                 void work(async () => {
-                  if (!navigator.clipboard) throw new Error('当前环境不支持剪贴板，请使用系统复制');
+                  if (typeof navigator.clipboard?.writeText !== 'function')
+                    throw new Error('当前环境不支持剪贴板，请使用系统复制或通过 HTTPS 访问');
                   await navigator.clipboard.writeText(target.anchor.quote);
                 })
               }
