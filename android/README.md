@@ -25,7 +25,9 @@ cd android
   （写入 `BuildConfig.DEFAULT_SERVER_URL`，经桥接方法 `configuredServerUrl()` 交给 H5 预填）。
 - **资源目录**：`app/build.gradle.kts` 把 assets 根目录**替换**为 `src/main/assets/web-assets`，
   所以 `web/dist` 的内容平铺在 APK 的 `assets/` 下。该目录除 `README.txt` 占位外被 Git 忽略。
-- release 构建在没有提供 keystore 时使用 debug 签名。
+- release 构建在没有提供 keystore 时使用 debug 签名。提供时用环境变量 `READER_KEYSTORE_FILE`、
+  `READER_KEYSTORE_PASSWORD`、`READER_KEY_ALIAS`（可选 `READER_KEY_PASSWORD`）；版本用
+  `-PreaderVersionName=1.2.3 -PreaderVersionCode=1002003` 指定。
 - **包名**：`applicationId` 与 `namespace` 均为 `com.htmake.readerpro`，Kotlin 源码在
   `app/src/main/java/com/htmake/readerpro/`（媒体快捷方式的 action 也以此为前缀）。旧包名
   `cool.cnb.reader` 的安装与新包是两个不同的应用，不能覆盖升级，也不迁移其本地数据。
@@ -47,7 +49,7 @@ sh android/scripts/verify-web-assets.sh  # 在 build-web-assets.sh 之后运行
 - `scripts/verify-web-apk.ps1`（PowerShell）：逐文件比对已构建 APK 的 `assets/` 与 `web/dist` 的哈希。
 
 CI：GitHub Actions `ci.yml` 的 Android 任务依次运行 `check-shell.sh`、`build-web-assets.sh`、
-`verify-web-assets.sh` 和 `./gradlew --no-daemon :app:assembleDebug`，并上传 debug APK 制品；
+`verify-web-assets.sh` 和 `./gradlew --no-daemon :app:assembleDebug :app:assembleRelease`，并上传 debug 与 release APK 制品。
 
 ---
 
@@ -90,5 +92,5 @@ IndexedDB 等 API 与浏览器一致。因为资源加载器不能为任意路�
 
 ## 分发
 
-AGPL 免费、无收入，不走应用商店，直接侧载 APK。当前 CI 只产出 debug APK 制品；Docker 镜像发布
-（`release.yml`）不包含 APK。iOS 不在本目录范围内。
+AGPL 免费、无收入，不走应用商店，直接侧载 APK。推送 `v*` 标签时 `release.yml` 在发布 Docker 镜像后
+创建 GitHub Release，附带 `reader-pro-<版本>.apk`。iOS 不在本目录范围内。

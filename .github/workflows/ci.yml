@@ -10,6 +10,20 @@ on:
   push:
     branches: ['**']
   workflow_call:
+    inputs:
+      release-tag:
+        description: The v* tag being released; versions the Android APK.
+        type: string
+        default: ''
+    secrets:
+      ANDROID_KEYSTORE_BASE64:
+        required: false
+      ANDROID_KEYSTORE_PASSWORD:
+        required: false
+      ANDROID_KEY_ALIAS:
+        required: false
+      ANDROID_KEY_PASSWORD:
+        required: false
   workflow_dispatch:
 
 permissions:
@@ -114,10 +128,13 @@ jobs:
           retention-days: 14
 
   android:
-    name: Android · shell contract, debug APK
+    name: Android · shell contract, debug + release APK
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Tags and history for `git describe`, which versions a non-release build.
+          fetch-depth: 0
       - run: sh android/scripts/check-shell.sh
       - uses: actions/setup-node@v5
         with:
@@ -138,10 +155,67 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools platforms;android-35 build-tools;35.0.1
-      - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
+      # versionName: the release tag (v1.2.3 -> 1.2.3), otherwise `git describe`
+      # (1.2.3-4-gabcdef0). versionCode: major*1000000 + minor*1000 + patch of that
+      # version, so each release upgrades over the previous one.
+      - name: Version
+        id: version
+        env:
+          RELEASE_TAG: ${{ inputs.release-tag }}
+        run: |
+          tag="${RELEASE_TAG:-$(git describe --tags --match 'v*' 2>/dev/null || echo v0.0.0-$(git rev-parse --short HEAD))}"
+          name="${tag#v}"
+          IFS=. read -r major minor patch <<< "${name%%[-+]*}"
+          code=$(( ${major:-0} * 1000000 + ${minor:-0} * 1000 + ${patch:-0} ))
+          [ "$code" -gt 0 ] || code=1
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Android versionName $name, versionCode $code"
+      # Release signing: repository secrets ANDROID_KEYSTORE_BASE64 (base64 of the
+      # .jks), ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and optionally
+      # ANDROID_KEY_PASSWORD. Without them (forks, PRs from forks) the release APK is
+      # signed with the runner's throwaway debug key, which cannot upgrade over a
+      # build signed by another runner.
+      - name: Release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "READER_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "Release APK is signed with the repository keystore."
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set; the release APK is signed with a debug key."
+          fi
+      - run: >-
+          ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug :app:assembleRelease
+          "-PreaderVersionName=$VERSION_NAME" "-PreaderVersionCode=$VERSION_CODE"
         working-directory: android
+        env:
+          VERSION_NAME: ${{ steps.version.outputs.name }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
+          READER_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          READER_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          READER_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - name: Name the APKs
+        env:
+          VERSION: ${{ steps.version.outputs.name }}
+        run: |
+          mkdir -p dist/android
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/android/reader-pro-$VERSION.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/android/reader-pro-$VERSION-debug.apk"
+      - name: Remove the keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reader-android-apk
+          path: dist/android/reader-pro-${{ steps.version.outputs.name }}.apk
+          if-no-files-found: error
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
           name: reader-debug-apk
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: dist/android/reader-pro-${{ steps.version.outputs.name }}-debug.apk
+          if-no-files-found: error
           retention-days: 14
