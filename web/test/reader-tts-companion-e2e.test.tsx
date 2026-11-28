@@ -26,9 +26,12 @@ function makeRect(left: number, top: number, width: number, height: number): DOM
 
 function makeDoc(html: string): BookDoc {
   return {
-    title: '测试书',
     format: 'epub',
     layout: 'reflowable',
+    render: 'reflowable',
+    direction: 'ltr',
+    toc: [],
+    orderedByBook: true,
     styles: [],
     resources: new Map(),
     sections: [{ id: 'ch1', label: '第一章', depth: 0, html }],
