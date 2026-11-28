@@ -356,3 +356,165 @@ test('spoiler-free AI companion enforces section_seq <= uptoSeq, caches digests/
   assert.equal(backfill2.uncachedChapters, 0);
   assert.equal(backfill2.hasMoreBackfill, false);
 });
+
+test('AI companion backfill fetches unfetched online chapters on demand via sources.chapters.asset', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'reader-ai-chapters-'));
+  const booksDir = join(root, 'books');
+  const dataDir = join(root, 'data');
+  await mkdir(booksDir, { recursive: true });
+  await mkdir(dataDir, { recursive: true });
+
+  const envBackup = {
+    BOOKS_DIR: process.env.BOOKS_DIR,
+    DATA_DIR: process.env.DATA_DIR,
+    JWT_SECRET: process.env.JWT_SECRET,
+  };
+  process.env.BOOKS_DIR = booksDir;
+  process.env.DATA_DIR = dataDir;
+  process.env.JWT_SECRET = 'test-secret-key-for-ai-companion-chapters';
+  t.after(() => {
+    for (const [k, v] of Object.entries(envBackup)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                digest: '在线章节摘要内容，记录角色齐夏在终焉之地的首次试炼。',
+                entities: [{ name: '齐夏', category: 'character', role: '主角', note: '醒来于房间' }],
+                relations: [],
+                openThreads: ['终焉之地的真相'],
+              }),
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    )) as typeof globalThis.fetch;
+
+  const config = loadConfig();
+  const db = openDatabase(config);
+  autoShelf(db);
+  const silent = Fastify({ logger: false });
+  const onlineBookId = 'online-chapters-book-1';
+  const assetCalls: string[] = [];
+
+  const ctx: AppContext = {
+    config,
+    db,
+    log: silent.log,
+    scanner: new Scanner(db, config, { info: () => {}, warn: () => {} }),
+    users: new UserService(db, config),
+    shelf: new ShelfService(db),
+    sync: undefined as never,
+    tts: new TtsService(config),
+    browse: undefined as never,
+    uploads: undefined as never,
+  };
+  ctx.sync = new SyncService(db, ctx.shelf);
+  ctx.browse = new BrowseService(db, config, ctx.shelf);
+  ctx.uploads = new UploadService(db, config, ctx.browse, ctx.scanner);
+  const app = buildApp(ctx);
+  ctx.sources = {
+    chapters: {
+      has: (id: string) => id === onlineBookId,
+      manifest: () => ({
+        bookId: onlineBookId,
+        kind: 'text',
+        format: 'chapters',
+        revision: 'rev1',
+        items: [
+          { id: 'c0', href: 'chapter:c0', title: '第1章', format: 'text', resourceRef: 'chapter-resource:rev1:c0' },
+          { id: 'c1', href: 'chapter:c1', title: '第2章', format: 'text', resourceRef: 'chapter-resource:rev1:c1' },
+        ],
+        toc: [],
+      }),
+      asset: async (_userId: string, _bookId: string, ref: string) => {
+        assetCalls.push(ref);
+        const body = `这是通过书源按需拉取的在线章节正文（${ref}），齐夏在房间中醒来，开始寻找离开终焉之地的线索。`;
+        return { data: Buffer.from(body, 'utf8'), contentType: 'text/plain; charset=utf-8' };
+      },
+    },
+  } as never;
+
+  t.after(async () => {
+    globalThis.fetch = origFetch;
+    await app.close();
+    db.close();
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const reg = await app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/register',
+    payload: { username: 'online_u', password: 'password123', displayName: 'Online U' },
+  });
+  const regBody = JSON.parse(reg.body);
+  const token = regBody.session.accessToken as string;
+  const userId = regBody.user.id as string;
+  const auth = { authorization: `Bearer ${token}` };
+
+  await app.inject({
+    method: 'PATCH',
+    url: '/api/v1/admin/settings/ai',
+    headers: auth,
+    payload: {
+      values: {
+        enabled: true,
+        summaryEnabled: true,
+        assistEnabled: true,
+        baseUrl: 'http://mock-ai.local/v1',
+        apiKey: 'test-key',
+        model: 'test-model',
+      },
+      revision: ctx.settings!.view('ai').revision,
+    },
+  });
+
+  const now = Date.now();
+  db.run(
+    `INSERT INTO books (id, content_hash, content_hash_kind, format, title, author, language, description, pubdate, page_count, meta_json, source, created_at, updated_at)
+     VALUES (?, 'rev1', 'manifest', 'chapters', '十日终焉', '杀虫队队员', 'zh', '', '', 2, '{"kind":"text"}', 'provider:test', ?, ?)`,
+    onlineBookId,
+    now,
+    now,
+  );
+  db.run(
+    `INSERT INTO user_books (user_id, book_id, added_at) VALUES (?, ?, ?)`,
+    userId,
+    onlineBookId,
+    now,
+  );
+  // No chapter_resources rows cached yet — simulates unread online chapters (body IS NULL / missing)
+
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/v1/ai/companion',
+    headers: auth,
+    payload: { bookId: onlineBookId, sectionIndex: 1, window: 2, backfill: true, generateRecap: false },
+  });
+  assert.equal(res.statusCode, 200);
+  const body = JSON.parse(res.body);
+  assert.equal(body.coveredChapters, 2);
+  assert.equal(body.newlyExtracted, 2);
+  assert.equal(body.hasMoreBackfill, false);
+  assert.deepEqual(assetCalls, ['chapter-resource:rev1:c1', 'chapter-resource:rev1:c0']);
+
+  // Calling again hits ai_chapter_digests fast-path with 0 extra chapter asset fetches
+  const res2 = await app.inject({
+    method: 'POST',
+    url: '/api/v1/ai/companion',
+    headers: auth,
+    payload: { bookId: onlineBookId, sectionIndex: 1, window: 2, backfill: true, generateRecap: false },
+  });
+  assert.equal(res2.statusCode, 200);
+  assert.equal(JSON.parse(res2.body).newlyExtracted, 0);
+  assert.equal(assetCalls.length, 2);
+});

@@ -287,10 +287,24 @@ export class AiCompanionService {
     let newlyExtracted = 0;
     let scannedToStart = false;
 
+    const isChapters = this.ctx.sources?.chapters.has(bookId) ?? false;
+
     const extractSeq = async (seq: number): Promise<boolean> => {
       signal?.throwIfAborted();
       const item = manifest.items[seq]!;
-      const text = await this.tryLoadSectionText(bookId, book.format, item, overrides);
+      // Fast-path: for online chapter books, avoid network/source fetch if this
+      // chapter & model is already digested in ai_chapter_digests.
+      if (isChapters) {
+        const existing = this.ctx.db.get<{ digest_text: string }>(
+          'SELECT digest_text FROM ai_chapter_digests WHERE book_id = ? AND section_seq = ? AND section_id = ? AND model = ?',
+          bookId,
+          seq,
+          item.href,
+          c.model,
+        );
+        if (existing) return false;
+      }
+      const text = await this.tryLoadSectionText(userId, bookId, book.format, item, overrides, signal);
       if (!text || text.trim().length < 20) return false;
       const limited = text.slice(0, Math.min(c.maxInputChars, DIGEST_CHAPTER_CHAR_LIMIT));
       const contentHash = sha256(limited);
@@ -585,10 +599,12 @@ export class AiCompanionService {
   }
 
   private async tryLoadSectionText(
+    userId: string,
     bookId: string,
     format: string,
     item: ContentItem,
     overrides: ReturnType<ReadingOverrideService['get']>,
+    signal?: AbortSignal,
   ): Promise<string | null> {
     const isChapters = this.ctx.sources?.chapters.has(bookId) ?? false;
     let payload: AssetPayload | undefined;
@@ -603,8 +619,13 @@ export class AiCompanionService {
           match[1]!,
           match[2]!,
         );
-        if (!row || row.body === null) return null;
-        payload = { data: Buffer.from(row.body, 'utf8'), contentType: row.media_type || 'text/plain; charset=utf-8' };
+        if (row && row.body !== null) {
+          payload = { data: Buffer.from(row.body, 'utf8'), contentType: row.media_type || 'text/plain; charset=utf-8' };
+        } else {
+          // Online chapter not yet downloaded locally: fetch on demand via the book source
+          // (which also persists it into chapter_resources for future reads & digests).
+          payload = await this.ctx.sources!.chapters.asset(userId, bookId, ref, signal);
+        }
       } else {
         const files = new FilePublications(this.ctx.db, this.ctx.config);
         const handler = files.handler(format);
@@ -623,7 +644,9 @@ export class AiCompanionService {
         item.href,
         overrides,
       );
-    } catch {
+    } catch (error) {
+      if (signal?.aborted) throw error;
+      this.log?.warn({ err: error, bookId, href: item.href }, 'ai companion failed to load section text');
       return null;
     } finally {
       payload?.stream?.destroy();
