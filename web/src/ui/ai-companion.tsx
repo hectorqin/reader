@@ -1,4 +1,4 @@
-import { type JSX, useEffect, useState } from 'react';
+import { type JSX, useEffect, useRef, useState } from 'react';
 import { Sheet } from './sheet.tsx';
 import { Button } from './toolkit.tsx';
 import { CharacterRelationshipGraph } from './character-graph.tsx';
@@ -112,13 +112,14 @@ export function GlossaryEntrySheet({
  * strictly bounded by `section_seq <= current`.
  */
 const BACKFILL_BATCH = 8;
+const MAX_AUTO_BACKFILL_BATCHES = 64;
 
 export function AiCompanionSheet({
   load,
   onLoaded,
   onClose,
 }: {
-  load(options: { window: number; backfill?: boolean }): Promise<CompanionData>;
+  load(options: { window: number; backfill?: boolean; generateRecap?: boolean }): Promise<CompanionData>;
   onLoaded?(data: CompanionData): void;
   onClose(): void;
 }): JSX.Element {
@@ -127,10 +128,14 @@ export function AiCompanionSheet({
   const [query, setQuery] = useState('');
   const [data, setData] = useState<CompanionData | null>(null);
   const [busy, setBusy] = useState(true);
-  const [backfilling, setBackfilling] = useState(false);
+  const [backfillMode, setBackfillMode] = useState<'idle' | 'single' | 'all'>('idle');
   const [error, setError] = useState('');
+  const cancelBackfillRef = useRef(false);
+  const mountedRef = useRef(true);
 
   useEffect(() => {
+    mountedRef.current = true;
+    cancelBackfillRef.current = false;
     let live = true;
     setBusy(true);
     setError('');
@@ -149,24 +154,44 @@ export function AiCompanionSheet({
       });
     return () => {
       live = false;
+      mountedRef.current = false;
+      cancelBackfillRef.current = true;
     };
   }, [load]);
 
-  const handleBackfill = () => {
+  const backfilling = backfillMode !== 'idle';
+
+  const runBackfill = async (mode: 'single' | 'all') => {
     if (busy || backfilling) return;
-    setBackfilling(true);
+    cancelBackfillRef.current = false;
+    setBackfillMode(mode);
     setError('');
-    void load({ window: BACKFILL_BATCH, backfill: true })
-      .then((result) => {
-        setData(result);
+    const maxRounds = mode === 'all' ? MAX_AUTO_BACKFILL_BATCHES : 1;
+    try {
+      for (let round = 0; round < maxRounds; round += 1) {
+        if (cancelBackfillRef.current || !mountedRef.current) break;
+        const result = await load({ window: BACKFILL_BATCH, backfill: true, generateRecap: false });
+        if (!mountedRef.current) break;
+        setData((prev) => ({
+          ...result,
+          recap: result.recap || prev?.recap || '',
+        }));
         onLoaded?.(result);
-      })
-      .catch((failure: unknown) => {
+        const rem = Math.max(0, result.uncachedChapters ?? result.uptoSeq + 1 - result.coveredChapters);
+        const hasMore = (result.hasMoreBackfill ?? rem > 0) && rem > 0;
+        if (!hasMore || result.newlyExtracted === 0) break;
+      }
+    } catch (failure: unknown) {
+      if (mountedRef.current) {
         setError(failure instanceof Error ? failure.message : '补提更早章节失败');
-      })
-      .finally(() => {
-        setBackfilling(false);
-      });
+      }
+    } finally {
+      if (mountedRef.current) setBackfillMode('idle');
+    }
+  };
+
+  const stopBackfill = () => {
+    cancelBackfillRef.current = true;
   };
 
   const remainingUncached = data
@@ -235,22 +260,35 @@ export function AiCompanionSheet({
             书内词典{data ? ` (${data.entities.length})` : ''}
           </button>
         </div>
-        {canBackfill && (
+        {(canBackfill || backfillMode === 'all') && (
           <div className="ai-companion-toolbar">
-            <Button disabled={busy || backfilling} onClick={handleBackfill}>
-              {backfilling
-                ? '正在按批补提更早章节…'
-                : remainingUncached <= BACKFILL_BATCH
-                  ? `补提剩余 ${remainingUncached} 章`
-                  : `继续向前补提 ${BACKFILL_BATCH} 章（剩余未缓存 ${remainingUncached} 章）`}
-            </Button>
+            {backfillMode === 'all' ? (
+              <Button onClick={stopBackfill}>停止补全（已缓存 {data?.coveredChapters ?? 0} 章）</Button>
+            ) : (
+              <>
+                <Button disabled={busy || backfilling} onClick={() => void runBackfill('single')}>
+                  {backfilling
+                    ? '正在按批补提…'
+                    : remainingUncached <= BACKFILL_BATCH
+                      ? `补提剩余 ${remainingUncached} 章`
+                      : `补提 ${BACKFILL_BATCH} 章`}
+                </Button>
+                {remainingUncached > BACKFILL_BATCH && (
+                  <Button disabled={busy || backfilling} onClick={() => void runBackfill('all')}>
+                    一键补全（剩余 {remainingUncached} 章）
+                  </Button>
+                )}
+              </>
+            )}
           </div>
         )}
         {(busy || backfilling) && (
           <p className="ai-assist-status" role="status">
-            {backfilling
-              ? '正在按批补提更早未缓存章节，已缓存章节自动复用…'
-              : '正在按已读进度提取与汇总（绝不读取未读章节）…'}
+            {backfillMode === 'all' && data
+              ? `正在一键分批补全更早未缓存章节（已缓存 ${data.coveredChapters}/${data.uptoSeq + 1} 章，剩余 ${remainingUncached} 章）…`
+              : backfilling
+                ? '正在按批补提更早未缓存章节，已缓存章节自动复用…'
+                : '正在按已读进度提取与汇总（绝不读取未读章节）…'}
           </p>
         )}
         {error && (

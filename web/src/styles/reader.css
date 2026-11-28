@@ -6476,6 +6476,7 @@ svg.icon {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  gap: var(--space-2);
   min-width: 0;
 }
 .ai-graph-shell {

@@ -387,11 +387,12 @@ export class ReaderScreen {
               {this.companionOpen && this.book && (
                 <AiCompanionSheet
                   key={`${this.book.id}:${this.chrome.chapterIndex}`}
-                  load={({ window: windowSize, backfill }) =>
+                  load={({ window: windowSize, backfill, generateRecap }) =>
                     this.options.api.aiCompanion(this.book!.id, {
                       ...(this.chrome.chapterIndex > 0 ? { sectionIndex: this.chrome.chapterIndex - 1 } : {}),
                       window: windowSize,
                       ...(backfill ? { backfill: true } : {}),
+                      ...(generateRecap !== undefined ? { generateRecap } : {}),
                     })
                   }
                   onLoaded={(data) => {

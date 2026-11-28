@@ -239,15 +239,16 @@ describe('AiCompanionSheet E2E: tabs, backfill button visibility, and character 
     host.remove();
   });
 
-  it('supports repeatable batch backfill until all earlier chapters are cached', async () => {
+  it('supports single-batch and one-click auto-backfill until all earlier chapters are cached', async () => {
     const load = vi
-      .fn<((opts: { window: number; backfill?: boolean }) => Promise<CompanionData>)>()
+      .fn<((opts: { window: number; backfill?: boolean; generateRecap?: boolean }) => Promise<CompanionData>)>()
       .mockResolvedValueOnce(
         sampleData({
           uptoSeq: 19,
           coveredChapters: 8,
           uncachedChapters: 12,
           hasMoreBackfill: true,
+          newlyExtracted: 8,
           chapterTitle: '第二十章',
         }),
       )
@@ -257,6 +258,8 @@ describe('AiCompanionSheet E2E: tabs, backfill button visibility, and character 
           coveredChapters: 16,
           uncachedChapters: 4,
           hasMoreBackfill: true,
+          newlyExtracted: 8,
+          recap: '',
           chapterTitle: '第二十章',
         }),
       )
@@ -266,6 +269,8 @@ describe('AiCompanionSheet E2E: tabs, backfill button visibility, and character 
           coveredChapters: 20,
           uncachedChapters: 0,
           hasMoreBackfill: false,
+          newlyExtracted: 4,
+          recap: '',
           chapterTitle: '第二十章',
         }),
       );
@@ -282,32 +287,27 @@ describe('AiCompanionSheet E2E: tabs, backfill button visibility, and character 
     });
 
     expect(load).toHaveBeenNthCalledWith(1, { window: 8 });
-    const btn1 = [...host.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('继续向前补提 8 章（剩余未缓存 12 章）'),
+    expect([...host.querySelectorAll('button')].some((b) => b.textContent?.includes('补提 8 章'))).toBe(true);
+    const autoBtn = [...host.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('一键补全（剩余 12 章）'),
     );
-    expect(btn1).toBeTruthy();
+    expect(autoBtn).toBeTruthy();
 
-    // First backfill click
+    // One-click backfill runs both remaining batches automatically and preserves initial recap
     await act(async () => {
-      btn1!.click();
+      autoBtn!.click();
     });
     await act(async () => {
       await Promise.resolve();
-    });
-    expect(load).toHaveBeenNthCalledWith(2, { window: 8, backfill: true });
-
-    const btn2 = [...host.querySelectorAll('button')].find((b) => b.textContent?.includes('补提剩余 4 章'));
-    expect(btn2).toBeTruthy();
-
-    // Second backfill click finishes all chapters; button disappears
-    await act(async () => {
-      btn2!.click();
-    });
-    await act(async () => {
       await Promise.resolve();
     });
-    expect(load).toHaveBeenNthCalledWith(3, { window: 8, backfill: true });
+    expect(load).toHaveBeenCalledTimes(3);
+    expect(load).toHaveBeenNthCalledWith(2, { window: 8, backfill: true, generateRecap: false });
+    expect(load).toHaveBeenNthCalledWith(3, { window: 8, backfill: true, generateRecap: false });
+    expect(host.textContent).toContain('前两章的防剧透前情提要。');
+    expect(host.textContent).toContain('已缓存 20/20 章记忆');
     expect(host.textContent).not.toContain('补提');
+    expect(host.textContent).not.toContain('一键补全');
 
     await act(async () => root.unmount());
     host.remove();
