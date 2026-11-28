@@ -231,9 +231,7 @@ test('spoiler-free AI companion enforces section_seq <= uptoSeq, caches digests/
     },
   });
 
-  const books = JSON.parse(
-    (await app.inject({ method: 'GET', url: '/api/v1/books', headers: authA })).body,
-  ).items;
+  const books = JSON.parse((await app.inject({ method: 'GET', url: '/api/v1/books', headers: authA })).body).items;
   const bookId = books[0].id as string;
 
   // Step A: Extract all 3 chapters (including chapter 3 spoiler) at sectionIndex = 2
@@ -248,7 +246,10 @@ test('spoiler-free AI companion enforces section_seq <= uptoSeq, caches digests/
   assert.equal(fullData.uptoSeq, 2);
   assert.equal(fullData.coveredChapters, 3);
   assert.equal(fullData.newlyExtracted, 3);
-  assert.equal(fullData.relations.find((r: { from: string; to: string }) => r.from === '林默' && r.to === '苏清')?.label, '宿敌');
+  assert.equal(
+    fullData.relations.find((r: { from: string; to: string }) => r.from === '林默' && r.to === '苏清')?.label,
+    '宿敌',
+  );
 
   // Step B: Even though chapter 3 is ALREADY cached in ai_chapter_digests, querying at
   // sectionIndex = 0 MUST physically hide chapter 2 & chapter 3 (zero spoilers, zero re-extraction)!
@@ -264,7 +265,10 @@ test('spoiler-free AI companion enforces section_seq <= uptoSeq, caches digests/
   assert.equal(safeData.uptoSeq, 0);
   assert.equal(safeData.coveredChapters, 1);
   assert.equal(safeData.newlyExtracted, 0);
-  assert.equal(safeData.relations.find((r: { from: string; to: string }) => r.from === '林默' && r.to === '苏清')?.label, '同门师兄妹');
+  assert.equal(
+    safeData.relations.find((r: { from: string; to: string }) => r.from === '林默' && r.to === '苏清')?.label,
+    '同门师兄妹',
+  );
   assert.doesNotMatch(JSON.stringify(safeData), /魔教圣女|宿敌/);
   // Only 1 upstream call (for the new recap at uptoSeq=0), 0 digest extractions
   assert.equal(calls.length, callsBeforeSafe + 1);
@@ -486,12 +490,7 @@ test('AI companion backfill fetches unfetched online chapters on demand via sour
     now,
     now,
   );
-  db.run(
-    `INSERT INTO user_books (user_id, book_id, added_at) VALUES (?, ?, ?)`,
-    userId,
-    onlineBookId,
-    now,
-  );
+  db.run(`INSERT INTO user_books (user_id, book_id, added_at) VALUES (?, ?, ?)`, userId, onlineBookId, now);
   // No chapter_resources rows cached yet — simulates unread online chapters (body IS NULL / missing)
 
   const res = await app.inject({

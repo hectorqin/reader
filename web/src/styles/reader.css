@@ -1748,7 +1748,7 @@ book-content {
   word-break: break-word;
 }
 .book-card .cover .placeholder::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 8px;
   border: 1px solid color-mix(in srgb, var(--reader-ink) 10%, transparent);
@@ -6461,7 +6461,9 @@ svg.icon {
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
-  transition: color var(--dur-fast), border-color var(--dur-fast);
+  transition:
+    color var(--dur-fast),
+    border-color var(--dur-fast);
 }
 .ai-companion-tab.is-active {
   color: var(--color-brand-text);

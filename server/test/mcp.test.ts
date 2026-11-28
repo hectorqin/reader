@@ -55,9 +55,18 @@ async function makeMultiChapterEpub() {
   </spine>
 </package>`,
   );
-  zip.file('OEBPS/ch1.xhtml', '<html><body><h1>第一章 复制与共识</h1><p>林默在第一章提出了 Raft 领导者选举协议。</p></body></html>');
-  zip.file('OEBPS/ch2.xhtml', '<html><body><h1>第二章 日志压缩</h1><p>第二章讨论了快照机制与状态机恢复。</p></body></html>');
-  zip.file('OEBPS/ch3.xhtml', '<html><body><h1>第三章 终局反转</h1><p>剧透内容：林默其实是幕后最终反派。</p></body></html>');
+  zip.file(
+    'OEBPS/ch1.xhtml',
+    '<html><body><h1>第一章 复制与共识</h1><p>林默在第一章提出了 Raft 领导者选举协议。</p></body></html>',
+  );
+  zip.file(
+    'OEBPS/ch2.xhtml',
+    '<html><body><h1>第二章 日志压缩</h1><p>第二章讨论了快照机制与状态机恢复。</p></body></html>',
+  );
+  zip.file(
+    'OEBPS/ch3.xhtml',
+    '<html><body><h1>第三章 终局反转</h1><p>剧透内容：林默其实是幕后最终反派。</p></body></html>',
+  );
   return zip.generateAsync({ type: 'nodebuffer' });
 }
 
@@ -141,7 +150,11 @@ test('resolveProgressSectionIndex maps r1, rt1, and percentage onto manifest ite
   ];
   assert.equal(resolveProgressSectionIndex('r1:0.2500:OEBPS/ch2.xhtml', 0.4, items), 1);
   assert.equal(
-    resolveProgressSectionIndex('rt1:' + JSON.stringify({ sectionId: 'OEBPS/ch1.xhtml', start: 0, end: 3 }), 0.1, items),
+    resolveProgressSectionIndex(
+      'rt1:' + JSON.stringify({ sectionId: 'OEBPS/ch1.xhtml', start: 0, end: 3 }),
+      0.1,
+      items,
+    ),
     0,
   );
   assert.equal(resolveProgressSectionIndex('', 0.7, items), 2);
@@ -345,7 +358,9 @@ test('MCP reading tools, spoiler protection, notes sync, resources and prompts',
     headers: { authorization: `Bearer ${accessToken}` },
   });
   const syncedNotes = JSON.parse(pulled.body).notes;
-  assert.ok(syncedNotes.some((n: { id: string; comment: string }) => n.id === createdNote.id && n.comment.includes('任期')));
+  assert.ok(
+    syncedNotes.some((n: { id: string; comment: string }) => n.id === createdNote.id && n.comment.includes('任期')),
+  );
 
   // 6. export_notes_markdown, resource reader://library/recent, and prompt review_book_notes
   const exported = await rpc(token, {

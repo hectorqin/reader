@@ -202,6 +202,7 @@ test('AI capabilities tell a reader whether 章节总结 is available, without t
   assert.equal((await app.inject({ url: '/api/v1/ai/capabilities' })).statusCode, 401);
   assert.deepEqual((await app.inject({ url: '/api/v1/ai/capabilities', headers: member })).json(), {
     summary: false,
+    companion: false,
     scan: false,
     assist: false,
   });
@@ -216,22 +217,23 @@ test('AI capabilities tell a reader whether 章节总结 is available, without t
   assert.equal(on.statusCode, 200, on.body);
   assert.deepEqual(
     (await app.inject({ url: '/api/v1/ai/capabilities', headers: member })).json(),
-    { summary: false, scan: false, assist: false },
+    { summary: false, companion: false, scan: false, assist: false },
     'AI on, 总结 and 扫描 still off',
   );
   assert.equal((await save({ summaryEnabled: true })).statusCode, 200);
   const ready = await app.inject({ url: '/api/v1/ai/capabilities', headers: member });
-  assert.deepEqual(ready.json(), { summary: true, scan: false, assist: false });
+  assert.deepEqual(ready.json(), { summary: true, companion: true, scan: false, assist: false });
   assert.equal((await save({ scanEnabled: true })).statusCode, 200);
   assert.deepEqual((await app.inject({ url: '/api/v1/ai/capabilities', headers: member })).json(), {
     summary: true,
+    companion: true,
     scan: true,
     assist: false,
   });
   assert.equal((await save({ enabled: false })).statusCode, 200);
   assert.deepEqual(
     (await app.inject({ url: '/api/v1/ai/capabilities', headers: member })).json(),
-    { summary: false, scan: false, assist: false },
+    { summary: false, companion: false, scan: false, assist: false },
     'the master switch turns both off',
   );
   assert.ok(!ready.body.includes('secret-key'));

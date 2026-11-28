@@ -134,7 +134,9 @@ export function mergeCompanionGraph(digests: readonly ChapterDigestRecord[]): {
       if (!name) continue;
       const category = normalizeEntityCategory(raw.category);
       const rawAliases = Array.isArray(raw.aliases)
-        ? raw.aliases.map((a) => (typeof a === 'string' ? a.trim() : '')).filter((a) => a && a.toLowerCase() !== name.toLowerCase())
+        ? raw.aliases
+            .map((a) => (typeof a === 'string' ? a.trim() : ''))
+            .filter((a) => a && a.toLowerCase() !== name.toLowerCase())
         : [];
       const lower = name.toLowerCase();
       const matchedKey =
@@ -221,7 +223,9 @@ export function mergeCompanionGraph(digests: readonly ChapterDigestRecord[]): {
 
   return {
     entities: [...entityMap.values()].sort((a, b) => b.mentions - a.mentions || a.firstSeenSeq - b.firstSeenSeq),
-    relations: [...relationMap.values()].sort((a, b) => b.lastSeenSeq - a.lastSeenSeq || a.firstSeenSeq - b.firstSeenSeq),
+    relations: [...relationMap.values()].sort(
+      (a, b) => b.lastSeenSeq - a.lastSeenSeq || a.firstSeenSeq - b.firstSeenSeq,
+    ),
     openThreads: threads.slice(-20).reverse(),
   };
 }
@@ -247,9 +251,7 @@ export class AiCompanionService {
         PRIMARY KEY (book_id, section_seq, content_hash, model)
       )
     `);
-    ctx.db.run(
-      'CREATE INDEX IF NOT EXISTS idx_ai_digests_book_seq ON ai_chapter_digests(book_id, model, section_seq)',
-    );
+    ctx.db.run('CREATE INDEX IF NOT EXISTS idx_ai_digests_book_seq ON ai_chapter_digests(book_id, model, section_seq)');
     ctx.db.run(`
       CREATE TABLE IF NOT EXISTS ai_recaps (
         user_id TEXT NOT NULL,
@@ -695,7 +697,8 @@ export class AiCompanionService {
       return {
         sectionSeq: seq,
         sectionId: '',
-        digestText: typeof parsed.digest === 'string' && parsed.digest.trim() ? parsed.digest.trim() : raw.slice(0, 300),
+        digestText:
+          typeof parsed.digest === 'string' && parsed.digest.trim() ? parsed.digest.trim() : raw.slice(0, 300),
         entities: Array.isArray(parsed.entities)
           ? parsed.entities.filter(
               (e): e is CompanionEntityInput => !!e && typeof e === 'object' && typeof (e as any).name === 'string',

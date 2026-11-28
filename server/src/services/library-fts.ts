@@ -178,10 +178,7 @@ export class LibraryFtsService {
           fetchLimit,
         );
 
-    const bookMeta = this.ctx.shelf.getMany(
-      userId,
-      [...new Set(rows.map((r) => r.book_id))],
-    );
+    const bookMeta = this.ctx.shelf.getMany(userId, [...new Set(rows.map((r) => r.book_id))]);
     const progressCapCache = new Map<string, number | null>();
 
     const hits: LibrarySearchHit[] = [];

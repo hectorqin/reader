@@ -46,8 +46,7 @@ export function findGlossaryMatchSpans(
   const counts = new Map<string, number>();
   const matches: GlossaryMatchSpan[] = [];
 
-  const overlaps = (start: number, end: number): boolean =>
-    taken.some(([a, b]) => start < b && end > a);
+  const overlaps = (start: number, end: number): boolean => taken.some(([a, b]) => start < b && end > a);
 
   for (const { term, lower } of candidates) {
     if (matches.length >= maxTotal) break;

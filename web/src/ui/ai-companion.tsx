@@ -194,9 +194,7 @@ export function AiCompanionSheet({
     cancelBackfillRef.current = true;
   };
 
-  const remainingUncached = data
-    ? Math.max(0, data.uncachedChapters ?? data.uptoSeq + 1 - data.coveredChapters)
-    : 0;
+  const remainingUncached = data ? Math.max(0, data.uncachedChapters ?? data.uptoSeq + 1 - data.coveredChapters) : 0;
   const canBackfill = Boolean(data && (data.hasMoreBackfill ?? remainingUncached > 0) && remainingUncached > 0);
 
   const counts: Record<CompanionEntityCategory, number> = {

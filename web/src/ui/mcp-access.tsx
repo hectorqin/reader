@@ -3,6 +3,7 @@ import { ApiError, type ReaderApi } from '../api/client.ts';
 import type { McpCredential, McpScope } from '../api/sources.ts';
 import { Button } from './toolkit.tsx';
 import { FloatingNotice } from './floating-notice.tsx';
+import { Select } from './select.tsx';
 
 /**
  * Personal MCP credentials for AI assistants (Claude Desktop, Claude Code,
@@ -134,10 +135,10 @@ export function McpAccess({ api, onSignedOut }: { api: ReaderApi; onSignedOut():
         </label>
         <label className="sheet-field">
           权限范围
-          <select value={scope} disabled={busy} onChange={(event) => setScope(event.currentTarget.value as McpScope)}>
+          <Select value={scope} disabled={busy} onChange={(event) => setScope(event.currentTarget.value as McpScope)}>
             <option value="read">只读（检索书架、分片读正文、查笔记）</option>
             <option value="write">读写（包含只读能力 + 允许写入读书笔记）</option>
-          </select>
+          </Select>
         </label>
         <Button type="submit" disabled={busy || !name.trim()}>
           创建 MCP 凭据

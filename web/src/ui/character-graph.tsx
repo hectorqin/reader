@@ -294,7 +294,7 @@ export function CharacterRelationshipGraph({
     };
   };
 
-  const selectedNode = selectedId ? nodeMap.get(selectedId) ?? null : null;
+  const selectedNode = selectedId ? (nodeMap.get(selectedId) ?? null) : null;
   const selectedRelations = selectedId
     ? relations.filter((r) => r.from.toLowerCase() === selectedId || r.to.toLowerCase() === selectedId)
     : [];
@@ -510,12 +510,7 @@ export function CharacterRelationshipGraph({
                   {shortName}
                 </text>
                 {node.entity.role && (
-                  <text
-                    y={node.r + 14}
-                    textAnchor="middle"
-                    fontSize="10"
-                    fill="var(--color-muted)"
-                  >
+                  <text y={node.r + 14} textAnchor="middle" fontSize="10" fill="var(--color-muted)">
                     {node.entity.role.length > 8 ? `${node.entity.role.slice(0, 7)}…` : node.entity.role}
                   </text>
                 )}
@@ -527,7 +522,11 @@ export function CharacterRelationshipGraph({
       </div>
 
       {selectedNode && (
-        <div className="ai-companion-card is-focused" role="region" aria-label={`人物详情：${selectedNode.entity.name}`}>
+        <div
+          className="ai-companion-card is-focused"
+          role="region"
+          aria-label={`人物详情：${selectedNode.entity.name}`}
+        >
           <div className="ai-companion-card-head">
             <strong>{selectedNode.entity.name}</strong>
             {selectedNode.entity.role && <span className="ai-companion-badge">{selectedNode.entity.role}</span>}

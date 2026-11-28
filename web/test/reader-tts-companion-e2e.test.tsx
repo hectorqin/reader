@@ -241,7 +241,7 @@ describe('AiCompanionSheet E2E: tabs, backfill button visibility, and character 
 
   it('supports single-batch and one-click auto-backfill until all earlier chapters are cached', async () => {
     const load = vi
-      .fn<((opts: { window: number; backfill?: boolean; generateRecap?: boolean }) => Promise<CompanionData>)>()
+      .fn<(opts: { window: number; backfill?: boolean; generateRecap?: boolean }) => Promise<CompanionData>>()
       .mockResolvedValueOnce(
         sampleData({
           uptoSeq: 19,
@@ -288,9 +288,7 @@ describe('AiCompanionSheet E2E: tabs, backfill button visibility, and character 
 
     expect(load).toHaveBeenNthCalledWith(1, { window: 8 });
     expect([...host.querySelectorAll('button')].some((b) => b.textContent?.includes('补提 8 章'))).toBe(true);
-    const autoBtn = [...host.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('一键补全（剩余 12 章）'),
-    );
+    const autoBtn = [...host.querySelectorAll('button')].find((b) => b.textContent?.includes('一键补全（剩余 12 章）'));
     expect(autoBtn).toBeTruthy();
 
     // One-click backfill runs both remaining batches automatically and preserves initial recap

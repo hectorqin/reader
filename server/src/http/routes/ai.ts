@@ -3,7 +3,11 @@ import type { AppContext } from '../context.ts';
 import { authenticate, currentUser, requireAdmin } from '../auth.ts';
 import { badRequest } from '../../lib/errors.ts';
 import { AiService } from '../../services/ai.ts';
-import { AiCompanionService, COMPANION_ENTITY_CATEGORIES, type CompanionEntityCategory } from '../../services/ai-companion.ts';
+import {
+  AiCompanionService,
+  COMPANION_ENTITY_CATEGORIES,
+  type CompanionEntityCategory,
+} from '../../services/ai-companion.ts';
 import { BusinessSettingsReader } from '../../services/business-settings.ts';
 import { withSignal } from '../request-signal.ts';
 

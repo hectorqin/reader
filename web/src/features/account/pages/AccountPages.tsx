@@ -98,7 +98,12 @@ export function OpdsPage() {
 export function McpPage() {
   const runtime = useRuntime();
   return (
-    <MediaPageFrame className="media-secondary-page opds-page" title="AI 助手接入（MCP）" backTo="/me" backLabel="返回我的">
+    <MediaPageFrame
+      className="media-secondary-page opds-page"
+      title="AI 助手接入（MCP）"
+      backTo="/me"
+      backLabel="返回我的"
+    >
       <McpAccess
         api={runtime.api}
         onSignedOut={() => {

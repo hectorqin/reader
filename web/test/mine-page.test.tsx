@@ -65,6 +65,7 @@ describe('我的', () => {
       ['偏好设置跟随系统', '/me/settings'],
       ['账号与连接', '/me/account'],
       ['外部阅读器OPDS', '/me/opds'],
+      ['AI 助手接入MCP', '/me/mcp'],
     ]);
     // Only signing out is a button (it asks first); nothing else opens a sheet in place.
     expect([...root.querySelectorAll('button.mine-row')].map((b) => b.textContent)).toEqual(['退出登录']);

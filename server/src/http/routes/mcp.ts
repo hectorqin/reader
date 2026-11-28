@@ -74,5 +74,12 @@ export function registerMcpRoutes(app: FastifyInstance, ctx: AppContext): void {
   };
 
   app.post('/mcp', handleMcp);
-  app.get('/mcp', async (_request, reply) => reply.code(405).header('allow', 'POST').send({ error: { code: 'METHOD_NOT_ALLOWED', message: 'Use POST /mcp for MCP Streamable HTTP JSON-RPC requests' } }));
+  app.get('/mcp', async (_request, reply) =>
+    reply
+      .code(405)
+      .header('allow', 'POST')
+      .send({
+        error: { code: 'METHOD_NOT_ALLOWED', message: 'Use POST /mcp for MCP Streamable HTTP JSON-RPC requests' },
+      }),
+  );
 }

@@ -158,7 +158,12 @@ const TOOLS: readonly McpToolDef[] = [
       required: ['query'],
       properties: {
         query: { type: 'string', minLength: 1, maxLength: 200, description: '搜索关键词' },
-        bookIds: { type: 'array', items: { type: 'string' }, maxItems: 50, description: '可选，限定搜索的书籍 ID 列表' },
+        bookIds: {
+          type: 'array',
+          items: { type: 'string' },
+          maxItems: 50,
+          description: '可选，限定搜索的书籍 ID 列表',
+        },
         limit: { type: 'integer', minimum: 1, maximum: 50, default: 20 },
         autoIndex: { type: 'boolean', default: true, description: '是否自动为尚未建索引的书架书籍懒建 FTS5 索引' },
         respectProgress: {
@@ -182,7 +187,8 @@ const TOOLS: readonly McpToolDef[] = [
   },
   {
     name: 'lookup_book_glossary',
-    description: '防剧透书内词典检索：按名称/别名/分类（人物、物品、地点、势力、术语）查询截至用户当前进度的设定与演变轨迹（零额外 LLM 开销）。',
+    description:
+      '防剧透书内词典检索：按名称/别名/分类（人物、物品、地点、势力、术语）查询截至用户当前进度的设定与演变轨迹（零额外 LLM 开销）。',
     inputSchema: {
       type: 'object',
       required: ['bookId'],
@@ -356,7 +362,11 @@ export class McpService {
           ],
         };
       case 'prompts/get':
-        return this.getPrompt(principal.userId, String(params.name ?? ''), (params.arguments ?? {}) as Record<string, unknown>);
+        return this.getPrompt(
+          principal.userId,
+          String(params.name ?? ''),
+          (params.arguments ?? {}) as Record<string, unknown>,
+        );
       case 'tools/list':
         return {
           tools: TOOLS.filter((tool) => !tool.write || principal.scope === 'write').map(
