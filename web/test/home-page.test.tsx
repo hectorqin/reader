@@ -150,11 +150,11 @@ function sidebar() {
 describe('首页', () => {
   it('adds a bounded recently-added shelf preview on desktop with a sorted all-books link', async () => {
     sidebar();
-    const added = Array.from({ length: 6 }, (_, index) => ({ ...book, id: `new-${index}`, title: `新书${index}` }));
+    const added = Array.from({ length: 10 }, (_, index) => ({ ...book, id: `new-${index}`, title: `新书${index}` }));
     const runtime = mount({ added });
-    await until(() => root.querySelectorAll('.home-recent-books .book-card').length === 4);
+    await until(() => root.querySelectorAll('.home-recent-books .book-card').length === 8);
     expect(root.querySelector('.home-recent-books')?.textContent).toContain('新书0');
-    expect(root.querySelector('.home-recent-books')?.textContent).not.toContain('新书4');
+    expect(root.querySelector('.home-recent-books')?.textContent).not.toContain('新书8');
     expect(root.querySelector('.home-recent-books .home-section a')?.getAttribute('href')).toBe('/shelf?sort=added');
     expect(runtime.api.listBooks).toHaveBeenCalledWith(
       expect.objectContaining({ scope: 'shelf', sort: 'added', order: 'desc' }),

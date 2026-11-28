@@ -262,7 +262,7 @@ export function HomePage() {
   const shelf = useShelf(1, 'recent');
   const desktop = useMediaQuery('(min-width: 701px)');
   const added = useQuery({ ...shelfQuery(runtime, 1, 'added'), enabled: desktop, retry: false });
-  const addedBooks = added.isError ? [] : (added.data?.items ?? []).slice(0, 4);
+  const addedBooks = added.isError ? [] : (added.data?.items ?? []).slice(0, 8);
   // 首页显示最近续播 (偏好设置 › 影音浏览) off: no video/audiobook continue cards; books are not media.
   const { showContinue } = useMediaPreferences();
   const video = useQuery({ ...historyQuery(runtime, 'video', new URLSearchParams()), enabled: media && showContinue });

@@ -96,7 +96,9 @@ export function BookCard({
               {book.title || '无封面'}
             </div>
           )}
-          <span className="format-badge">{book.format || '书籍'}</span>
+          <span className="format-badge">
+            {book.format === 'chapters' ? '连载' : book.format || '书籍'}
+          </span>
           {showProgress && progress !== undefined && progress > 0 && (
             <div className="cover-progress">
               <span style={{ width: `${Math.round(Math.max(0, Math.min(1, progress)) * 100)}%` }} />

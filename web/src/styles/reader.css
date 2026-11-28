@@ -1698,6 +1698,15 @@ book-content {
   transform: scale(0.975);
   box-shadow: var(--shadow-sm);
 }
+@media (hover: hover) and (pointer: fine) {
+  .book-card .book-open:hover .cover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+  }
+  .book-card .book-open:hover .title {
+    color: var(--color-brand-text);
+  }
+}
 
 .book-card .cover img {
   width: 100%;
@@ -1709,39 +1718,51 @@ book-content {
 /*
  * A book with no cover art — every TXT file, plenty of PDFs.
  *
- * The title is drawn *as* the cover rather than as a broken-image icon, because
- * "this book has no cover" and "this library is broken" look identical otherwise,
- * and the first one is a fact about the book. A tinted panel with the title set in
- * it also makes the shelf scannable at a glance, which a grey box does not.
+ * Designed as an editorial printed cover (subtle spine crease + inner hairline
+ * frame + balanced serif title) so text-only books feel intentional beside
+ * illustrated covers rather than flat wireframe boxes.
  */
 .book-card .cover .placeholder {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-3) var(--space-2);
-  font-size: var(--text-label);
-  font-weight: 500;
-  line-height: 1.35;
+  padding: var(--space-4) var(--space-3);
+  border-inline-start: 4px solid color-mix(in srgb, var(--reader-ink) 12%, transparent);
+  font-family: "Songti SC", "Noto Serif SC", "Source Han Serif SC", serif;
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: 0.04em;
   text-align: center;
-  color: var(--reader-ink);
+  text-wrap: balance;
+  color: color-mix(in srgb, var(--reader-ink) 88%, transparent);
   background: linear-gradient(
-    150deg,
-    color-mix(in srgb, var(--reader-accent) 16%, var(--reader-surface)) 0%,
-    color-mix(in srgb, var(--reader-accent) 6%, var(--reader-line)) 100%
+    155deg,
+    color-mix(in srgb, var(--reader-accent) 22%, var(--reader-surface)) 0%,
+    color-mix(in srgb, var(--reader-accent) 12%, var(--reader-line)) 100%
   );
   /* Clipped rather than scrolled: a title set to fourteen lines stops being a
      cover and starts being a paragraph in the wrong place. */
   overflow: hidden;
   word-break: break-word;
 }
+.book-card .cover .placeholder::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border: 1px solid color-mix(in srgb, var(--reader-ink) 10%, transparent);
+  border-radius: var(--radius-xs);
+  pointer-events: none;
+}
 
 /* Per-title tint (ui/cover-tint.ts, ui.md §2.7): mixed into the theme surface, so
    it stays a tint in every theme and mode and the title on it keeps its contrast. */
 .book-card .cover .placeholder[style*="--cover-hue"] {
   background: linear-gradient(
-    150deg,
-    color-mix(in oklab, hsl(var(--cover-hue) 55% 55%) 20%, var(--reader-surface)) 0%,
-    color-mix(in oklab, hsl(var(--cover-hue) 55% 55%) 12%, var(--reader-line)) 100%
+    155deg,
+    color-mix(in oklab, hsl(var(--cover-hue) 52% 54%) 24%, var(--reader-surface)) 0%,
+    color-mix(in oklab, hsl(var(--cover-hue) 52% 50%) 16%, var(--reader-line)) 100%
   );
 }
 
