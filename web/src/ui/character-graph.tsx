@@ -23,11 +23,11 @@ const NODE_PALETTES = [
 ] as const;
 
 /**
- * Deterministic force-directed layout (Fruchterman-Reingold style) so related
- * characters cluster naturally, central protagonists sit near the middle, and
- * nodes never pile on top of one another.
+ * Deterministic concentric + gentle force layout with guaranteed collision
+ * separation and viewport fit. Prevents nodes from collapsing onto a line or
+ * piling up on the canvas edges regardless of graph density (2..14 characters).
  */
-function computeForceLayout(
+export function computeForceLayout(
   entities: readonly CompanionEntity[],
   relations: readonly CompanionRelation[],
 ): NodePos[] {
@@ -35,38 +35,90 @@ function computeForceLayout(
   const picked = (characters.length > 0 ? characters : entities).slice(0, 14);
   if (picked.length === 0) return [];
 
-  const maxMentions = Math.max(1, ...picked.map((e) => e.mentions));
-  const nodes: NodePos[] = picked.map((entity, idx) => {
+  const cx = VIEW_W / 2;
+  const cy = VIEW_H / 2;
+
+  // Rank by degree + mentions so the most connected protagonist anchors the center
+  const degree = new Map<string, number>();
+  for (const rel of relations) {
+    const f = rel.from.toLowerCase();
+    const t = rel.to.toLowerCase();
+    degree.set(f, (degree.get(f) ?? 0) + 1);
+    degree.set(t, (degree.get(t) ?? 0) + 1);
+  }
+  const ranked = [...picked].sort((a, b) => {
+    const scoreA = (degree.get(a.name.toLowerCase()) ?? 0) * 3 + a.mentions;
+    const scoreB = (degree.get(b.name.toLowerCase()) ?? 0) * 3 + b.mentions;
+    return scoreB - scoreA || a.firstSeenSeq - b.firstSeenSeq;
+  });
+
+  const maxMentions = Math.max(1, ...ranked.map((e) => e.mentions));
+  const nodes: NodePos[] = ranked.map((entity, idx) => {
     const ratio = entity.mentions / maxMentions;
-    const r = Math.round(20 + ratio * 10);
-    // Place the top character near center, others on golden-angle spiral for deterministic spread
-    const angle = idx * 2.399963229728653;
-    const dist = idx === 0 ? 0 : 75 + Math.sqrt(idx) * 44;
+    const r = Math.round(20 + ratio * 9);
+    let x = cx;
+    let y = cy;
+
+    if (ranked.length === 1) {
+      x = cx;
+      y = cy;
+    } else if (ranked.length === 2) {
+      x = cx + (idx === 0 ? -120 : 120);
+      y = cy;
+    } else if (ranked.length <= 4) {
+      // Clean triangle or diamond around center — never collinear
+      const angle = -Math.PI / 2 + (idx / ranked.length) * Math.PI * 2;
+      x = cx + Math.cos(angle) * 155;
+      y = cy + Math.sin(angle) * 105;
+    } else if (idx === 0) {
+      // Central protagonist
+      x = cx;
+      y = cy;
+    } else {
+      // Concentric rings: inner ring up to 6 nodes, outer ring for the rest
+      const others = ranked.length - 1;
+      const innerCount = Math.min(6, others);
+      if (idx <= innerCount) {
+        const angle = -Math.PI / 2 + ((idx - 1) / innerCount) * Math.PI * 2;
+        const rx = others <= 6 ? 190 : 145;
+        const ry = others <= 6 ? 120 : 92;
+        x = cx + Math.cos(angle) * rx;
+        y = cy + Math.sin(angle) * ry;
+      } else {
+        const outerCount = others - innerCount;
+        const outerIdx = idx - innerCount - 1;
+        // Stagger outer ring angles so they sit between inner ring rays
+        const angle = -Math.PI / 2 + ((outerIdx + 0.5) / outerCount) * Math.PI * 2;
+        x = cx + Math.cos(angle) * 245;
+        y = cy + Math.sin(angle) * 145;
+      }
+    }
+
     return {
       id: entity.name.toLowerCase(),
       entity,
-      x: VIEW_W / 2 + Math.cos(angle) * dist,
-      y: VIEW_H / 2 + Math.sin(angle) * dist * 0.72,
+      x,
+      y,
       r,
       paletteIndex: idx % NODE_PALETTES.length,
     };
   });
+
+  if (nodes.length <= 2) return nodes;
 
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const edges = relations
     .map((rel) => ({ a: byId.get(rel.from.toLowerCase()), b: byId.get(rel.to.toLowerCase()) }))
     .filter((e): e is { a: NodePos; b: NodePos } => !!e.a && !!e.b && e.a !== e.b);
 
-  const area = VIEW_W * VIEW_H;
-  const k = Math.sqrt(area / Math.max(2, nodes.length)) * 0.62;
-  const iterations = 120;
-
+  // Gentle spring refinement + local collision avoidance (bounded, never blasts to walls)
+  const iterations = 60;
   for (let iter = 0; iter < iterations; iter += 1) {
-    const temp = (1 - iter / iterations) * 28 + 1.5;
+    const cooling = 1 - iter / iterations;
     const dx = new Float64Array(nodes.length);
     const dy = new Float64Array(nodes.length);
 
-    // Pairwise repulsion
+    // 1. Short-range pairwise separation (only pushes when nodes are too close)
     for (let i = 0; i < nodes.length; i += 1) {
       for (let j = i + 1; j < nodes.length; j += 1) {
         const a = nodes[i]!;
@@ -74,55 +126,109 @@ function computeForceLayout(
         let vx = a.x - b.x;
         let vy = a.y - b.y;
         let dist = Math.hypot(vx, vy);
-        if (dist < 1) {
-          vx = (i - j) * 0.5 || 1;
-          vy = 0.5;
-          dist = Math.hypot(vx, vy);
+        if (dist < 0.5) {
+          const angle = ((i * 7 + j * 13) % 12) * (Math.PI / 6);
+          vx = Math.cos(angle);
+          vy = Math.sin(angle);
+          dist = 1;
         }
-        const minDist = a.r + b.r + 44;
-        const repulse = (k * k) / dist + (dist < minDist ? (minDist - dist) * 3.5 : 0);
-        const fx = (vx / dist) * repulse;
-        const fy = (vy / dist) * repulse;
-        dx[i] = dx[i]! + fx;
-        dy[i] = dy[i]! + fy;
-        dx[j] = dx[j]! - fx;
-        dy[j] = dy[j]! - fy;
+        const minGap = a.r + b.r + 68;
+        if (dist < minGap) {
+          const push = (minGap - dist) * 0.35;
+          const fx = (vx / dist) * push;
+          const fy = (vy / dist) * push;
+          dx[i] = dx[i]! + fx;
+          dy[i] = dy[i]! + fy;
+          dx[j] = dx[j]! - fx;
+          dy[j] = dy[j]! - fy;
+        }
       }
     }
 
-    // Spring attraction along edges
+    // 2. Gentle spring along edges toward an ideal readable length
     for (const { a, b } of edges) {
       const i = nodes.indexOf(a);
       const j = nodes.indexOf(b);
       const vx = a.x - b.x;
       const vy = a.y - b.y;
       const dist = Math.max(1, Math.hypot(vx, vy));
-      const ideal = Math.max(125, a.r + b.r + 75);
-      const attract = ((dist - ideal) * dist) / (k * 2.2);
-      const fx = (vx / dist) * attract;
-      const fy = (vy / dist) * attract;
+      const ideal = Math.max(135, a.r + b.r + 82);
+      const pull = (dist - ideal) * 0.04;
+      const fx = (vx / dist) * pull;
+      const fy = (vy / dist) * pull;
       dx[i] = dx[i]! - fx;
       dy[i] = dy[i]! - fy;
       dx[j] = dx[j]! + fx;
       dy[j] = dy[j]! + fy;
     }
 
-    // Gentle center gravity + apply step
+    // 3. Soft center gravity + apply damped step
+    const maxStep = 10 * cooling + 1;
     for (let i = 0; i < nodes.length; i += 1) {
       const n = nodes[i]!;
-      const gx = (VIEW_W / 2 - n.x) * 0.08;
-      const gy = (VIEW_H / 2 - n.y) * 0.1;
-      const mx = dx[i]! + gx;
-      const my = dy[i]! + gy;
+      const mx = dx[i]! + (cx - n.x) * 0.015;
+      const my = dy[i]! + (cy - n.y) * 0.02;
       const mag = Math.hypot(mx, my);
       if (mag > 0) {
-        const step = Math.min(mag, temp);
+        const step = Math.min(mag, maxStep);
         n.x += (mx / mag) * step;
         n.y += (my / mag) * step;
       }
-      n.x = Math.min(VIEW_W - PAD, Math.max(PAD, n.x));
-      n.y = Math.min(VIEW_H - PAD, Math.max(PAD, n.y));
     }
+  }
+
+  // 4. Normalize bounding box smoothly into the safe viewport so nodes never hug walls
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+  for (const n of nodes) {
+    if (n.x < minX) minX = n.x;
+    if (n.x > maxX) maxX = n.x;
+    if (n.y < minY) minY = n.y;
+    if (n.y > maxY) maxY = n.y;
+  }
+  const spanX = Math.max(1, maxX - minX);
+  const spanY = Math.max(1, maxY - minY);
+  const availW = VIEW_W - PAD * 2;
+  const availH = VIEW_H - PAD * 2;
+  const scale = Math.min(1, availW / spanX, availH / spanY);
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
+  for (const n of nodes) {
+    n.x = cx + (n.x - midX) * scale;
+    n.y = cy + (n.y - midY) * scale;
+  }
+
+  // 5. Final hard non-overlap pass within safe canvas bounds
+  for (let pass = 0; pass < 20; pass += 1) {
+    let moved = false;
+    for (let i = 0; i < nodes.length; i += 1) {
+      for (let j = i + 1; j < nodes.length; j += 1) {
+        const a = nodes[i]!;
+        const b = nodes[j]!;
+        let vx = a.x - b.x;
+        let vy = a.y - b.y;
+        let dist = Math.hypot(vx, vy);
+        const minDist = a.r + b.r + 36;
+        if (dist < minDist) {
+          if (dist < 0.5) {
+            vx = Math.cos(i + j);
+            vy = Math.sin(i + j);
+            dist = 1;
+          }
+          const delta = (minDist - dist) / 2;
+          const ox = (vx / dist) * delta;
+          const oy = (vy / dist) * delta;
+          a.x = Math.min(VIEW_W - PAD, Math.max(PAD, a.x + ox));
+          a.y = Math.min(VIEW_H - PAD, Math.max(PAD, a.y + oy));
+          b.x = Math.min(VIEW_W - PAD, Math.max(PAD, b.x - ox));
+          b.y = Math.min(VIEW_H - PAD, Math.max(PAD, b.y - oy));
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
   }
 
   return nodes;

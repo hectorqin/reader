@@ -4,7 +4,8 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ReaderView } from '../src/ui/reader-view.ts';
 import type { BookDoc } from '../src/formats/types.ts';
-import { AiCompanionSheet, type CompanionData } from '../src/ui/ai-companion.tsx';
+import { AiCompanionSheet, type CompanionData, type CompanionEntity } from '../src/ui/ai-companion.tsx';
+import { computeForceLayout } from '../src/ui/character-graph.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -255,5 +256,52 @@ describe('AiCompanionSheet E2E: tabs, backfill button visibility, and character 
 
     await act(async () => root.unmount());
     host.remove();
+  });
+
+  it('lays out 4, 8, and 14 characters in 2D without collinear piling or overlapping nodes', () => {
+    for (const count of [4, 8, 14]) {
+      const entities: CompanionEntity[] = Array.from({ length: count }, (_, idx) => ({
+        name: `角色${idx + 1}`,
+        category: 'character',
+        aliases: [],
+        role: idx === 0 ? '主角' : '配角',
+        note: '出场',
+        firstSeenSeq: 0,
+        lastSeenSeq: 1,
+        mentions: count - idx,
+        timeline: [{ seq: 0, note: '出场' }],
+      }));
+      const relations = entities.slice(1).map((e) => ({
+        from: entities[0]!.name,
+        to: e.name,
+        label: '同伴',
+        firstSeenSeq: 0,
+        lastSeenSeq: 1,
+        history: [{ seq: 0, label: '同伴' }],
+      }));
+
+      const laid = computeForceLayout(entities, relations);
+      expect(laid.length).toBe(count);
+
+      // Must span both X and Y (never collapsed onto a single line)
+      const xs = laid.map((n) => n.x);
+      const ys = laid.map((n) => n.y);
+      expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(120);
+      expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(100);
+
+      // Must not overlap any pair of circles
+      for (let i = 0; i < laid.length; i += 1) {
+        const a = laid[i]!;
+        expect(a.x).toBeGreaterThanOrEqual(50);
+        expect(a.x).toBeLessThanOrEqual(590);
+        expect(a.y).toBeGreaterThanOrEqual(50);
+        expect(a.y).toBeLessThanOrEqual(350);
+        for (let j = i + 1; j < laid.length; j += 1) {
+          const b = laid[j]!;
+          const dist = Math.hypot(a.x - b.x, a.y - b.y);
+          expect(dist).toBeGreaterThanOrEqual(a.r + b.r + 16);
+        }
+      }
+    }
   });
 });
