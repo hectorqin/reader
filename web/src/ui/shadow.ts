@@ -435,9 +435,10 @@ const FLOW_STYLESHEET = `
 .reader-speech-highlight {
   position: absolute;
   pointer-events: none;
-  z-index: -1;
+  z-index: 1;
   border-radius: 3px;
-  background: color-mix(in srgb, var(--reader-accent, var(--color-brand-text)) 34%, transparent);
+  background: rgba(245, 166, 35, 0.28);
+  background: color-mix(in srgb, var(--reader-accent, var(--color-brand-text, #d97706)) 28%, transparent);
   transition: top 120ms linear, left 120ms linear, width 120ms linear, height 120ms linear;
 }
 .fixed-page {

@@ -93,7 +93,8 @@ export function collectSpokenChunks(
         // A chunk needs at least one letter or ideograph; a lone "——" or "123"
         // produces no useful audio and would make the highlight look broken.
         if (!/[\p{L}\p{N}]/u.test(value)) continue;
-        chunks.push({ text: value, node: text, start: piece.start, blockIndex });
+        const lead = piece.text.length - piece.text.trimStart().length;
+        chunks.push({ text: value, node: text, start: piece.start + lead, blockIndex });
       }
     }
     node = walker.nextNode();

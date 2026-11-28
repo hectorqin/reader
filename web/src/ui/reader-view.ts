@@ -847,6 +847,25 @@ export class ReaderView {
     return text.length <= limit ? text : '';
   }
 
+  /** Plain text of the currently rendered chapter (pierces Shadow DOM, skips overlays/styles). */
+  chapterText(): string {
+    if (this.doc.layout === 'fixed') return '';
+    const walker = this.host.ownerDocument.createTreeWalker(this.host.flow, NodeFilter.SHOW_TEXT);
+    const parts: string[] = [];
+    let lastBlock: Element | null = null;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const parent = node.parentElement;
+      if (!parent || parent.closest('script, style, noscript, template, [data-reader-mark]')) continue;
+      const text = node.nodeValue ?? '';
+      if (!text.trim()) continue;
+      const block = parent.closest('p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, dd, dt, td, th, div, section');
+      if (parts.length > 0 && block !== lastBlock) parts.push('\n');
+      parts.push(text.trim());
+      lastBlock = block;
+    }
+    return parts.join('').trim();
+  }
+
   showTextAnchor(anchor: TextAnchor): boolean {
     if (this.doc.sections[this.sectionIndex]?.id !== anchor.sectionId) return false;
     const range = anchorRange(this.host.flow, anchor);
@@ -2164,25 +2183,36 @@ export class ReaderView {
     } catch {
       return;
     }
-    const rect = rangeRect(range);
-    if (!rect) return;
-    const hostRect = this.host.flow.getBoundingClientRect();
-    if (rect.width === 0 && rect.height === 0) return;
-
-    const mark = document.createElement('div');
-    mark.className = 'reader-speech-highlight';
-    mark.style.cssText = [
-      'position:absolute',
-      `left:${rect.left - hostRect.left + this.host.flow.scrollLeft}px`,
-      `top:${rect.top - hostRect.top + this.host.flow.scrollTop}px`,
-      `width:${rect.width}px`,
-      `height:${rect.height}px`,
-    ].join(';');
-    // The overlay lives inside the shadow root's flow so it scrolls with the
-    // text; `position: relative` on the flow is what anchors it.
-    this.host.flow.append(mark);
-    this.speechHighlight = mark;
     this.scrollIntoView(chunk);
+    const rawRects =
+      typeof range.getClientRects === 'function'
+        ? [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0)
+        : [];
+    const fallback = rawRects.length === 0 ? rangeRect(range) : null;
+    const rects =
+      rawRects.length > 0 ? rawRects : fallback && (fallback.width > 0 || fallback.height > 0) ? [fallback] : [];
+    if (rects.length === 0) return;
+
+    const hostRect = this.host.flow.getBoundingClientRect();
+    let firstMark: HTMLElement | null = null;
+    for (const rect of rects) {
+      const mark = document.createElement('div');
+      mark.className = 'reader-speech-highlight';
+      mark.dataset['readerMark'] = 'speech';
+      mark.setAttribute('aria-hidden', 'true');
+      mark.style.cssText = [
+        'position:absolute',
+        `left:${rect.left - hostRect.left + this.host.flow.scrollLeft}px`,
+        `top:${rect.top - hostRect.top + this.host.flow.scrollTop}px`,
+        `width:${rect.width}px`,
+        `height:${rect.height}px`,
+      ].join(';');
+      // The overlay lives inside the shadow root's flow so it scrolls with the
+      // text; `position: relative` on the flow is what anchors it.
+      this.host.flow.append(mark);
+      if (!firstMark) firstMark = mark;
+    }
+    this.speechHighlight = firstMark;
   }
 
   /**
@@ -2245,13 +2275,15 @@ export class ReaderView {
       if (x < flow.scrollLeft || x >= flow.scrollLeft + flow.clientWidth) this.scrollToColumnAt(x);
       return;
     }
-    const hostRect = flow.getBoundingClientRect();
+    const scroller = this.scroller;
+    const hostRect = scroller.getBoundingClientRect();
     if (rect.top < hostRect.top + 8 || rect.bottom > hostRect.bottom - 8) {
-      flow.scrollTop += rect.top - hostRect.top - hostRect.height / 3;
+      scroller.scrollTop += rect.top - hostRect.top - hostRect.height / 3;
     }
   }
 
   clearSpeechHighlight(): void {
+    for (const mark of this.host.flow.querySelectorAll('[data-reader-mark="speech"]')) mark.remove();
     this.speechHighlight?.remove();
     this.speechHighlight = null;
   }
@@ -2259,24 +2291,39 @@ export class ReaderView {
   /**
    * The sentence to start reading from, for "read from here".
    *
-   * Found by asking the flow which block is at the top of the reading area and
-   * then taking the first sentence inside it. Measuring the viewport rather than
-   * scaling the position fraction matters: in paged mode the leading edge of a
-   * page is a column boundary, and a fraction of the chapter maps to a sentence
-   * that can be a whole paragraph away from what the reader is looking at.
+   * Found by asking the viewport scroller which sentence is at the leading edge
+   * of the visible reading area. In scroll mode `this.host` is the scroller
+   * while `this.host.flow` is the full chapter; measuring against `this.scroller`
+   * ensures we inspect the visible viewport rather than the chapter's top.
    */
   speechAnchor(): SpokenChunk | null {
     if (this.spokenChunks.length === 0) return null;
-    const flow = this.host.flow;
-    const hostRect = flow.getBoundingClientRect();
+    const viewport = this.scroller;
+    const hostRect = viewport.getBoundingClientRect();
     if (hostRect.width === 0 && hostRect.height === 0) return this.spokenChunks[0] ?? null;
-    const edge = this.settings.mode === 'paged' ? hostRect.left + 4 : hostRect.top + 4;
     const first = this.spokenChunks[0] ?? null;
+    if (this.settings.mode === 'paged') {
+      const leftEdge = hostRect.left - 2;
+      const rightEdge = hostRect.right;
+      for (const chunk of this.spokenChunks) {
+        const rect = this.chunkRect(chunk);
+        if (!rect) return first;
+        if (rect.width === 0 && rect.height === 0) continue;
+        if (rect.right > hostRect.left + 4 && rect.left < rightEdge && rect.left >= leftEdge) return chunk;
+      }
+      for (const chunk of this.spokenChunks) {
+        const rect = this.chunkRect(chunk);
+        if (!rect) return first;
+        if (rect.right > hostRect.left + 4 && rect.left < rightEdge) return chunk;
+      }
+      return this.spokenChunks[this.spokenChunks.length - 1] ?? first;
+    }
+    const topEdge = hostRect.top + 4;
     for (const chunk of this.spokenChunks) {
       const rect = this.chunkRect(chunk);
       if (!rect) return first;
-      const start = this.settings.mode === 'paged' ? rect.left : rect.top;
-      if (start >= edge) return chunk;
+      if (rect.width === 0 && rect.height === 0) continue;
+      if (rect.bottom > topEdge) return chunk;
     }
     return this.spokenChunks[this.spokenChunks.length - 1] ?? first;
   }

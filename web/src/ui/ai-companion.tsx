@@ -1,6 +1,7 @@
 import { type JSX, useEffect, useState } from 'react';
 import { Sheet } from './sheet.tsx';
 import { Button } from './toolkit.tsx';
+import { CharacterRelationshipGraph } from './character-graph.tsx';
 
 export type CompanionEntityCategory = 'character' | 'item' | 'place' | 'organization' | 'term';
 
@@ -48,97 +49,6 @@ export interface CompanionData {
   entities: CompanionEntity[];
   relations: CompanionRelation[];
   openThreads: string[];
-}
-
-function CharacterGraphSvg({
-  entities,
-  relations,
-}: {
-  entities: CompanionEntity[];
-  relations: CompanionRelation[];
-}): JSX.Element | null {
-  const characters = entities.filter((e) => e.category === 'character');
-  const nodes = (characters.length > 0 ? characters : entities).slice(0, 10);
-  if (nodes.length === 0) return null;
-  const cx = 200;
-  const cy = 140;
-  const radius = nodes.length <= 2 ? 70 : 96;
-  const positions = new Map<string, { x: number; y: number }>();
-  nodes.forEach((node, idx) => {
-    const angle = (2 * Math.PI * idx) / nodes.length - Math.PI / 2;
-    positions.set(node.name.toLowerCase(), {
-      x: cx + Math.cos(angle) * radius,
-      y: cy + Math.sin(angle) * radius,
-    });
-  });
-
-  const edges = relations.filter(
-    (rel) => positions.has(rel.from.toLowerCase()) && positions.has(rel.to.toLowerCase()),
-  );
-
-  return (
-    <svg
-      viewBox="0 0 400 280"
-      role="img"
-      aria-label="人物关系图谱"
-      style={{
-        width: '100%',
-        height: 'auto',
-        maxHeight: '260px',
-        border: '1px solid var(--color-border-subtle)',
-        borderRadius: 'var(--radius-md)',
-        background: 'var(--color-surface-subtle)',
-      }}
-    >
-      {edges.map((rel, idx) => {
-        const a = positions.get(rel.from.toLowerCase())!;
-        const b = positions.get(rel.to.toLowerCase())!;
-        const mx = (a.x + b.x) / 2;
-        const my = (a.y + b.y) / 2;
-        return (
-          <g key={`${rel.from}-${rel.to}-${idx}`}>
-            <line
-              x1={a.x}
-              y1={a.y}
-              x2={b.x}
-              y2={b.y}
-              stroke="var(--color-border-strong)"
-              strokeWidth="1.5"
-              strokeOpacity="0.8"
-            />
-            <text x={mx} y={my - 4} textAnchor="middle" fontSize="10" fill="var(--color-text-secondary)">
-              {rel.label.slice(0, 12)}
-            </text>
-          </g>
-        );
-      })}
-      {nodes.map((node) => {
-        const pos = positions.get(node.name.toLowerCase())!;
-        return (
-          <g key={node.name}>
-            <circle
-              cx={pos.x}
-              cy={pos.y}
-              r="22"
-              fill="var(--color-surface)"
-              stroke="var(--color-accent)"
-              strokeWidth="1.8"
-            />
-            <text
-              x={pos.x}
-              y={pos.y + 4}
-              textAnchor="middle"
-              fontSize="11"
-              fontWeight="600"
-              fill="var(--color-text-primary)"
-            >
-              {node.name.slice(0, 5)}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
 }
 
 export function GlossaryEntrySheet({
@@ -266,26 +176,48 @@ export function AiCompanionSheet({
       <div className="ai-assist">
         {data && (
           <p className="ai-assist-hint">
-            防剧透边界：截至第 {data.uptoSeq + 1} 章{data.chapterTitle ? `（${data.chapterTitle}）` : ''} · 已纳入{' '}
-            {data.coveredChapters} 章记忆，绝不剧透未读章节。
+            防剧透边界：截至第 {data.uptoSeq + 1} 章{data.chapterTitle ? `（${data.chapterTitle}）` : ''} · 已缓存{' '}
+            {data.coveredChapters}/{data.uptoSeq + 1} 章记忆（自动复用缓存，绝不剧透未读章节）。
           </p>
         )}
-        <div className="ai-assist-actions">
-          <Button aria-pressed={tab === 'recap'} onClick={() => setTab('recap')}>
+        <div className="ai-companion-tabs" role="tablist" aria-label="AI 伴读视图">
+          <button
+            type="button"
+            role="tab"
+            className={tab === 'recap' ? 'ai-companion-tab is-active' : 'ai-companion-tab'}
+            aria-selected={tab === 'recap'}
+            onClick={() => setTab('recap')}
+          >
             前情提要
-          </Button>
-          <Button aria-pressed={tab === 'graph'} onClick={() => setTab('graph')}>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className={tab === 'graph' ? 'ai-companion-tab is-active' : 'ai-companion-tab'}
+            aria-selected={tab === 'graph'}
+            onClick={() => setTab('graph')}
+          >
             人物图谱
-          </Button>
-          <Button aria-pressed={tab === 'glossary'} onClick={() => setTab('glossary')}>
-            书内词典{data ? `（${data.entities.length}）` : ''}
-          </Button>
-          {windowSize < 16 && (
-            <Button disabled={busy} onClick={() => setWindowSize(16)}>
-              回溯 16 章
-            </Button>
-          )}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            className={tab === 'glossary' ? 'ai-companion-tab is-active' : 'ai-companion-tab'}
+            aria-selected={tab === 'glossary'}
+            onClick={() => setTab('glossary')}
+          >
+            书内词典{data ? ` (${data.entities.length})` : ''}
+          </button>
         </div>
+        {data && windowSize < 16 && data.coveredChapters < data.uptoSeq + 1 && data.uptoSeq + 1 > windowSize && (
+          <div className="ai-companion-toolbar">
+            <Button disabled={busy} onClick={() => setWindowSize(16)}>
+              {data.uptoSeq + 1 < 16
+                ? `补提更早未缓存章节（共 ${data.uptoSeq + 1} 章）`
+                : '补提更早未缓存章节（最多近 16 章）'}
+            </Button>
+          </div>
+        )}
         {busy && (
           <p className="ai-assist-status" role="status">
             正在按已读进度提取与汇总（绝不读取未读章节）…
@@ -300,9 +232,11 @@ export function AiCompanionSheet({
           <article className="ai-assist-answer" aria-live="polite">
             <p>{data.recap || '当前进度范围内暂无可汇总的章节文本。'}</p>
             {data.openThreads.length > 0 && (
-              <div>
-                <strong>当前未解伏笔</strong>
-                <ul>
+              <div className="ai-companion-card">
+                <div className="ai-companion-card-head">
+                  <strong>当前未解伏笔</strong>
+                </div>
+                <ul className="ai-companion-threads">
                   {data.openThreads.map((thread, index) => (
                     <li key={index}>{thread}</li>
                   ))}
@@ -313,20 +247,24 @@ export function AiCompanionSheet({
         )}
         {data && tab === 'graph' && (
           <div className="ai-assist">
-            <CharacterGraphSvg entities={data.entities} relations={data.relations} />
+            <CharacterRelationshipGraph entities={data.entities} relations={data.relations} />
             {data.relations.length > 0 ? (
-              <div>
-                <strong>已揭示的关系演变</strong>
-                <ul>
-                  {data.relations.map((rel, index) => (
-                    <li key={index}>
-                      {rel.from} → {rel.to}：{rel.label}
+              <div className="ai-companion-cards">
+                {data.relations.map((rel, index) => (
+                  <div className="ai-companion-card" key={index}>
+                    <div className="ai-companion-card-head">
+                      <strong>
+                        {rel.from} → {rel.to}
+                      </strong>
+                      <span className="ai-companion-badge">{rel.label}</span>
+                    </div>
+                    <p className="ai-companion-meta">
                       {rel.history.length > 1
-                        ? `（演变：${rel.history.map((h) => `第${h.seq + 1}章 ${h.label}`).join(' → ')}）`
-                        : `（第 ${rel.firstSeenSeq + 1} 章）`}
-                    </li>
-                  ))}
-                </ul>
+                        ? `关系演变：${rel.history.map((h) => `第 ${h.seq + 1} 章 ${h.label}`).join(' → ')}`
+                        : `首次揭示于第 ${rel.firstSeenSeq + 1} 章`}
+                    </p>
+                  </div>
+                ))}
               </div>
             ) : (
               <p className="ai-assist-hint">截至当前进度暂未提取到人物关系连线。</p>
@@ -343,36 +281,51 @@ export function AiCompanionSheet({
                 onInput={(event) => setQuery(event.currentTarget.value)}
               />
             </label>
-            <div className="ai-assist-actions">
-              <Button aria-pressed={category === 'all'} onClick={() => setCategory('all')}>
-                全部（{data.entities.length}）
-              </Button>
+            <div className="ai-glossary-pills">
+              <button
+                type="button"
+                className={category === 'all' ? 'ai-glossary-pill is-active' : 'ai-glossary-pill'}
+                onClick={() => setCategory('all')}
+              >
+                全部 ({data.entities.length})
+              </button>
               {CATEGORY_ORDER.map((cat) => (
-                <Button key={cat} aria-pressed={category === cat} onClick={() => setCategory(cat)}>
-                  {CATEGORY_LABELS[cat]}（{counts[cat]}）
-                </Button>
+                <button
+                  type="button"
+                  key={cat}
+                  className={category === cat ? 'ai-glossary-pill is-active' : 'ai-glossary-pill'}
+                  onClick={() => setCategory(cat)}
+                >
+                  {CATEGORY_LABELS[cat]} ({counts[cat]})
+                </button>
               ))}
             </div>
             {glossaryItems.length > 0 ? (
-              <ul>
+              <div className="ai-companion-cards">
                 {glossaryItems.map((entity) => (
-                  <li key={`${entity.category}:${entity.name}`}>
-                    <strong>
-                      [{CATEGORY_LABELS[entity.category]}] {entity.name}
-                    </strong>
-                    {entity.aliases.length > 0 ? `（别名：${entity.aliases.join(' / ')}）` : ''}
-                    {entity.role ? ` · ${entity.role}` : ''}
-                    <div>
-                      {entity.note || '已出场'} · 首见第 {entity.firstSeenSeq + 1} 章（共出现 {entity.mentions} 章）
+                  <div className="ai-companion-card" key={`${entity.category}:${entity.name}`}>
+                    <div className="ai-companion-card-head">
+                      <span className="ai-companion-badge" data-category={entity.category}>
+                        {CATEGORY_LABELS[entity.category]}
+                      </span>
+                      <strong>{entity.name}</strong>
+                      {entity.role && <span className="ai-companion-meta">{entity.role}</span>}
                     </div>
-                    {entity.timeline.length > 1 && (
-                      <small>
-                        轨迹：{entity.timeline.map((t) => `第${t.seq + 1}章 ${t.note}`).join(' → ')}
-                      </small>
+                    {entity.aliases.length > 0 && (
+                      <p className="ai-companion-sub">别名：{entity.aliases.join(' / ')}</p>
                     )}
-                  </li>
+                    <p className="ai-companion-body">{entity.note || '已出场'}</p>
+                    <p className="ai-companion-meta">
+                      首见第 {entity.firstSeenSeq + 1} 章 · 共出现 {entity.mentions} 章
+                    </p>
+                    {entity.timeline.length > 1 && (
+                      <p className="ai-companion-timeline">
+                        轨迹：{entity.timeline.map((t) => `第 ${t.seq + 1} 章 ${t.note}`).join(' → ')}
+                      </p>
+                    )}
+                  </div>
                 ))}
-              </ul>
+              </div>
             ) : (
               <p className="ai-assist-hint">当前筛选条件下暂无词条。</p>
             )}

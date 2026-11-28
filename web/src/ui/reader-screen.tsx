@@ -706,7 +706,7 @@ export class ReaderScreen {
       return;
     }
     if (!this.book || !this.chrome.currentSectionId || this.chrome.aiSummaryBusy) return;
-    const content = this.stage.textContent?.trim() || '';
+    const content = this.view?.chapterText() || this.stage.textContent?.trim() || '';
     if (!content) {
       this.flashStatus('当前章节没有可总结的正文', 2400);
       return;
@@ -2878,7 +2878,12 @@ export class ReaderScreen {
     // leading edge is re-measured, because the reader may have scrolled or turned
     // a page since the anchor was recorded.
     const anchor = view.speechAnchorFromSelection() ?? view.speechAnchor() ?? this.pendingSpeechAnchor;
-    const start = anchor ? chunks.indexOf(anchor) : -1;
+    const start = anchor
+      ? chunks.findIndex((c) => c === anchor || (c.node === anchor.node && c.start === anchor.start))
+      : -1;
+    // Stop first when already active (playing or paused) so `play(start)` never
+    // falls into the paused-resume branch and ignores the new page anchor.
+    if (engine.active) engine.stop();
     await engine.play(start >= 0 ? start : 0);
   }
 
@@ -2996,6 +3001,7 @@ export class ReaderScreen {
         trimmed.push({ ...chunk, text: chunk.text.slice(offset, offset + max), start: chunk.start + offset });
       }
     }
+    this.lastSpeechQueue = trimmed;
     return trimmed;
   }
 

@@ -6343,9 +6343,25 @@ svg.icon {
   margin-top: var(--space-2);
 }
 /* AI 选区助手: the passage, what to do with it, and the one current answer. */
+.ai-assist-sheet > .sheet-body {
+  overflow-x: hidden;
+}
 .ai-assist {
   display: grid;
   gap: var(--space-4);
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+.ai-assist > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.ai-assist .sheet-field input {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 .ai-assist blockquote {
   margin: 0;
@@ -6397,6 +6413,244 @@ svg.icon {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
+}
+/* 防剧透 AI 伴读：下划线标签栏、力导向人物图谱与词典卡片 */
+.ai-companion-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--color-line);
+  min-width: 0;
+}
+.ai-companion-tab {
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-1);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: var(--text-ui);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color var(--dur-fast), border-color var(--dur-fast);
+}
+.ai-companion-tab.is-active {
+  color: var(--color-brand-text);
+  border-bottom-color: var(--color-brand);
+  font-weight: 600;
+}
+.ai-companion-tab:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: -2px;
+}
+.ai-companion-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.ai-graph-shell {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  max-width: 100%;
+}
+.ai-graph-canvas-wrap {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  overflow: hidden;
+}
+.ai-graph-svg {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 260px;
+  max-height: 380px;
+  touch-action: none;
+  user-select: none;
+}
+.ai-graph-node,
+.ai-graph-edge {
+  transition: opacity var(--dur-fast);
+}
+.ai-graph-controls {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 2;
+  display: flex;
+  gap: 4px;
+}
+.ai-graph-ctrl {
+  min-width: 30px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: var(--text-label);
+  cursor: pointer;
+}
+.ai-graph-tip {
+  margin: 0;
+  padding: 6px var(--space-3);
+  border-top: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: var(--text-label);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.ai-glossary-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.ai-glossary-pill {
+  height: 30px;
+  padding: 0 12px;
+  max-width: 100%;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-muted);
+  font-size: var(--text-label);
+  cursor: pointer;
+}
+.ai-glossary-pill.is-active {
+  border-color: var(--color-brand);
+  background: var(--color-brand-soft);
+  color: var(--color-brand-text);
+  font-weight: 600;
+}
+.ai-companion-cards {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: 100%;
+}
+.ai-companion-card {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  overflow-wrap: anywhere;
+}
+.ai-companion-card.is-focused {
+  border-color: var(--color-brand);
+  background: var(--color-surface);
+}
+.ai-companion-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--color-ink);
+  font-size: var(--text-ui);
+  overflow-wrap: anywhere;
+}
+.ai-companion-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-brand-soft);
+  color: var(--color-brand-text);
+  font-size: var(--text-label);
+  font-weight: 600;
+}
+.ai-companion-badge[data-category="item"] {
+  background: var(--color-ch-video-soft);
+  color: var(--color-ch-video-text);
+}
+.ai-companion-badge[data-category="place"] {
+  background: var(--color-ch-audio-soft);
+  color: var(--color-ch-audio-text);
+}
+.ai-companion-badge[data-category="organization"] {
+  background: var(--color-ch-music-soft);
+  color: var(--color-ch-music-text);
+}
+.ai-companion-badge[data-category="term"] {
+  background: var(--color-ch-read-soft);
+  color: var(--color-ch-read-text);
+}
+.ai-companion-body,
+.ai-companion-sub,
+.ai-companion-meta,
+.ai-companion-timeline {
+  margin: 0;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.ai-companion-body {
+  color: var(--color-ink);
+  font-size: var(--text-ui);
+}
+.ai-companion-sub,
+.ai-companion-meta,
+.ai-companion-timeline {
+  color: var(--color-muted);
+  font-size: var(--text-label);
+}
+.ai-companion-rel-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+  min-width: 0;
+}
+.ai-companion-rel-chip {
+  padding: 2px 8px;
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  color: var(--color-ink);
+  font-size: var(--text-label);
+  overflow-wrap: anywhere;
+}
+.ai-companion-threads {
+  margin: 4px 0 0;
+  padding-inline-start: 18px;
+  color: var(--color-ink);
+  font-size: var(--text-ui);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+@media (hover: hover) and (pointer: fine) {
+  .ai-companion-tab:hover:not(.is-active) {
+    color: var(--color-ink);
+  }
+  .ai-graph-ctrl:hover,
+  .ai-glossary-pill:hover:not(.is-active) {
+    color: var(--color-ink);
+    background: var(--color-surface);
+  }
 }
 .annotation-editor {
   display: grid;
