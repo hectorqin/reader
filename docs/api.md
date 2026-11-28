@@ -1374,7 +1374,7 @@ All endpoints require the account access token in the Authorization header. Read
 ## 防剧透 AI 伴读
 
 - `GET /api/v1/ai/capabilities` — 新增 `companion` 布尔能力位。
-- `POST /api/v1/ai/companion` — Body: `{ "bookId": "...", "sectionIndex"?: 0, "window"?: 8, "generateRecap"?: true }`。
-  - 按当前阅读进度（或请求中的 `sectionIndex`）建立物理截断边界 `section_seq <= uptoSeq`，对窗口内缺失缓存的章节做懒抽取并缓存至 `ai_chapter_digests`；返回防剧透前情提要（缓存至 `ai_recaps`）、按章节顺序折叠的词条列表（含 `category` / `aliases` / `timeline`）、关系演变轨迹与未解伏笔。
+- `POST /api/v1/ai/companion` — Body: `{ "bookId": "...", "sectionIndex"?: 0, "window"?: 8, "backfill"?: false, "generateRecap"?: true }`。
+  - 按当前阅读进度（或请求中的 `sectionIndex`）建立物理截断边界 `section_seq <= uptoSeq`，对窗口内缺失缓存的章节做懒抽取并缓存至 `ai_chapter_digests`；传入 `backfill: true` 时从 `uptoSeq` 向前扫描至第 1 章，自动跳过已缓存章节，每批最多补提 `window` 个未缓存章节（支持前端按批或一键分批补全）。返回防剧透前情提要（缓存至 `ai_recaps`）、`coveredChapters` / `uncachedChapters` / `hasMoreBackfill`、按章节顺序折叠的词条列表（含 `category` / `aliases` / `timeline`）、关系演变轨迹与未解伏笔。
 - `GET /api/v1/ai/glossary` — Query: `bookId`、`q`（可选，按名称/别名/说明匹配）、`category`（可选：`character | item | place | organization | term`）、`sectionIndex`（可选）；零额外 LLM 调用，直接返回截至当前进度的防剧透书内词典（Kindle X-Ray 风格）。
 - `POST /api/v1/ai/assist` — 支持可选字段 `sectionIndex`；在 `explain` / `ask` 场景下自动从 `ai_chapter_digests`（`section_seq <= sectionIndex`）召回相关已读前文记忆并注入上下文。
