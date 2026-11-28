@@ -10,10 +10,12 @@ import { collectSpokenChunks, type SpokenChunk } from '../render/tts-text.ts';
 import { adoptWindow } from '../formats/windowed.ts';
 import { BOOK_RESOURCE_MARKER, chapterRefFromLink } from '../formats/book-resource.ts';
 import { anchorRange, selectedAnchor, type TextAnchor } from './text-anchor.ts';
+import { findGlossaryRanges, type GlossaryTermRef } from './glossary-marks.ts';
 import { isNoteReference, noteAt } from './footnote.ts';
 
 export interface ReaderViewOptions {
   onSelection?(anchor: TextAnchor | null, rect: DOMRect | null): void;
+  onGlossary?(key: string, rect: DOMRect): void;
   onAnnotation?(id: string, rect: DOMRect): void;
   transformText?(root: HTMLElement, sectionId: string): void;
   container: HTMLElement;
@@ -289,6 +291,7 @@ export class ReaderView {
    * (`repaintMarks`).
    */
   private noteAnchors: Array<{ id?: string; anchor: TextAnchor; color: string }> = [];
+  private glossaryTerms: GlossaryTermRef[] = [];
   private searchAnchor: TextAnchor | null = null;
   /** 专注模式: the two veils, the chapter's paragraphs in order, and the one in focus. */
   private focusVeils: [HTMLElement, HTMLElement] | null = null;
@@ -870,6 +873,32 @@ export class ReaderView {
     }
   }
 
+  /** Paints subtle clickable dotted underlines for spoiler-free glossary terms in the open chapter. */
+  paintGlossary(terms: GlossaryTermRef[]): void {
+    this.glossaryTerms = terms;
+    for (const mark of this.host.flow.querySelectorAll('[data-reader-mark="glossary"]')) mark.remove();
+    if (this.doc.layout === 'fixed' || !terms.length) return;
+    const box = this.host.flow.getBoundingClientRect();
+    for (const { term, range } of findGlossaryRanges(this.host.flow, terms)) {
+      const rects = typeof range.getClientRects === 'function' ? [...range.getClientRects()] : [];
+      for (const rect of rects) {
+        if (rect.width < 1 || rect.height < 1) continue;
+        const mark = document.createElement('button');
+        mark.dataset['readerMark'] = 'glossary';
+        mark.dataset['glossaryKey'] = term.key;
+        mark.setAttribute('type', 'button');
+        mark.setAttribute('aria-label', `查看词条：${term.label}`);
+        mark.addEventListener('click', (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.options.onGlossary?.(term.key, mark.getBoundingClientRect());
+        });
+        mark.style.cssText = `position:absolute;pointer-events:auto;cursor:pointer;border:0;border-bottom:1.5px dotted var(--reader-accent, var(--color-brand-text));padding:0;margin:0;min-width:0;min-height:0;background:transparent;left:${rect.left - box.left + this.host.flow.scrollLeft}px;top:${rect.top - box.top + this.host.flow.scrollTop}px;width:${rect.width}px;height:${rect.height}px;`;
+        this.host.flow.append(mark);
+      }
+    }
+  }
+
   // ---- 专注模式 ----
 
   private get focusActive(): boolean {
@@ -1006,6 +1035,7 @@ export class ReaderView {
     this.scheduleFocus();
     if (this.doc.layout === 'fixed') return;
     this.paintAnnotations(this.noteAnchors);
+    this.paintGlossary(this.glossaryTerms);
     const search = this.searchAnchor;
     if (!search || this.doc.sections[this.sectionIndex]?.id !== search.sectionId) return;
     const range = anchorRange(this.host.flow, search);

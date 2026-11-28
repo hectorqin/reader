@@ -373,6 +373,17 @@ CREATE TABLE IF NOT EXISTS opds_credentials (
   expires_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS mcp_credentials (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  scope TEXT NOT NULL DEFAULT 'read' CHECK (scope IN ('read', 'write')),
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_mcp_credentials_user ON mcp_credentials(user_id);
+
 CREATE TABLE IF NOT EXISTS source_access (
   source_id TEXT NOT NULL REFERENCES source_instances(id) ON DELETE CASCADE,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

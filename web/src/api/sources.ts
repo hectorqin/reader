@@ -157,3 +157,11 @@ export interface OpdsCredential {
   createdAt: number;
   expiresAt: number;
 }
+export type McpScope = 'read' | 'write';
+export interface McpCredential {
+  id: string;
+  name: string;
+  scope: McpScope;
+  createdAt: number;
+  expiresAt: number;
+}

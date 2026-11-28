@@ -63,6 +63,7 @@ import { tapActionAt, tapZonePreset } from './tap-zones.ts';
 import { ReadingTimeTracker } from '../features/stats/reading-time.ts';
 import { noteInMarkup } from './footnote.ts';
 import { AiAssistSheet, type AssistAction } from './ai-assist.tsx';
+import { AiCompanionSheet, GlossaryEntrySheet, type CompanionEntity } from './ai-companion.tsx';
 import { ImageViewer, type ViewerImage } from './image-viewer.tsx';
 import { Sheet } from './sheet.tsx';
 import { Button } from './toolkit.tsx';
@@ -258,6 +259,13 @@ export class ReaderScreen {
   private assistAvailable = false;
   /** The passage the AI sheet is open on. */
   private assist: { anchor: TextAnchor; context: string } | null = null;
+  /** Whether the spoiler-free AI companion sheet is open. */
+  private companionOpen = false;
+  /** Cached spoiler-free glossary entries for inline underlines in the open chapter. */
+  private glossaryEntries = new Map<string, CompanionEntity>();
+  private glossaryUptoSeq = 0;
+  private activeGlossaryKey: string | null = null;
+  private glossaryLoadedKey = '';
   private toolsSelection: TextAnchor | null = null;
   private toolsReturn = '';
   private preview: SpeechEngine | null = null;
@@ -376,6 +384,39 @@ export class ReaderScreen {
                   }}
                 />
               )}
+              {this.companionOpen && this.book && (
+                <AiCompanionSheet
+                  key={`${this.book.id}:${this.chrome.chapterIndex}`}
+                  load={(windowSize) =>
+                    this.options.api.aiCompanion(this.book!.id, {
+                      ...(this.chrome.chapterIndex > 0 ? { sectionIndex: this.chrome.chapterIndex - 1 } : {}),
+                      window: windowSize,
+                    })
+                  }
+                  onLoaded={(data) => {
+                    this.applyGlossary(data.entities, data.uptoSeq);
+                  }}
+                  onClose={() => {
+                    this.companionOpen = false;
+                    this.patch({});
+                  }}
+                />
+              )}
+              {this.activeGlossaryKey && this.glossaryEntries.has(this.activeGlossaryKey) && (
+                <GlossaryEntrySheet
+                  entity={this.glossaryEntries.get(this.activeGlossaryKey)!}
+                  uptoSeq={this.glossaryUptoSeq}
+                  onOpenCompanion={() => {
+                    this.activeGlossaryKey = null;
+                    this.companionOpen = true;
+                    this.patch({});
+                  }}
+                  onClose={() => {
+                    this.activeGlossaryKey = null;
+                    this.patch({});
+                  }}
+                />
+              )}
               {this.viewer && (
                 <ImageViewer
                   key={this.viewer.images[this.viewer.index]?.src}
@@ -475,6 +516,10 @@ export class ReaderScreen {
             onRetryHistory: () => void this.loadHistory(),
             onRestoreHistory: (locator) => void this.restoreHistory(locator),
             onAiSummary: () => void this.generateAiSummary(),
+            onAiCompanion: () => {
+              this.companionOpen = !this.companionOpen;
+              this.patch({});
+            },
             onRefresh: () => void this.refreshPublication(),
             onRefreshChapter: () => void this.refreshChapter(),
             onAlternatives: (cursor) => void this.loadAlternatives(cursor),
@@ -590,6 +635,7 @@ export class ReaderScreen {
       text: anchor.quote,
       ...(context !== anchor.quote ? { context } : {}),
       ...(question ? { question } : {}),
+      ...(this.chrome.chapterIndex > 0 ? { sectionIndex: this.chrome.chapterIndex - 1 } : {}),
     });
     return result.answer;
   }
@@ -758,7 +804,11 @@ export class ReaderScreen {
           .then((capabilities) => {
             if (!this.disposed) {
               this.assistAvailable = capabilities.assist === true;
-              this.patch({ aiSummaryAvailable: capabilities.summary });
+              this.patch({
+                aiSummaryAvailable: capabilities.summary,
+                aiCompanionAvailable: capabilities.companion ?? capabilities.summary,
+              });
+              if (capabilities.companion ?? capabilities.summary) void this.refreshGlossary();
             }
           })
           .catch((error) => {
@@ -1097,6 +1147,38 @@ export class ReaderScreen {
           : [];
       }),
     );
+  }
+
+  private applyGlossary(items: CompanionEntity[], uptoSeq: number): void {
+    this.glossaryUptoSeq = uptoSeq;
+    this.glossaryEntries = new Map(items.map((item) => [`${item.category}:${item.name}`, item]));
+    this.view?.paintGlossary(
+      items.map((item) => ({
+        key: `${item.category}:${item.name}`,
+        label: item.name,
+        category: item.category,
+        needles: [item.name, ...item.aliases],
+      })),
+    );
+  }
+
+  private async refreshGlossary(force = false): Promise<void> {
+    const book = this.book;
+    if (!book || !this.chrome.aiCompanionAvailable || typeof this.options.api.aiGlossary !== 'function') return;
+    const sectionIndex = Math.max(0, this.chrome.chapterIndex - 1);
+    const key = `${book.id}:${sectionIndex}`;
+    if (!force && key === this.glossaryLoadedKey) {
+      if (this.glossaryEntries.size > 0) this.applyGlossary([...this.glossaryEntries.values()], this.glossaryUptoSeq);
+      return;
+    }
+    this.glossaryLoadedKey = key;
+    try {
+      const result = await this.options.api.aiGlossary(book.id, { sectionIndex });
+      if (this.disposed || this.book?.id !== book.id) return;
+      this.applyGlossary(result.items, result.uptoSeq);
+    } catch {
+      // Glossary underlines are a best-effort progressive enhancement.
+    }
   }
 
   private async saveAnnotation(type: 'highlight' | 'note' | 'bookmark', comment: string, color: string): Promise<void> {
@@ -1776,6 +1858,14 @@ export class ReaderScreen {
           this.patch({});
         }
       },
+      onGlossary: (key) => {
+        if (epoch !== this.viewEpoch || !this.book || this.toolsOpen) return;
+        if (this.glossaryEntries.has(key)) {
+          this.view?.clearSelection();
+          this.activeGlossaryKey = key;
+          this.patch({});
+        }
+      },
       transformText: (root, sectionId) => {
         applyCorrections(root, sectionId, this.overrides);
         void this.pdfRegions?.paint(root);
@@ -2291,6 +2381,7 @@ export class ReaderScreen {
     const title = position.chapterTitle;
     const sectionId = position.sectionId;
     const chapterMoved = sectionId !== this.chrome.currentSectionId;
+    if (chapterMoved) void this.refreshGlossary();
     this.patch({
       bookmarked: this.bookmarksHere(position.locator).length > 0,
       progress: position.percentage,

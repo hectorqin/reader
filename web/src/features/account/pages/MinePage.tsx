@@ -155,6 +155,7 @@ export function MinePage() {
             <Group title="账号" order={4}>
               <Row icon="account" label="账号与连接" to="/me/account" />
               <Row icon="connect" label="外部阅读器" value="OPDS" to="/me/opds" />
+              <Row icon="server" label="AI 助手接入" value="MCP" to="/me/mcp" />
               <Row icon="logout" label="退出登录" danger onClick={() => setSignOutOpen(true)} />
             </Group>
           </div>

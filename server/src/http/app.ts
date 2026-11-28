@@ -12,6 +12,7 @@ import { registerTtsRoutes } from './routes/tts.ts';
 import { registerWebRoutes } from './routes/web.ts';
 import { registerSourceRoutes } from './routes/sources.ts';
 import { registerOpdsRoutes } from './routes/opds.ts';
+import { registerMcpRoutes } from './routes/mcp.ts';
 import { registerMediaRoutes } from './routes/media.ts';
 import { registerMediaProxy } from './routes/media-proxy.ts';
 import { AppError } from '../lib/errors.ts';
@@ -65,9 +66,9 @@ export function buildApp(ctx: AppContext, mediaRuntime?: MediaService): FastifyI
       return;
     }
     reply.header('access-control-allow-origin', resolveCorsOrigin(ctx.config, request));
-    reply.header('access-control-allow-headers', 'authorization, content-type, range');
+    reply.header('access-control-allow-headers', 'authorization, content-type, range, mcp-session-id, mcp-protocol-version');
     reply.header('access-control-allow-methods', 'GET,HEAD,POST,PUT,PATCH,DELETE,OPTIONS');
-    reply.header('access-control-expose-headers', 'accept-ranges, content-length, content-range, retry-after');
+    reply.header('access-control-expose-headers', 'accept-ranges, content-length, content-range, retry-after, mcp-session-id');
     // `vary: origin` is required whenever the allowed origin is reflected rather
     // than fixed, otherwise a shared cache will serve one origin's response to
     // another.
@@ -95,6 +96,7 @@ export function buildApp(ctx: AppContext, mediaRuntime?: MediaService): FastifyI
   registerReadingOverrideRoutes(app, ctx);
   registerSourceRoutes(app, ctx);
   registerOpdsRoutes(app, ctx);
+  registerMcpRoutes(app, ctx);
   if (mediaRuntime) registerMediaProxy(app, mediaRuntime);
   else registerMediaRoutes(app, ctx);
   // Registered last: the SPA fallback must not shadow an API route.

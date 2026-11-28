@@ -1347,3 +1347,34 @@ All endpoints require the account access token in the Authorization header. Read
 
 - `CatalogEntry.coverRef`：封面资源引用，约定用 `readResource({publicationRef: entry.ref, ref: coverRef})` 读取。
 - 章节目录条目（插件 `getManifest` 的 `items`，以及 `/books/:id/manifest`、`/books/:id/toc` 的条目）可带 `volume`（所属卷名，相邻且相同的条目归在同一个卷标题下）和 `note`（标题下的一行说明，例如更新时间）。两者都是最长 200 字符的字符串，缺省时不出现。
+
+
+---
+
+## 原生 MCP Server（Streamable HTTP）
+
+面向 Claude Code / Claude Desktop / Cursor / OpenClaw 等外部 AI Agent，复用账号隔离、书架元数据与笔记同步契约。
+
+### 凭据管理（需要登录 JWT）
+
+- `GET /api/v1/mcp/credentials` — 列出当前账号的 MCP 凭据与 `/mcp` 端点地址。
+- `POST /api/v1/mcp/credentials` — Body: `{ "name": "Cursor", "scope": "read" | "write" }`；返回一次性 `token`（格式 `rdr_<id>.<secret>`，有效期 1 年，数据库仅保存哈希）。
+- `DELETE /api/v1/mcp/credentials/:id` — 立即撤销指定凭据。
+
+### 协议端点（`Authorization: Bearer rdr_<id>.<secret>`）
+
+- `POST /mcp` — 无状态 JSON-RPC 2.0（Streamable HTTP），支持 `initialize`、`ping`、`resources/list`、`resources/read`、`prompts/list`、`prompts/get`、`tools/list`、`tools/call`。
+  - **Resource**：`reader://library/recent`（最近在读书单、阅读进度与最近 20 条笔记）。
+  - **Tools（`read` 权限）**：`search_books`、`get_book_detail`、`get_book_toc`、`read_passage`（支持分片与 `respectProgress` 防剧透上限）、`search_book_content`、`search_library_content`（基于 SQLite FTS5 `trigram` 懒索引的跨书全文检索，支持 `respectProgress`）、`get_spoiler_free_companion`、`lookup_book_glossary`（防剧透书内词典：人物/物品/地点/势力/术语检索）、`get_notes`、`export_notes_markdown`。
+  - **Tools（需 `write` 权限）**：`append_note`（经由 `SyncService.push` 写入，保证触发 `sync_revision` 多端增量同步）。
+  - **Prompt**：`review_book_notes`（汇总某本书的划线、批注与书评）。
+
+---
+
+## 防剧透 AI 伴读
+
+- `GET /api/v1/ai/capabilities` — 新增 `companion` 布尔能力位。
+- `POST /api/v1/ai/companion` — Body: `{ "bookId": "...", "sectionIndex"?: 0, "window"?: 8, "generateRecap"?: true }`。
+  - 按当前阅读进度（或请求中的 `sectionIndex`）建立物理截断边界 `section_seq <= uptoSeq`，对窗口内缺失缓存的章节做懒抽取并缓存至 `ai_chapter_digests`；返回防剧透前情提要（缓存至 `ai_recaps`）、按章节顺序折叠的词条列表（含 `category` / `aliases` / `timeline`）、关系演变轨迹与未解伏笔。
+- `GET /api/v1/ai/glossary` — Query: `bookId`、`q`（可选，按名称/别名/说明匹配）、`category`（可选：`character | item | place | organization | term`）、`sectionIndex`（可选）；零额外 LLM 调用，直接返回截至当前进度的防剧透书内词典（Kindle X-Ray 风格）。
+- `POST /api/v1/ai/assist` — 支持可选字段 `sectionIndex`；在 `explain` / `ask` 场景下自动从 `ai_chapter_digests`（`section_seq <= sectionIndex`）召回相关已读前文记忆并注入上下文。

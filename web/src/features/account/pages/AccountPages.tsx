@@ -6,6 +6,7 @@ import { MediaPageFrame } from '../../media/components/MediaPageFrame.tsx';
 import { MediaAccountPanel } from '../../media/components/settings.tsx';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { OpdsAccess } from '../../../ui/opds-access.tsx';
+import { McpAccess } from '../../../ui/mcp-access.tsx';
 
 /** 账号与连接 (/me/account): who is signed in, and to which server. */
 export function AccountPage() {
@@ -84,6 +85,21 @@ export function OpdsPage() {
       backLabel={back === '/me' ? '返回我的' : '返回上一页'}
     >
       <OpdsAccess
+        api={runtime.api}
+        onSignedOut={() => {
+          void runtime.api.signOut();
+        }}
+      />
+    </MediaPageFrame>
+  );
+}
+
+/** AI 助手接入 (/me/mcp): personal MCP Streamable HTTP tokens. */
+export function McpPage() {
+  const runtime = useRuntime();
+  return (
+    <MediaPageFrame className="media-secondary-page opds-page" title="AI 助手接入（MCP）" backTo="/me" backLabel="返回我的">
+      <McpAccess
         api={runtime.api}
         onSignedOut={() => {
           void runtime.api.signOut();

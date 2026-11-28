@@ -1,5 +1,5 @@
 import { abortedError, abortFailure, combineAbortSignals, isAbortError } from '../core/abort.ts';
-import type { ChapterQuality, CredentialStatus, OpdsCredential } from './sources.ts';
+import type { ChapterQuality, CredentialStatus, McpCredential, McpScope, OpdsCredential } from './sources.ts';
 import type { ReadingOverrides } from './types.ts';
 import { eventStream } from './event-stream.ts';
 import type { ExtensionField, ExtensionPage } from './sources.ts';
@@ -387,6 +387,18 @@ export class ReaderApi {
   }
   async revokeOpdsCredential(id: string): Promise<void> {
     await this.call('/api/v1/opds/credentials/' + encodeURIComponent(id), 'DELETE');
+  }
+  async mcpCredentials(): Promise<{ credentials: McpCredential[]; endpointUrl: string }> {
+    return this.get('/api/v1/mcp/credentials');
+  }
+  async createMcpCredential(
+    name: string,
+    scope: McpScope = 'read',
+  ): Promise<McpCredential & { token: string; endpointUrl: string }> {
+    return this.call('/api/v1/mcp/credentials', 'POST', { name, scope });
+  }
+  async revokeMcpCredential(id: string): Promise<void> {
+    await this.call('/api/v1/mcp/credentials/' + encodeURIComponent(id), 'DELETE');
   }
   async deleteCredential(id: string, key: string): Promise<void> {
     await this.call('/api/v1/sources/' + encodeURIComponent(id) + '/credentials/' + encodeURIComponent(key), 'DELETE');
@@ -1122,18 +1134,92 @@ export class ReaderApi {
     return (await this.call<{ models: string[] }>('/api/v1/admin/ai/models', 'POST', values ?? {})).models;
   }
   /** What the server's AI can do for a reader; older servers answer 404. */
-  async aiCapabilities(options: RequestOptions = {}): Promise<{ summary: boolean; scan?: boolean; assist?: boolean }> {
+  async aiCapabilities(
+    options: RequestOptions = {},
+  ): Promise<{ summary: boolean; companion?: boolean; scan?: boolean; assist?: boolean }> {
     return this.get('/api/v1/ai/capabilities', options);
   }
   /** Translate, explain or answer a question about a passage the reader selected. */
   async aiAssist(
     bookId: string,
-    input: { action: 'translate' | 'explain' | 'ask'; text: string; context?: string; question?: string },
+    input: {
+      action: 'translate' | 'explain' | 'ask';
+      text: string;
+      context?: string;
+      question?: string;
+      sectionIndex?: number;
+    },
   ): Promise<{ answer: string; cached: boolean }> {
     return this.call('/api/v1/ai/assist', 'POST', { bookId, ...input });
   }
   async aiSummary(bookId: string, chapterId: string, content: string): Promise<{ summary: string; cached: boolean }> {
     return this.call('/api/v1/ai/summary', 'POST', { bookId, chapterId, content });
+  }
+  /** Spoiler-free recap and evolving character graph bounded by the reader's current chapter. */
+  async aiCompanion(
+    bookId: string,
+    input: { sectionIndex?: number; window?: number; generateRecap?: boolean } = {},
+  ): Promise<{
+    bookId: string;
+    title: string;
+    uptoSeq: number;
+    chapterTitle: string;
+    totalChapters: number;
+    coveredChapters: number;
+    newlyExtracted: number;
+    recap: string;
+    recapCached: boolean;
+    entities: Array<{
+      name: string;
+      category: 'character' | 'item' | 'place' | 'organization' | 'term';
+      aliases: string[];
+      role: string;
+      note: string;
+      firstSeenSeq: number;
+      lastSeenSeq: number;
+      mentions: number;
+      timeline: Array<{ seq: number; note: string }>;
+    }>;
+    relations: Array<{
+      from: string;
+      to: string;
+      label: string;
+      firstSeenSeq: number;
+      lastSeenSeq: number;
+      history: Array<{ seq: number; label: string }>;
+    }>;
+    openThreads: string[];
+  }> {
+    return this.call('/api/v1/ai/companion', 'POST', { bookId, ...input });
+  }
+  /** Zero-LLM spoiler-free glossary lookup for underlining and instant term inspection. */
+  async aiGlossary(
+    bookId: string,
+    options: { q?: string; category?: string; sectionIndex?: number } = {},
+  ): Promise<{
+    bookId: string;
+    title: string;
+    uptoSeq: number;
+    chapterTitle: string;
+    coveredChapters: number;
+    counts: Record<'character' | 'item' | 'place' | 'organization' | 'term', number>;
+    items: Array<{
+      name: string;
+      category: 'character' | 'item' | 'place' | 'organization' | 'term';
+      aliases: string[];
+      role: string;
+      note: string;
+      firstSeenSeq: number;
+      lastSeenSeq: number;
+      mentions: number;
+      timeline: Array<{ seq: number; note: string }>;
+    }>;
+  }> {
+    const params = new URLSearchParams({ bookId });
+    if (options.q) params.set('q', options.q);
+    if (options.category) params.set('category', options.category);
+    if (options.sectionIndex !== undefined) params.set('sectionIndex', String(options.sectionIndex));
+    return this.get(`/api/v1/ai/glossary?${params.toString()}`);
   }
 
   private async get<T>(path: string, options: RequestOptions = {}): Promise<T> {

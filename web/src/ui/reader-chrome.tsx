@@ -95,6 +95,8 @@ export interface ChromeState {
   statusState: string;
   /** Whether the server offers AI 章节总结; unknown (undefined) draws no button. */
   aiSummaryAvailable?: boolean;
+  /** Whether the server offers 防剧透 AI 伴读 (前情提要 + 人物关系图谱). */
+  aiCompanionAvailable?: boolean;
   /** 阅读记录 in 书籍信息: where this account has been in the book, newest first. */
   historyState?: 'loading' | 'ready' | 'offline' | 'error';
   history?: Array<{ locator: string; percentage: number; chapterTitle: string; device: string; updatedAt: number }>;
@@ -212,6 +214,7 @@ export interface ChromeHandlers {
   onChapter(delta: 1 | -1): void;
   onBookInfo?(): void;
   onAiSummary?(): void;
+  onAiCompanion?(): void;
   onRefresh?(): void;
   onRefreshChapter?(): void;
   onAlternatives?(cursor?: string): void;
@@ -329,6 +332,14 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
               icon="file-text"
               disabled={state.aiSummaryBusy || state.navigating}
               onClick={() => handlers.onAiSummary?.()}
+            />
+          )}
+          {state.aiCompanionAvailable && (
+            <IconButton
+              label="AI 伴读"
+              icon="users"
+              disabled={state.navigating}
+              onClick={() => handlers.onAiCompanion?.()}
             />
           )}
         </div>
