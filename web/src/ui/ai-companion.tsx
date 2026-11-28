@@ -43,6 +43,8 @@ export interface CompanionData {
   chapterTitle: string;
   totalChapters: number;
   coveredChapters: number;
+  uncachedChapters?: number;
+  hasMoreBackfill?: boolean;
   newlyExtracted: number;
   recap: string;
   recapCached: boolean;
@@ -109,28 +111,30 @@ export function GlossaryEntrySheet({
  * and an X-Ray style book glossary (characters, items, places, organizations, terms)
  * strictly bounded by `section_seq <= current`.
  */
+const BACKFILL_BATCH = 8;
+
 export function AiCompanionSheet({
   load,
   onLoaded,
   onClose,
 }: {
-  load(windowSize: number): Promise<CompanionData>;
+  load(options: { window: number; backfill?: boolean }): Promise<CompanionData>;
   onLoaded?(data: CompanionData): void;
   onClose(): void;
 }): JSX.Element {
   const [tab, setTab] = useState<'recap' | 'graph' | 'glossary'>('recap');
   const [category, setCategory] = useState<'all' | CompanionEntityCategory>('all');
   const [query, setQuery] = useState('');
-  const [windowSize, setWindowSize] = useState(8);
   const [data, setData] = useState<CompanionData | null>(null);
   const [busy, setBusy] = useState(true);
+  const [backfilling, setBackfilling] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let live = true;
     setBusy(true);
     setError('');
-    void load(windowSize)
+    void load({ window: BACKFILL_BATCH })
       .then((result) => {
         if (live) {
           setData(result);
@@ -146,7 +150,29 @@ export function AiCompanionSheet({
     return () => {
       live = false;
     };
-  }, [load, windowSize]);
+  }, [load]);
+
+  const handleBackfill = () => {
+    if (busy || backfilling) return;
+    setBackfilling(true);
+    setError('');
+    void load({ window: BACKFILL_BATCH, backfill: true })
+      .then((result) => {
+        setData(result);
+        onLoaded?.(result);
+      })
+      .catch((failure: unknown) => {
+        setError(failure instanceof Error ? failure.message : '补提更早章节失败');
+      })
+      .finally(() => {
+        setBackfilling(false);
+      });
+  };
+
+  const remainingUncached = data
+    ? Math.max(0, data.uncachedChapters ?? data.uptoSeq + 1 - data.coveredChapters)
+    : 0;
+  const canBackfill = Boolean(data && (data.hasMoreBackfill ?? remainingUncached > 0) && remainingUncached > 0);
 
   const counts: Record<CompanionEntityCategory, number> = {
     character: 0,
@@ -209,18 +235,22 @@ export function AiCompanionSheet({
             书内词典{data ? ` (${data.entities.length})` : ''}
           </button>
         </div>
-        {data && windowSize < 16 && data.coveredChapters < data.uptoSeq + 1 && data.uptoSeq + 1 > windowSize && (
+        {canBackfill && (
           <div className="ai-companion-toolbar">
-            <Button disabled={busy} onClick={() => setWindowSize(16)}>
-              {data.uptoSeq + 1 < 16
-                ? `补提更早未缓存章节（共 ${data.uptoSeq + 1} 章）`
-                : '补提更早未缓存章节（最多近 16 章）'}
+            <Button disabled={busy || backfilling} onClick={handleBackfill}>
+              {backfilling
+                ? '正在按批补提更早章节…'
+                : remainingUncached <= BACKFILL_BATCH
+                  ? `补提剩余 ${remainingUncached} 章`
+                  : `继续向前补提 ${BACKFILL_BATCH} 章（剩余未缓存 ${remainingUncached} 章）`}
             </Button>
           </div>
         )}
-        {busy && (
+        {(busy || backfilling) && (
           <p className="ai-assist-status" role="status">
-            正在按已读进度提取与汇总（绝不读取未读章节）…
+            {backfilling
+              ? '正在按批补提更早未缓存章节，已缓存章节自动复用…'
+              : '正在按已读进度提取与汇总（绝不读取未读章节）…'}
           </p>
         )}
         {error && (

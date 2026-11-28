@@ -239,8 +239,37 @@ describe('AiCompanionSheet E2E: tabs, backfill button visibility, and character 
     host.remove();
   });
 
-  it('shows smart backfill button only when earlier chapters are uncached beyond window', async () => {
-    const load = vi.fn(async () => sampleData({ uptoSeq: 9, coveredChapters: 8, chapterTitle: '第十章' }));
+  it('supports repeatable batch backfill until all earlier chapters are cached', async () => {
+    const load = vi
+      .fn<((opts: { window: number; backfill?: boolean }) => Promise<CompanionData>)>()
+      .mockResolvedValueOnce(
+        sampleData({
+          uptoSeq: 19,
+          coveredChapters: 8,
+          uncachedChapters: 12,
+          hasMoreBackfill: true,
+          chapterTitle: '第二十章',
+        }),
+      )
+      .mockResolvedValueOnce(
+        sampleData({
+          uptoSeq: 19,
+          coveredChapters: 16,
+          uncachedChapters: 4,
+          hasMoreBackfill: true,
+          chapterTitle: '第二十章',
+        }),
+      )
+      .mockResolvedValueOnce(
+        sampleData({
+          uptoSeq: 19,
+          coveredChapters: 20,
+          uncachedChapters: 0,
+          hasMoreBackfill: false,
+          chapterTitle: '第二十章',
+        }),
+      );
+
     const host = document.createElement('div');
     document.body.append(host);
     const root = createRoot(host);
@@ -252,7 +281,33 @@ describe('AiCompanionSheet E2E: tabs, backfill button visibility, and character 
       await Promise.resolve();
     });
 
-    expect(host.textContent).toContain('补提更早未缓存章节（共 10 章）');
+    expect(load).toHaveBeenNthCalledWith(1, { window: 8 });
+    const btn1 = [...host.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('继续向前补提 8 章（剩余未缓存 12 章）'),
+    );
+    expect(btn1).toBeTruthy();
+
+    // First backfill click
+    await act(async () => {
+      btn1!.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(load).toHaveBeenNthCalledWith(2, { window: 8, backfill: true });
+
+    const btn2 = [...host.querySelectorAll('button')].find((b) => b.textContent?.includes('补提剩余 4 章'));
+    expect(btn2).toBeTruthy();
+
+    // Second backfill click finishes all chapters; button disappears
+    await act(async () => {
+      btn2!.click();
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(load).toHaveBeenNthCalledWith(3, { window: 8, backfill: true });
+    expect(host.textContent).not.toContain('补提');
 
     await act(async () => root.unmount());
     host.remove();

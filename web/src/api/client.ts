@@ -1158,7 +1158,7 @@ export class ReaderApi {
   /** Spoiler-free recap and evolving character graph bounded by the reader's current chapter. */
   async aiCompanion(
     bookId: string,
-    input: { sectionIndex?: number; window?: number; generateRecap?: boolean } = {},
+    input: { sectionIndex?: number; window?: number; backfill?: boolean; generateRecap?: boolean } = {},
   ): Promise<{
     bookId: string;
     title: string;
@@ -1166,6 +1166,8 @@ export class ReaderApi {
     chapterTitle: string;
     totalChapters: number;
     coveredChapters: number;
+    uncachedChapters?: number;
+    hasMoreBackfill?: boolean;
     newlyExtracted: number;
     recap: string;
     recapCached: boolean;

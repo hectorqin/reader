@@ -306,4 +306,53 @@ test('spoiler-free AI companion enforces section_seq <= uptoSeq, caches digests/
   assert.equal(glossaryBody.items[0].name, '神秘玉佩');
   assert.equal(glossaryBody.counts.organization, 1);
   assert.doesNotMatch(JSON.stringify(glossaryBody), /魔教圣女|宿敌/);
+
+  // Step E: Incremental batch backfill walks backwards from uptoSeq to 0 without re-extracting cached chapters
+  db.run('DELETE FROM ai_chapter_digests');
+  db.run('DELETE FROM ai_recaps');
+
+  const initBatch = JSON.parse(
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/api/v1/ai/companion',
+        headers: authA,
+        payload: { bookId, sectionIndex: 2, window: 1, generateRecap: false },
+      })
+    ).body,
+  );
+  assert.equal(initBatch.coveredChapters, 1);
+  assert.equal(initBatch.newlyExtracted, 1);
+  assert.equal(initBatch.uncachedChapters, 2);
+  assert.equal(initBatch.hasMoreBackfill, true);
+
+  const backfill1 = JSON.parse(
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/api/v1/ai/companion',
+        headers: authA,
+        payload: { bookId, sectionIndex: 2, window: 1, backfill: true, generateRecap: false },
+      })
+    ).body,
+  );
+  assert.equal(backfill1.coveredChapters, 2);
+  assert.equal(backfill1.newlyExtracted, 1);
+  assert.equal(backfill1.uncachedChapters, 1);
+  assert.equal(backfill1.hasMoreBackfill, true);
+
+  const backfill2 = JSON.parse(
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/api/v1/ai/companion',
+        headers: authA,
+        payload: { bookId, sectionIndex: 2, window: 1, backfill: true, generateRecap: false },
+      })
+    ).body,
+  );
+  assert.equal(backfill2.coveredChapters, 3);
+  assert.equal(backfill2.newlyExtracted, 1);
+  assert.equal(backfill2.uncachedChapters, 0);
+  assert.equal(backfill2.hasMoreBackfill, false);
 });

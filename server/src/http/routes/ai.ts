@@ -62,6 +62,7 @@ export function registerAiRoutes(app: FastifyInstance, ctx: AppContext) {
       bookId: string;
       sectionIndex?: number;
       window?: number;
+      backfill?: boolean;
       generateRecap?: boolean;
     };
   }>(
@@ -77,13 +78,14 @@ export function registerAiRoutes(app: FastifyInstance, ctx: AppContext) {
             bookId: { type: 'string', minLength: 1, maxLength: 200 },
             sectionIndex: { type: 'integer', minimum: 0, maximum: 1_000_000 },
             window: { type: 'integer', minimum: 1, maximum: 20 },
+            backfill: { type: 'boolean' },
             generateRecap: { type: 'boolean' },
           },
         },
       },
     },
     async (req, reply) => {
-      const { bookId, sectionIndex, window, generateRecap } = req.body;
+      const { bookId, sectionIndex, window, backfill, generateRecap } = req.body;
       return withSignal(req, reply, (signal) =>
         companion.companion(
           currentUser(req).id,
@@ -91,6 +93,7 @@ export function registerAiRoutes(app: FastifyInstance, ctx: AppContext) {
           {
             ...(sectionIndex !== undefined ? { sectionIndex } : {}),
             ...(window !== undefined ? { window } : {}),
+            ...(backfill !== undefined ? { backfill } : {}),
             ...(generateRecap !== undefined ? { generateRecap } : {}),
           },
           signal,

@@ -72,6 +72,8 @@ export interface CompanionResult {
   chapterTitle: string;
   totalChapters: number;
   coveredChapters: number;
+  uncachedChapters: number;
+  hasMoreBackfill: boolean;
   newlyExtracted: number;
   recap: string;
   recapCached: boolean;
@@ -269,7 +271,7 @@ export class AiCompanionService {
   async companion(
     userId: string,
     bookId: string,
-    options: { sectionIndex?: number; window?: number; generateRecap?: boolean } = {},
+    options: { sectionIndex?: number; window?: number; backfill?: boolean; generateRecap?: boolean } = {},
     signal?: AbortSignal,
   ): Promise<CompanionResult> {
     const c = this.requireConfig();
@@ -280,15 +282,16 @@ export class AiCompanionService {
 
     const uptoSeq = this.resolveUptoSeq(userId, bookId, manifest, options.sectionIndex);
     const windowSize = Math.min(MAX_WINDOW, Math.max(1, Math.trunc(options.window ?? DEFAULT_WINDOW)));
-    const startSeq = Math.max(0, uptoSeq - windowSize + 1);
     const overrides = new ReadingOverrideService(this.ctx.db).get(userId, bookId);
 
     let newlyExtracted = 0;
-    for (let seq = startSeq; seq <= uptoSeq; seq += 1) {
+    let scannedToStart = false;
+
+    const extractSeq = async (seq: number): Promise<boolean> => {
       signal?.throwIfAborted();
       const item = manifest.items[seq]!;
       const text = await this.tryLoadSectionText(bookId, book.format, item, overrides);
-      if (!text || text.trim().length < 20) continue;
+      if (!text || text.trim().length < 20) return false;
       const limited = text.slice(0, Math.min(c.maxInputChars, DIGEST_CHAPTER_CHAR_LIMIT));
       const contentHash = sha256(limited);
       const cached = this.ctx.db.get<{ digest_text: string }>(
@@ -298,7 +301,7 @@ export class AiCompanionService {
         contentHash,
         c.model,
       );
-      if (cached) continue;
+      if (cached) return false;
 
       const extracted = await this.extractChapterDigest(book.title, item.title, seq, limited, c, signal);
       this.ctx.db.run(
@@ -317,11 +320,30 @@ export class AiCompanionService {
         Date.now(),
       );
       newlyExtracted += 1;
+      return true;
+    };
+
+    if (options.backfill) {
+      // Walk backwards from current chapter down to chapter 0, extracting up to
+      // `windowSize` uncached chapters in this batch (never touches > uptoSeq).
+      let seq = uptoSeq;
+      for (; seq >= 0 && newlyExtracted < windowSize; seq -= 1) {
+        await extractSeq(seq);
+      }
+      if (seq < 0) scannedToStart = true;
+    } else {
+      const startSeq = Math.max(0, uptoSeq - windowSize + 1);
+      for (let seq = startSeq; seq <= uptoSeq; seq += 1) {
+        await extractSeq(seq);
+      }
+      if (startSeq === 0) scannedToStart = true;
     }
 
     // Physical spoiler-free SQL boundary: NEVER select section_seq > uptoSeq.
     const digests = this.readCachedDigests(bookId, c.model, uptoSeq, manifest.items);
     const graph = mergeCompanionGraph(digests);
+    const uncachedChapters = scannedToStart ? 0 : Math.max(0, uptoSeq + 1 - digests.length);
+    const hasMoreBackfill = !scannedToStart && uncachedChapters > 0;
 
     let recap = '';
     let recapCached = false;
@@ -367,6 +389,8 @@ export class AiCompanionService {
       chapterTitle: manifest.items[uptoSeq]?.title ?? '',
       totalChapters: manifest.items.length,
       coveredChapters: digests.length,
+      uncachedChapters,
+      hasMoreBackfill,
       newlyExtracted,
       recap,
       recapCached,
